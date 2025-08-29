@@ -21,6 +21,12 @@ import ProfileScreen from "./screens/Profile";
 import PostDetailScreen from "./screens/Post";
 import SettingsScreen from "./screens/Settings";
 import colors from "./config/colors";
+import EventScreen from "./screens/Event";
+import EventDetailScreen from "./screens/EventDetail";
+import EventRegister from "./screens/EventRegister";
+import EventPayment from "./screens/EventPayment";
+import RegisteredEvents from "./screens/RegisteredEvents";
+import EditProfileScreen from "./screens/EditProfile";
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -53,8 +59,8 @@ function MainTabs() {
             case "AddPostTab":
               iconName = focused ? "plus-circle" : "plus-circle-outline";
               break;
-            case "NotificationsTab":
-              iconName = focused ? "bell" : "bell-outline";
+            case "EventTab":
+              iconName = focused ? "calendar" : "calendar-outline";
               break;
             case "ProfileTab":
               iconName = focused ? "account" : "account-outline";
@@ -82,9 +88,9 @@ function MainTabs() {
         options={{ title: "Post" }}
       />
       <Tab.Screen
-        name="NotificationsTab"
-        component={NotificationsScreen}
-        options={{ title: "Alerts" }}
+        name="EventTab"
+        component={EventScreen}
+        options={{ title: "Event" }}
       />
       <Tab.Screen
         name="ProfileTab"
@@ -113,6 +119,11 @@ export default function App() {
         <Stack.Screen name="PostDetail" component={PostDetailScreen} />
         <Stack.Screen name="Settings" component={SettingsScreen} />
         <Stack.Screen name="UserProfile" component={ProfileScreen} />
+        <Stack.Screen name="EventDetail" component={EventDetailScreen} />
+        <Stack.Screen name="EventRegister" component={EventRegister} />
+        <Stack.Screen name="EventPayment" component={EventPayment} />
+        <Stack.Screen name="RegisteredEvents" component={RegisteredEvents} />
+        <Stack.Screen name="EditProfile" component={EditProfileScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

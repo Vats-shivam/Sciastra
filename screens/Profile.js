@@ -5,6 +5,8 @@ import Container from '../components/Container';
 import colors from '../config/colors';
 import { api } from '../api/MockApi';
 import PostCard from '../components/PostCard';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { Modal, Pressable } from 'react-native';
 
 const ProfileScreen = ({ navigation }) => {
   // Mock user info and posts fetch
@@ -17,13 +19,50 @@ const ProfileScreen = ({ navigation }) => {
   });
 
   const [posts, setPosts] = useState([]);
+  const [menuVisible, setMenuVisible] = useState(false);
 
   useEffect(() => {
     api.fetchFeedPosts().then(setPosts);
   }, []);
 
+  const handleMenu = () => setMenuVisible(true);
+  const closeMenu = () => setMenuVisible(false);
+
+  const handleEditProfile = () => {
+    closeMenu();
+    navigation.navigate('EditProfile');
+  };
+  const handleRegisteredEvents = () => {
+    closeMenu();
+    navigation.navigate('RegisteredEvents');
+  };
+
   return (
     <Container>
+      {/* Top Bar with 3-dot menu */}
+      <View style={styles.topBar}>
+        <View style={{ flex: 1 }} />
+        <Pressable onPress={handleMenu} hitSlop={12} style={styles.menuButton}>
+          <Icon name="dots-vertical" size={28} color={colors.textPrimary} />
+        </Pressable>
+      </View>
+      <Modal
+        visible={menuVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={closeMenu}
+      >
+        <Pressable style={styles.menuOverlay} onPress={closeMenu}>
+          <View style={styles.menuContainer}>
+            <Pressable style={styles.menuItem} onPress={handleEditProfile}>
+              <Text style={styles.menuText}>Edit Profile</Text>
+            </Pressable>
+            <Pressable style={styles.menuItem} onPress={handleRegisteredEvents}>
+              <Text style={styles.menuText}>Registered Events</Text>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Modal>
       <ScrollView>
         <View style={styles.profileInfo}>
           <Image
@@ -34,11 +73,7 @@ const ProfileScreen = ({ navigation }) => {
           <Text style={styles.designation}>{user.designation}</Text>
           <Text style={styles.info}>{user.email}</Text>
           <Text style={styles.info}>{user.phone}</Text>
-          <TouchableOpacity style={styles.editButton} onPress={() => navigation.navigate('EditProfile')}>
-            <Text style={{ color: colors.white, fontWeight: '700' }}>Edit Profile</Text>
-          </TouchableOpacity>
         </View>
-
         <Text style={styles.sectionTitle}>My Posts</Text>
         {posts.map(post => (
           <PostCard key={post.id} post={post} style={styles.postCard} />
@@ -49,6 +84,44 @@ const ProfileScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    paddingTop: 8,
+    paddingBottom: 4,
+    paddingHorizontal: 8,
+  },
+  menuButton: {
+    padding: 4,
+  },
+  menuOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    justifyContent: 'flex-start',
+    alignItems: 'flex-end',
+  },
+  menuContainer: {
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    marginTop: 48,
+    marginRight: 12,
+    paddingVertical: 8,
+    minWidth: 160,
+    shadowColor: colors.black,
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  menuItem: {
+    paddingVertical: 12,
+    paddingHorizontal: 18,
+  },
+  menuText: {
+    color: colors.textPrimary,
+    fontSize: 16,
+    fontWeight: '600',
+  },
   profileInfo: { alignItems: 'center', marginBottom: 20 },
   avatar: { width: 120, height: 120, borderRadius: 60, marginBottom: 12 },
   name: { fontSize: 24, fontWeight: '700', color: colors.primary },

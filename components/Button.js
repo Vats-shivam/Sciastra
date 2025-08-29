@@ -7,6 +7,7 @@ const Button = ({ title, onPress, buttonColor = colors.accent, disabled, loading
     style={[styles.button, { backgroundColor: buttonColor }, disabled && styles.disabled]}
     onPress={onPress}
     disabled={disabled || loading}
+    activeOpacity={0.9}
   >
     {loading ? <ActivityIndicator color={colors.white} /> : <Text style={styles.text}>{title}</Text>}
   </TouchableOpacity>
@@ -14,17 +15,20 @@ const Button = ({ title, onPress, buttonColor = colors.accent, disabled, loading
 
 const styles = StyleSheet.create({
   button: {
-    padding: 14,
-    borderRadius: 8,
+    paddingHorizontal: 18,
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   disabled: {
     opacity: 0.6,
   },
   text: {
     color: colors.white,
-    fontWeight: 'bold',
+    fontWeight: '700',
     fontSize: 16,
+    fontFamily: 'Poppins_600SemiBold',
   },
 });
 

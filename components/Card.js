@@ -9,14 +9,16 @@ const Card = ({ children, style }) => {
 const styles = StyleSheet.create({
   card: {
     backgroundColor: colors.card,
-    borderRadius: 12,
+    borderRadius: 14,
     padding: 14,
     marginVertical: 8,
-    shadowColor: colors.primary,
-    shadowOpacity: 0.08,
+    borderWidth: 1,
+    borderColor: colors.border,
+    shadowColor: colors.black,
+    shadowOpacity: 0.05,
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 2 },
-    elevation: 3,
+    elevation: 2,
   },
 });
 
