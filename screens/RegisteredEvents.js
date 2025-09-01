@@ -2,6 +2,7 @@ import React from "react";
 import { View, Text, StyleSheet, ScrollView } from "react-native";
 import Container from "../components/Container";
 import colors from "../config/colors";
+import Header from "../components/Header";
 
 const mockRegisteredEvents = [
   {

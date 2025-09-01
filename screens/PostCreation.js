@@ -6,6 +6,7 @@ import Container from '../components/Container';
 import Button from '../components/Button';
 import colors from '../config/colors';
 import { api } from '../api/MockApi';
+import Header from '../components/Header';
 
 const PostCreationScreen = ({ navigation }) => {
   const [text, setText] = useState('');
@@ -43,31 +44,36 @@ const PostCreationScreen = ({ navigation }) => {
   };
 
   return (
-    <Container>
-      <TextInput
-        style={styles.textInput}
-        placeholder="What's on your mind?"
-        multiline
-        value={text}
-        onChangeText={setText}
-        placeholderTextColor={colors.textSecondary}
-      />
-      <Button title={imageUri ? 'Change Image' : 'Add Image'} onPress={pickImage} />
-      {imageUri && <Image source={{ uri: imageUri }} style={styles.imagePreview} />}
-      <View style={styles.visibilityContainer}>
-        <Button
-          title="Public"
-          buttonColor={visibility === 'public' ? colors.accent : colors.secondary}
-          onPress={() => setVisibility('public')}
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      {/* Header */}
+      <Header title="CREATE POST" />
+      
+      <Container>
+        <TextInput
+          style={styles.textInput}
+          placeholder="What's on your mind?"
+          multiline
+          value={text}
+          onChangeText={setText}
+          placeholderTextColor={colors.textSecondary}
         />
-        <Button
-          title="Connections"
-          buttonColor={visibility === 'connections' ? colors.accent : colors.secondary}
-          onPress={() => setVisibility('connections')}
-        />
-      </View>
-      <Button title="Post" onPress={handlePost} loading={loading} />
-    </Container>
+        <Button title={imageUri ? 'Change Image' : 'Add Image'} onPress={pickImage} />
+        {imageUri && <Image source={{ uri: imageUri }} style={styles.imagePreview} />}
+        <View style={styles.visibilityContainer}>
+          <Button
+            title="Public"
+            buttonColor={visibility === 'public' ? colors.accent : colors.secondary}
+            onPress={() => setVisibility('public')}
+          />
+          <Button
+            title="Connections"
+            buttonColor={visibility === 'connections' ? colors.accent : colors.secondary}
+            onPress={() => setVisibility('connections')}
+          />
+        </View>
+        <Button title="Post" onPress={handlePost} loading={loading} />
+      </Container>
+    </View>
   );
 };
 

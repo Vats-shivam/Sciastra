@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Image, TextInput, TouchableOpacity, ScrollView,
 import colors from "../config/colors";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import EventCard from "../components/EventCard";
+import Header from "../components/Header";
 
 const CATEGORIES = [
   { id: "for-you", label: "For You", icon: "star" },
@@ -97,20 +98,7 @@ const EventScreen = ({ navigation }) => {
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.background }}>
       {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <Image source={require("../assets/icon.png")} style={styles.logo} />
-          <Text style={styles.appName}>EVENTS</Text>
-        </View>
-        <View style={styles.headerRight}>
-          {/* <TouchableOpacity style={styles.iconButton}>
-            <Icon name="bell-outline" size={22} color={colors.textPrimary} />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.iconButton}>
-            <Icon name="account-circle-outline" size={22} color={colors.textPrimary} />
-          </TouchableOpacity> */}
-        </View>
-      </View>
+      <Header title="EVENTS" />
 
       {/* Search */}
       <View style={styles.searchBar}>
@@ -167,22 +155,6 @@ const EventScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  header: {
-    paddingHorizontal: 16,
-    paddingTop: 44,
-    paddingBottom: 10,
-    backgroundColor: colors.card,
-    borderBottomColor: colors.border,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  headerLeft: { flexDirection: "row", alignItems: "center" },
-  headerRight: { flexDirection: "row", alignItems: "center" },
-  logo: { width: 28, height: 28, borderRadius: 6, marginRight: 8 },
-  appName: { fontSize: 18, fontWeight: "800", color: colors.textPrimary, letterSpacing: 1 },
-  iconButton: { marginLeft: 10 },
 
   searchBar: {
     marginHorizontal: 16,

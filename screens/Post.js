@@ -16,6 +16,7 @@ import Container from "../components/Container";
 import colors from "../config/colors";
 import { api } from "../api/MockApi";
 import PostCard from "../components/PostCard";
+import Header from "../components/Header";
 
 const Comment = ({ comment, onReply, onLike, level = 0 }) => {
   const [showReplies, setShowReplies] = useState(true);
@@ -156,57 +157,62 @@ const PostDetailScreen = ({ route }) => {
     return <Text style={{ textAlign: "center", marginTop: 50 }}>Loading...</Text>;
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
-    >
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <View style={{ flex: 1 }}>
-          <Container>
-            <PostCard post={post} />
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      {/* Header */}
+      <Header title="POST" />
+      
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
+      >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <View style={{ flex: 1 }}>
+            <Container>
+              <PostCard post={post} />
 
-            <FlatList
-              ref={flatListRef}
-              data={post.comments}
-              keyExtractor={(item) => item.id}
-              renderItem={({ item }) => (
-                <Comment
-                  comment={item}
-                  onReply={onReply}
-                  onLike={handleLikeComment}
-                />
-              )}
-              ListEmptyComponent={
-                <Text style={{ textAlign: "center", marginVertical: 20 }}>
-                  No comments yet
-                </Text>
-              }
-              contentContainerStyle={{ flexGrow: 1 }}
-              keyboardShouldPersistTaps="handled"
-            />
-
-            {/* Input Bar */}
-            <View style={styles.commentInputContainer}>
-              <TextInput
-                ref={inputRef}
-                placeholder="Write a comment..."
-                style={styles.commentInput}
-                value={commentText}
-                onChangeText={setCommentText}
-                multiline
+              <FlatList
+                ref={flatListRef}
+                data={post.comments}
+                keyExtractor={(item) => item.id}
+                renderItem={({ item }) => (
+                  <Comment
+                    comment={item}
+                    onReply={onReply}
+                    onLike={handleLikeComment}
+                  />
+                )}
+                ListEmptyComponent={
+                  <Text style={{ textAlign: "center", marginVertical: 20 }}>
+                    No comments yet
+                  </Text>
+                }
+                contentContainerStyle={{ flexGrow: 1 }}
+                keyboardShouldPersistTaps="handled"
               />
-              <TouchableOpacity
-                onPress={handleComment}
-                style={styles.commentButton}
-              >
-                <Text style={{ color: "white" }}>Post</Text>
-              </TouchableOpacity>
-            </View>
-          </Container>
-        </View>
-      </TouchableWithoutFeedback>
-    </KeyboardAvoidingView>
+
+              {/* Input Bar */}
+              <View style={styles.commentInputContainer}>
+                <TextInput
+                  ref={inputRef}
+                  placeholder="Write a comment..."
+                  style={styles.commentInput}
+                  value={commentText}
+                  onChangeText={setCommentText}
+                  multiline
+                />
+                <TouchableOpacity
+                  onPress={handleComment}
+                  style={styles.commentButton}
+                >
+                  <Text style={{ color: "white" }}>Post</Text>
+                </TouchableOpacity>
+              </View>
+            </Container>
+          </View>
+        </TouchableWithoutFeedback>
+      </KeyboardAvoidingView>
+    </View>
   );
 };
 

@@ -2,6 +2,7 @@ import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity, Alert } from "react-native";
 import Container from "../components/Container";
 import colors from "../config/colors";
+import Header from "../components/Header";
 
 const EventPayment = ({ route, navigation }) => {
   const { event, name, email, phone } = route?.params || {};
@@ -13,24 +14,29 @@ const EventPayment = ({ route, navigation }) => {
   };
 
   return (
-    <Container style={{ backgroundColor: colors.background }}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Payment</Text>
-        <Text style={styles.eventName}>{event?.title}</Text>
-      </View>
-      <View style={styles.summaryCard}>
-        <Text style={styles.summaryTitle}>Your Details</Text>
-        <Text style={styles.summaryText}>Name: {name}</Text>
-        <Text style={styles.summaryText}>Email: {email}</Text>
-        <Text style={styles.summaryText}>Phone: {phone}</Text>
-        <View style={styles.divider} />
-        <Text style={styles.summaryTitle}>Event Price</Text>
-        <Text style={styles.price}>{event?.cheapest_ticket_price === 0 ? "Free" : `₹ ${event?.cheapest_ticket_price}`}</Text>
-      </View>
-      <TouchableOpacity style={styles.button} onPress={handlePay}>
-        <Text style={styles.buttonText}>Pay Now</Text>
-      </TouchableOpacity>
-    </Container>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      {/* Header */}
+      <Header title="PAYMENT" />
+      
+      <Container style={{ backgroundColor: colors.background }}>
+        <View style={styles.header}>
+          <Text style={styles.title}>Payment</Text>
+          <Text style={styles.eventName}>{event?.title}</Text>
+        </View>
+        <View style={styles.summaryCard}>
+          <Text style={styles.summaryTitle}>Your Details</Text>
+          <Text style={styles.summaryText}>Name: {name}</Text>
+          <Text style={styles.summaryText}>Email: {email}</Text>
+          <Text style={styles.summaryText}>Phone: {phone}</Text>
+          <View style={styles.divider} />
+          <Text style={styles.summaryTitle}>Event Price</Text>
+          <Text style={styles.price}>{event?.cheapest_ticket_price === 0 ? "Free" : `₹ ${event?.cheapest_ticket_price}`}</Text>
+        </View>
+        <TouchableOpacity style={styles.button} onPress={handlePay}>
+          <Text style={styles.buttonText}>Pay Now</Text>
+        </TouchableOpacity>
+      </Container>
+    </View>
   );
 };
 

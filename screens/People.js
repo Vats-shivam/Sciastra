@@ -7,9 +7,12 @@ import {
   TextInput,
   Image,
   StyleSheet,
+  ScrollView,
 } from "react-native";
 import colors from "../config/colors";
 import Container from "../components/Container";
+import Header from "../components/Header";
+import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 
 const mockConnections = Array.from({ length: 50 }, (_, i) => ({
   id: `${i + 1}`,
@@ -26,8 +29,14 @@ const mockInvites = Array.from({ length: 30 }, (_, i) => ({
   profilePic: null,
 }));
 
+const PEOPLE_CATEGORIES = [
+  { id: "invites", label: "Invites", icon: "account-plus" },
+  { id: "connections", label: "Connections", icon: "account-group" },
+];
+
 const ConnectionsScreen = () => {
   const [searchQuery, setSearchQuery] = useState("");
+  const [activeCategory, setActiveCategory] = useState("invites");
   const [showMoreConnections, setShowMoreConnections] = useState(false);
   const [showMoreInvites, setShowMoreInvites] = useState(false);
 
@@ -103,58 +112,107 @@ const ConnectionsScreen = () => {
     );
   }, []);
 
+  const renderCategoryTabs = () => (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={{ paddingHorizontal: 12 }}
+      style={{ marginTop: 10 }}
+    >
+      {PEOPLE_CATEGORIES.map((cat, idx) => (
+        <TouchableOpacity
+          key={cat.id}
+          style={[
+            styles.catChip,
+            activeCategory === cat.id && styles.catChipActive,
+          ]}
+          onPress={() => setActiveCategory(cat.id)}
+        >
+          <Icon
+            name={cat.icon}
+            size={18}
+            color={activeCategory === cat.id ? colors.black : colors.textPrimary}
+          />
+          <Text style={[styles.catText, activeCategory === cat.id && styles.catTextActive]}>
+            {cat.label}
+          </Text>
+        </TouchableOpacity>
+      ))}
+    </ScrollView>
+  );
+
+  const renderContent = () => {
+    if (activeCategory === "invites") {
+      return (
+        <>
+          <FlatList
+            data={
+              showMoreInvites ? filteredInvites : filteredInvites.slice(0, 5)
+            }
+            keyExtractor={(item) => item.id}
+            renderItem={renderInvite}
+          />
+          {filteredInvites.length > 5 && (
+            <TouchableOpacity
+              onPress={() => setShowMoreInvites(!showMoreInvites)}
+              style={styles.showMoreBtn}
+            >
+              <Text style={styles.showMoreText}>
+                {showMoreInvites ? "Show less" : "Show more"}
+              </Text>
+            </TouchableOpacity>
+          )}
+        </>
+      );
+    } else {
+      return (
+        <>
+          <FlatList
+            data={
+              showMoreConnections
+                ? filteredConnections
+                : filteredConnections.slice(0, 10)
+            }
+            keyExtractor={(item) => item.id}
+            renderItem={renderConnection}
+          />
+          {filteredConnections.length > 10 && (
+            <TouchableOpacity
+              onPress={() => setShowMoreConnections(!showMoreConnections)}
+              style={styles.showMoreBtn}
+            >
+              <Text style={styles.showMoreText}>
+                {showMoreConnections ? "Show less" : "Show more"}
+              </Text>
+            </TouchableOpacity>
+          )}
+        </>
+      );
+    }
+  };
+
   return (
-    <Container style={styles.container}>
-      {/* Search Bar */}
-      <TextInput
-        style={styles.searchBar}
-        placeholder="Search connections & invites..."
-        value={searchQuery}
-        onChangeText={setSearchQuery}
-      />
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      {/* Header */}
+      <Header title="PEOPLE" />
+      
+      <Container style={styles.container}>
+        {/* Search Bar */}
+        <TextInput
+          style={styles.searchBar}
+          placeholder="Search connections & invites..."
+          placeholderTextColor={colors.textMuted}
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+        />
 
-      {/* Invites Section */}
-      <Text style={styles.sectionTitle}>Invites</Text>
-      <FlatList
-        data={
-          showMoreInvites ? filteredInvites : filteredInvites.slice(0, 5)
-        }
-        keyExtractor={(item) => item.id}
-        renderItem={renderInvite}
-      />
-      {filteredInvites.length > 5 && (
-        <TouchableOpacity
-          onPress={() => setShowMoreInvites(!showMoreInvites)}
-          style={styles.showMoreBtn}
-        >
-          <Text style={styles.showMoreText}>
-            {showMoreInvites ? "Show less" : "Show more"}
-          </Text>
-        </TouchableOpacity>
-      )}
+        {/* Category Tabs */}
+        {renderCategoryTabs()}
 
-      {/* Connections Section */}
-      <Text style={styles.sectionTitle}>Connections</Text>
-      <FlatList
-        data={
-          showMoreConnections
-            ? filteredConnections
-            : filteredConnections.slice(0, 10)
-        }
-        keyExtractor={(item) => item.id}
-        renderItem={renderConnection}
-      />
-      {filteredConnections.length > 10 && (
-        <TouchableOpacity
-          onPress={() => setShowMoreConnections(!showMoreConnections)}
-          style={styles.showMoreBtn}
-        >
-          <Text style={styles.showMoreText}>
-            {showMoreConnections ? "Show less" : "Show more"}
-          </Text>
-        </TouchableOpacity>
-      )}
-    </Container>
+        {/* Content based on selected category */}
+        {renderContent()}
+      </Container>
+    </View>
   );
 };
 
@@ -174,7 +232,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     borderWidth: 1,
     borderColor: colors.border,
-    color: colors.textPrimary,
+    color: colors.white,
   },
   sectionTitle: {
     fontSize: 18,
@@ -255,5 +313,31 @@ const styles = StyleSheet.create({
   showMoreText: {
     color: colors.secondary, // softer cyan for "show more"
     fontWeight: "600",
+  },
+  catChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginRight: 10,
+    height: 42,
+    marginBottom: 30,
+  },
+  catChipActive: { backgroundColor: colors.white },
+  catText: { marginLeft: 8, color: colors.textPrimary, fontWeight: "600" },
+  catTextActive: { color: colors.black },
+
+  catText: { 
+    marginLeft: 8, 
+    color: colors.textPrimary, 
+    fontWeight: "600",
+    fontSize: 14,
+  },
+  catTextActive: { 
+    color: colors.black 
   },
 });

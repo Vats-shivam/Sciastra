@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, TextInput, TouchableOpacity, Alert } from "react-native";
 import Container from "../components/Container";
 import colors from "../config/colors";
+import Header from "../components/Header";
 
 const EventRegister = ({ route, navigation }) => {
   const event = route?.params?.event;
@@ -20,8 +21,12 @@ const EventRegister = ({ route, navigation }) => {
   };
 
   return (
-    <Container style={{ backgroundColor: colors.background }}>
-      <KeyboardAvoidingView
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      {/* Header */}
+      <Header title="REGISTER" />
+      
+      <Container style={{ backgroundColor: colors.background }}>
+        <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
@@ -65,7 +70,8 @@ const EventRegister = ({ route, navigation }) => {
           <Text style={styles.buttonText}>Proceed to Payment</Text>
         </TouchableOpacity>
       </KeyboardAvoidingView>
-    </Container>
+        </Container>
+      </View>
   );
 };
 

@@ -7,6 +7,7 @@ import { api } from '../api/MockApi';
 import PostCard from '../components/PostCard';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { Modal, Pressable } from 'react-native';
+import Header from '../components/Header';
 
 const ProfileScreen = ({ navigation }) => {
   // Mock user info and posts fetch
@@ -38,48 +39,53 @@ const ProfileScreen = ({ navigation }) => {
   };
 
   return (
-    <Container>
-      {/* Top Bar with 3-dot menu */}
-      <View style={styles.topBar}>
-        <View style={{ flex: 1 }} />
-        <Pressable onPress={handleMenu} hitSlop={12} style={styles.menuButton}>
-          <Icon name="dots-vertical" size={28} color={colors.textPrimary} />
-        </Pressable>
-      </View>
-      <Modal
-        visible={menuVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={closeMenu}
-      >
-        <Pressable style={styles.menuOverlay} onPress={closeMenu}>
-          <View style={styles.menuContainer}>
-            <Pressable style={styles.menuItem} onPress={handleEditProfile}>
-              <Text style={styles.menuText}>Edit Profile</Text>
-            </Pressable>
-            <Pressable style={styles.menuItem} onPress={handleRegisteredEvents}>
-              <Text style={styles.menuText}>Registered Events</Text>
-            </Pressable>
-          </View>
-        </Pressable>
-      </Modal>
-      <ScrollView>
-        <View style={styles.profileInfo}>
-          <Image
-            source={user.profilePic ? { uri: user.profilePic } : require('../assets/icon.png')}
-            style={styles.avatar}
-          />
-          <Text style={styles.name}>{user.name}</Text>
-          <Text style={styles.designation}>{user.designation}</Text>
-          <Text style={styles.info}>{user.email}</Text>
-          <Text style={styles.info}>{user.phone}</Text>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      {/* Header */}
+      <Header title="PROFILE" />
+      
+        {/* Top Bar with 3-dot menu */}
+        <View style={styles.topBar}>
+          <View style={{ flex: 1 }} />
+          <Pressable onPress={handleMenu} hitSlop={12} style={styles.menuButton}>
+            <Icon name="dots-vertical" size={28} color={colors.textPrimary} />
+          </Pressable>
         </View>
-        <Text style={styles.sectionTitle}>My Posts</Text>
-        {posts.map(post => (
-          <PostCard key={post.id} post={post} style={styles.postCard} />
-        ))}
-      </ScrollView>
-    </Container>
+        
+        <Modal
+          visible={menuVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={closeMenu}
+        >
+          <Pressable style={styles.menuOverlay} onPress={closeMenu}>
+            <View style={styles.menuContainer}>
+              <Pressable style={styles.menuItem} onPress={handleEditProfile}>
+                <Text style={styles.menuText}>Edit Profile</Text>
+              </Pressable>
+              <Pressable style={styles.menuItem} onPress={handleRegisteredEvents}>
+                <Text style={styles.menuText}>Registered Events</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Modal>
+        
+        <ScrollView>
+          <View style={styles.profileInfo}>
+            <Image
+              source={user.profilePic ? { uri: user.profilePic } : require('../assets/icon.png')}
+              style={styles.avatar}
+            />
+            <Text style={styles.name}>{user.name}</Text>
+            <Text style={styles.designation}>{user.designation}</Text>
+            <Text style={styles.info}>{user.email}</Text>
+            <Text style={styles.info}>{user.phone}</Text>
+          </View>
+          <Text style={styles.sectionTitle}>My Posts</Text>
+          {posts.map(post => (
+            <PostCard key={post.id} post={post} style={styles.postCard} />
+          ))}
+        </ScrollView>
+    </View>
   );
 };
 

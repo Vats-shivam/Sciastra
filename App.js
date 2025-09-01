@@ -3,7 +3,6 @@ import { NavigationContainer } from "@react-navigation/native";
 import { createStackNavigator } from "@react-navigation/stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
-
 import SplashScreen from "./screens/Splashscreen";
 import WelcomeScreen from "./screens/Welcome";
 import LoginScreen from "./screens/Login";

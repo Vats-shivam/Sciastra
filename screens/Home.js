@@ -16,6 +16,7 @@ import { useNavigation } from "@react-navigation/native";
 import colors from "../config/colors";
 import { api } from "../api/MockApi";
 import PostCard from "../components/PostCard";
+import Header from "../components/Header";
 
 const trendingSearches = ["React Native", "AI", "Blockchain", "Jobs", "Events"];
 
@@ -117,56 +118,38 @@ const HomeScreen = () => {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       {/* Header */}
-      <View style={styles.header}>
-        {!searching ? (
-          <>
-            <View style={styles.headerLeft}>
-              <Image
-                source={require("../assets/icon.png")}
-                style={styles.logo}
-              />
-              <Text style={styles.appName}>Sciastra</Text>
-            </View>
-            <View style={styles.headerRight}>
-              <TouchableOpacity
-                onPress={() => setSearching(true)}
-                style={styles.iconButton}
-              >
-                <Icon name="magnify" size={26} color={colors.textPrimary} />
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => navigation.navigate("ChatList")}
-                style={styles.iconButton}
-              >
-                <Icon name="chat-outline" size={26} color={colors.textPrimary} />
-              </TouchableOpacity>
-            </View>
-          </>
-        ) : (
-          <View style={styles.searchBar}>
-            <Icon
-              name="arrow-left"
-              size={24}
-              color={colors.textPrimary}
-              onPress={() => {
-                setSearching(false);
-                clearSearch();
-              }}
-            />
-            <TextInput
-              autoFocus
-              placeholder="Search posts or people"
-              placeholderTextColor={colors.textMuted}
-              style={styles.searchInput}
-              value={searchText}
-              onChangeText={(text) => {
-                setSearchText(text);
-                performSearch(text);
-              }}
-            />
-          </View>
-        )}
-      </View>
+      {!searching ? (
+        <Header 
+          title="SCICOMM" 
+          showSearchIcon={true} 
+          showChatIcon={true}
+          onSearchPress={() => setSearching(true)}
+          onChatPress={() => navigation.navigate("ChatList")}
+        />
+      ) : (
+        <View style={styles.searchBar}>
+          <Icon
+            name="arrow-left"
+            size={24}
+            color={colors.textPrimary}
+            onPress={() => {
+              setSearching(false);
+              clearSearch();
+            }}
+          />
+          <TextInput
+            autoFocus
+            placeholder="Search posts or people"
+            placeholderTextColor={colors.textMuted}
+            style={styles.searchInput}
+            value={searchText}
+            onChangeText={(text) => {
+              setSearchText(text);
+              performSearch(text);
+            }}
+          />
+        </View>
+      )}
 
       {/* Trending Chips */}
       {searching && !searchText && (
@@ -196,30 +179,6 @@ const HomeScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  header: {
-    paddingHorizontal: 16,
-    paddingTop: 44,
-    paddingBottom: 12,
-    backgroundColor: colors.card,
-    borderBottomColor: colors.border,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    shadowColor: colors.black,
-    shadowOpacity: 0.05,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  headerLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  logo: { width: 36, height: 36, borderRadius: 8, marginRight: 8 },
-  appName: { fontSize: 22, fontWeight: "700", color: colors.primary },
-  headerRight: { flexDirection: "row" },
-  iconButton: { marginLeft: 14 },
 
   searchBar: {
     flexDirection: "row",

@@ -5,6 +5,7 @@ import Button from "../components/Button";
 import Card from "../components/Card";
 import colors from "../config/colors";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
+import Header from "../components/Header";
 
 const mockEvent = {
   banner_url: require("../assets/splash-icon.png"),
@@ -62,8 +63,12 @@ const EventDetailScreen = ({ route, navigation }) => {
   };
 
   return (
-    <Container style={{ backgroundColor: colors.background, paddingHorizontal: 0 }}>
-      <ScrollView showsVerticalScrollIndicator={false}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      {/* Header */}
+      <Header title="EVENT DETAIL" />
+      
+      <Container style={{ backgroundColor: colors.background, paddingHorizontal: 0 }}>
+        <ScrollView showsVerticalScrollIndicator={false}>
         {/* Header actions over banner */}
         <View style={styles.bannerWrapper}>
           <Image
@@ -250,7 +255,8 @@ const EventDetailScreen = ({ route, navigation }) => {
           />
         </View>
       )}
-    </Container>
+        </Container>
+      </View>
   );
 };
 
