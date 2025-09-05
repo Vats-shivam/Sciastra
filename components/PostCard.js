@@ -65,23 +65,49 @@ const PostCard = ({ post }) => {
   >
       {/* Header */}
       <View style={styles.header}>
-        <Image
-          source={
-            post.profilePic
-              ? { uri: post.profilePic }
-              : require("../assets/icon.png")
-          }
-          style={styles.avatar}
-        />
-        <View style={{ flex: 1, paddingLeft: 10 }}>
+        <TouchableOpacity
+          onPress={() => {
+            // Check if this is the current user
+            if (post.authorId === '1') { // Current user ID is '1'
+              navigation.navigate("ProfileTab");
+            } else {
+              navigation.navigate("UserProfile", { userId: post.authorId });
+            }
+          }}
+        >
+          <Image
+            source={
+              post.profilePic
+                ? { uri: post.profilePic }
+                : require("../assets/icon.png")
+            }
+            style={styles.avatar}
+          />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={{ flex: 1, paddingLeft: 10 }}
+          onPress={() => {
+            // Check if this is the current user
+            if (post.authorId === '1') { // Current user ID is '1'
+              navigation.navigate("ProfileTab");
+            } else {
+              navigation.navigate("UserProfile", { userId: post.authorId });
+            }
+          }}
+        >
           <Text style={styles.author}>{post.author}</Text>
           <Text style={styles.subTitle}>{post.subTitle || "Professional"}</Text>
           <Text style={styles.timestamp}>{post.timeAgo || "1h ago"}</Text>
-        </View>
+        </TouchableOpacity>
         <TouchableOpacity
-          onPress={() =>
-            navigation.navigate("UserProfile", { userId: post.authorId })
-          }
+          onPress={() => {
+            // Check if this is the current user
+            if (post.authorId === '1') { // Current user ID is '1'
+              navigation.navigate("ProfileTab");
+            } else {
+              navigation.navigate("UserProfile", { userId: post.authorId });
+            }
+          }}
         >
           <Icon name="dots-vertical" size={22} color={colors.textSecondary} />
         </TouchableOpacity>

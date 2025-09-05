@@ -17,6 +17,7 @@ import PeopleScreen from "./screens/People";
 import PostCreationScreen from "./screens/PostCreation";
 import NotificationsScreen from "./screens/Notification";
 import ProfileScreen from "./screens/Profile";
+import UserProfileScreen from "./screens/UserProfile";
 import PostDetailScreen from "./screens/Post";
 import SettingsScreen from "./screens/Settings";
 import colors from "./config/colors";
@@ -26,6 +27,7 @@ import EventRegister from "./screens/EventRegister";
 import EventPayment from "./screens/EventPayment";
 import RegisteredEvents from "./screens/RegisteredEvents";
 import EditProfileScreen from "./screens/EditProfile";
+import { LoaderProvider } from "./context/LoaderContext";
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -104,26 +106,28 @@ function MainTabs() {
 
 export default function App() {
   return (
-    <NavigationContainer>
-      <Stack.Navigator initialRouteName="Splash" screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="Splash" component={SplashScreen} />
-        <Stack.Screen name="Welcome" component={WelcomeScreen} />
-        <Stack.Screen name="Login" component={LoginScreen} />
-        <Stack.Screen name="OtpVerification" component={OtpVerificationScreen} />
-        <Stack.Screen name="ProfileSetup" component={ProfileSetupScreen} />
-        <Stack.Screen name="SuggestedConnections" component={SuggestedConnectionsScreen} />
-        <Stack.Screen name="MainTabs" component={MainTabs} />
-        <Stack.Screen name="ChatList" component={ChatListScreen} />
-        <Stack.Screen name="OneToOneChat" component={OneToOneChatScreen} />
-        <Stack.Screen name="PostDetail" component={PostDetailScreen} />
-        <Stack.Screen name="Settings" component={SettingsScreen} />
-        <Stack.Screen name="UserProfile" component={ProfileScreen} />
-        <Stack.Screen name="EventDetail" component={EventDetailScreen} />
-        <Stack.Screen name="EventRegister" component={EventRegister} />
-        <Stack.Screen name="EventPayment" component={EventPayment} />
-        <Stack.Screen name="RegisteredEvents" component={RegisteredEvents} />
-        <Stack.Screen name="EditProfile" component={EditProfileScreen} />
-      </Stack.Navigator>
-    </NavigationContainer>
+    <LoaderProvider>
+      <NavigationContainer>
+        <Stack.Navigator initialRouteName="Splash" screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="Splash" component={SplashScreen} />
+          <Stack.Screen name="Welcome" component={WelcomeScreen} />
+          <Stack.Screen name="Login" component={LoginScreen} />
+          <Stack.Screen name="OtpVerification" component={OtpVerificationScreen} />
+          <Stack.Screen name="ProfileSetup" component={ProfileSetupScreen} />
+          <Stack.Screen name="SuggestedConnections" component={SuggestedConnectionsScreen} />
+          <Stack.Screen name="MainTabs" component={MainTabs} />
+          <Stack.Screen name="ChatList" component={ChatListScreen} />
+          <Stack.Screen name="OneToOneChat" component={OneToOneChatScreen} />
+          <Stack.Screen name="PostDetail" component={PostDetailScreen} />
+          <Stack.Screen name="Settings" component={SettingsScreen} />
+          <Stack.Screen name="UserProfile" component={UserProfileScreen} />
+          <Stack.Screen name="EventDetail" component={EventDetailScreen} />
+          <Stack.Screen name="EventRegister" component={EventRegister} />
+          <Stack.Screen name="EventPayment" component={EventPayment} />
+          <Stack.Screen name="RegisteredEvents" component={RegisteredEvents} />
+          <Stack.Screen name="EditProfile" component={EditProfileScreen} />
+        </Stack.Navigator>
+      </NavigationContainer>
+    </LoaderProvider>
   );
 }

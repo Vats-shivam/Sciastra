@@ -1,8 +1,8 @@
 // config/colors.js
 export default {
   // Brand / Accent
-  primary: '#0ea5e9',   // Vibrant cyan/blue for CTAs, icons, highlights
-  secondary: '#38bdf8', // Softer cyan variant for hovers/gradients
+  primary: '#ffffff',   // Vibrant cyan/blue for CTAs, icons, highlights
+  secondary: '#ffffff', // Softer cyan variant for hovers/gradients
   accent: '#1a1a1a',  // Pink accent for highlights
   // Backgrounds
   background: '#0d0d0d',        // App background (deep near-black)
@@ -11,7 +11,7 @@ export default {
 
   // Text
   textPrimary: '#ffffff',   // Main white text
-  textSecondary: '#d4d4d4', // Subtext, timestamps
+  textSecondary: '#ffffff', // Subtext, timestamps
   textMuted: '#9ca3af',     // Placeholders, disabled
   textInverse: '#000000',   // When text on light surfaces
 
@@ -21,10 +21,10 @@ export default {
   borderLight: 'rgba(255,255,255,0.1)',
 
   // Status
-  success: '#22c55e',  // Green
+  success: '#9257D2',  // Green
   error: '#ef4444',    // Red
   warning: '#f59e0b',  // Amber
-  info: '#3b82f6',     // Blue
+  info: '#9257D2',     // Blue
 
   // Common
   white: '#ffffff',

@@ -1,4 +1,3 @@
-// screens/HomeScreen.js
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -17,11 +16,13 @@ import colors from "../config/colors";
 import { api } from "../api/MockApi";
 import PostCard from "../components/PostCard";
 import Header from "../components/Header";
+import { useLoader } from "../context/LoaderContext";
 
 const trendingSearches = ["React Native", "AI", "Blockchain", "Jobs", "Events"];
 
 const HomeScreen = () => {
   const navigation = useNavigation();
+  const { showLoader, hideLoader } = useLoader();
   const [searching, setSearching] = useState(false);
   const [searchText, setSearchText] = useState("");
   const [feedPosts, setFeedPosts] = useState([]);
@@ -29,7 +30,11 @@ const HomeScreen = () => {
   const [searchResultsPeople, setSearchResultsPeople] = useState([]);
 
   useEffect(() => {
-    api.fetchFeedPosts().then(setFeedPosts);
+    showLoader();
+    api.fetchFeedPosts().then((posts) => {
+      setFeedPosts(posts);
+      hideLoader();
+    });
   }, []);
 
   const performSearch = (query) => {
@@ -54,15 +59,28 @@ const HomeScreen = () => {
     setSearchResultsPeople([]);
   };
 
+  const handlePostClick = async (postId) => {
+    showLoader();
+    try {
+      // Simulate loading comments for the post
+      await api.fetchComments(postId);
+      navigation.navigate("PostDetail", { postId });
+    } finally {
+      hideLoader();
+    }
+  };
+
   const renderFeed = () => (
-  <FlatList
-    data={feedPosts}
-    keyExtractor={(item) => item.id}
-    renderItem={({ item }) => <PostCard post={item} />}
-    showsVerticalScrollIndicator={false}
-    contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 100 }}
-  />
-);
+    <FlatList
+      data={feedPosts}
+      keyExtractor={(item) => item.id}
+      renderItem={({ item }) => (
+        <PostCard post={item} onPress={() => handlePostClick(item.id)} />
+      )}
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 100 }}
+    />
+  );
 
   const renderSearchResults = () => (
     <KeyboardAvoidingView
@@ -90,9 +108,15 @@ const HomeScreen = () => {
               renderItem={({ item }) => (
                 <TouchableOpacity
                   style={styles.peopleCard}
-                  onPress={() =>
-                    navigation.navigate("UserProfile", { userId: item.id })
-                  }
+                  onPress={() => {
+                    // Check if this is the current user
+                    if (item.id === "1") {
+                      // Current user ID is '1'
+                      navigation.navigate("Profile");
+                    } else {
+                      navigation.navigate("UserProfile", { userId: item.id });
+                    }
+                  }}
                 >
                   <Image
                     source={
@@ -119,9 +143,9 @@ const HomeScreen = () => {
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       {/* Header */}
       {!searching ? (
-        <Header 
-          title="SCICOMM" 
-          showSearchIcon={true} 
+        <Header
+          title="SCICOMM"
+          showSearchIcon={true}
           showChatIcon={true}
           onSearchPress={() => setSearching(true)}
           onChatPress={() => navigation.navigate("ChatList")}
@@ -179,7 +203,6 @@ const HomeScreen = () => {
 };
 
 const styles = StyleSheet.create({
-
   searchBar: {
     flexDirection: "row",
     alignItems: "center",
@@ -187,7 +210,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     flex: 1,
     paddingHorizontal: 12,
-    height: 42,
+    height: 4,
     borderWidth: 1,
     borderColor: colors.border,
   },
@@ -196,6 +219,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     flex: 1,
     color: colors.textPrimary,
+    height: 20,
   },
 
   breadcrumbs: {

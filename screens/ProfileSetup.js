@@ -34,7 +34,7 @@ const ProfileSetupScreen = ({ navigation }) => {
     }
     // Save profile info to backend or local storage (mocked here)
     // Navigate to SuggestedConnections screen
-    navigation.navigate('SuggestedConnections');
+    navigation.replace('SuggestedConnections');
   };
 
   return (

@@ -3148,6 +3148,16 @@ loose-envify@^1.0.0, loose-envify@^1.4.0:
   dependencies:
     js-tokens "^3.0.0 || ^4.0.0"
 
+lottie-ios@^4.5.1:
+  version "4.5.1"
+  resolved "https://registry.npmjs.org/lottie-ios/-/lottie-ios-4.5.1.tgz"
+  integrity sha512-LmFJG5ip7ZTuoMttmV6NyAY6dR8sEyVYEJOqJytS+fRAjpvqsF0tM/1VFt3lV7Ck7XB043QHwVelLag7fOx/TA==
+
+lottie-react-native@^7.3.3:
+  version "7.3.3"
+  resolved "https://registry.npmjs.org/lottie-react-native/-/lottie-react-native-7.3.3.tgz"
+  integrity sha512-NKGQZllI6rrxF0Mg1amCGwmfFJftI+7v54f48BfWpHH0tTl0RNRj1dujIMvhKGKPt485B41AfGOrFXC1k7/i7w==
+
 lru-cache@^10.0.1:
   version "10.4.3"
   resolved "https://registry.npmjs.org/lru-cache/-/lru-cache-10.4.3.tgz"
@@ -3968,7 +3978,7 @@ react-native-vector-icons@^10.3.0:
     prop-types "^15.7.2"
     yargs "^16.1.1"
 
-react-native@*, react-native@0.79.6:
+react-native@*, react-native@>=0.46, react-native@0.79.6:
   version "0.79.6"
   resolved "https://registry.npmjs.org/react-native/-/react-native-0.79.6.tgz"
   integrity sha512-kvIWSmf4QPfY41HC25TR285N7Fv0Pyn3DAEK8qRL9dA35usSaxsJkHfw+VqnonqJjXOaoKCEanwudRAJ60TBGA==

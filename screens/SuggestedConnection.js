@@ -24,7 +24,7 @@ const SuggestedConnectionsScreen = ({ navigation }) => {
     api.sendConnectRequest(Array.from(selectedIds)).then(() => {
       alert('Connection requests sent!');
       setSelectedIds(new Set());
-      navigation.navigate('HomeFeed');
+      navigation.replace('MainTabs');
     });
   };
 
@@ -49,7 +49,7 @@ const SuggestedConnectionsScreen = ({ navigation }) => {
       />
       <View style={styles.actions}>
         <Button title="Send Requests" disabled={selectedIds.size === 0} onPress={sendRequests} />
-        <Button title="Skip for Now" onPress={() => navigation.navigate('HomeFeed')} />
+        <Button title="Skip for Now" onPress={() => navigation.replace('MainTabs')} />
       </View>
     </View>
   );

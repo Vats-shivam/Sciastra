@@ -20,7 +20,7 @@ const OtpVerificationScreen = ({ navigation, route }) => {
     );
     setLoading(false);
     if (response.success) {
-      navigation.navigate('ProfileSetup');
+      navigation.replace('MainTabs');
     } else {
       Alert.alert('Invalid OTP', 'Please enter the correct OTP or resend.');
     }

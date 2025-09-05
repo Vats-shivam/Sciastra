@@ -9,6 +9,7 @@ import {
   StyleSheet,
   ScrollView,
 } from "react-native";
+import { useNavigation } from "@react-navigation/native";
 import colors from "../config/colors";
 import Container from "../components/Container";
 import Header from "../components/Header";
@@ -35,6 +36,7 @@ const PEOPLE_CATEGORIES = [
 ];
 
 const ConnectionsScreen = () => {
+  const navigation = useNavigation();
   const [searchQuery, setSearchQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState("invites");
   const [showMoreConnections, setShowMoreConnections] = useState(false);
@@ -62,7 +64,17 @@ const ConnectionsScreen = () => {
 
   const renderConnection = useCallback(({ item }) => {
     return (
-      <View style={styles.card}>
+      <TouchableOpacity 
+        style={styles.card}
+        onPress={() => {
+          // Check if this is the current user
+          if (item.id === '1') { // Current user ID is '1'
+            navigation.navigate("Profile");
+          } else {
+            navigation.navigate("UserProfile", { userId: item.id });
+          }
+        }}
+      >
         <Image
           source={
             item.profilePic
@@ -81,13 +93,23 @@ const ConnectionsScreen = () => {
         <TouchableOpacity style={styles.actionBtn}>
           <Text style={styles.actionBtnText}>Message</Text>
         </TouchableOpacity>
-      </View>
+      </TouchableOpacity>
     );
   }, []);
 
   const renderInvite = useCallback(({ item }) => {
     return (
-      <View style={styles.card}>
+      <TouchableOpacity 
+        style={styles.card}
+        onPress={() => {
+          // Check if this is the current user
+          if (item.id === '1') { // Current user ID is '1'
+            navigation.navigate("Profile");
+          } else {
+            navigation.navigate("UserProfile", { userId: item.id });
+          }
+        }}
+      >
         <Image
           source={
             item.profilePic
@@ -108,7 +130,7 @@ const ConnectionsScreen = () => {
             <Text style={styles.ignoreText}>Ignore</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </TouchableOpacity>
     );
   }, []);
 
@@ -329,14 +351,6 @@ const styles = StyleSheet.create({
   },
   catChipActive: { backgroundColor: colors.white },
   catText: { marginLeft: 8, color: colors.textPrimary, fontWeight: "600" },
-  catTextActive: { color: colors.black },
-
-  catText: { 
-    marginLeft: 8, 
-    color: colors.textPrimary, 
-    fontWeight: "600",
-    fontSize: 14,
-  },
   catTextActive: { 
     color: colors.black 
   },

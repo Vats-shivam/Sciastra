@@ -17,9 +17,20 @@ import colors from "../config/colors";
 import { api } from "../api/MockApi";
 import PostCard from "../components/PostCard";
 import Header from "../components/Header";
+import { useLoader } from "../context/LoaderContext";
 
 const Comment = ({ comment, onReply, onLike, level = 0 }) => {
+  const { showLoader, hideLoader } = useLoader();
   const [showReplies, setShowReplies] = useState(true);
+
+  const handleReply = async () => {
+    showLoader();
+    try {
+      await onReply();
+    } finally {
+      hideLoader();
+    }
+  };
 
   return (
     <View style={[styles.commentContainer, { marginLeft: level * 20 }]}>
@@ -50,7 +61,7 @@ const Comment = ({ comment, onReply, onLike, level = 0 }) => {
             </Text>
           </TouchableOpacity>
         )}
-        <TouchableOpacity onPress={() => onReply(comment.id)}>
+        <TouchableOpacity onPress={handleReply}>
           <Text style={styles.actionText}>Reply</Text>
         </TouchableOpacity>
       </View>

@@ -8,23 +8,34 @@ import PostCard from '../components/PostCard';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { Modal, Pressable } from 'react-native';
 import Header from '../components/Header';
+import { useLoader } from "../context/LoaderContext";
 
 const ProfileScreen = ({ navigation }) => {
-  // Mock user info and posts fetch
-  const [user, setUser] = useState({
-    name: 'John Doe',
-    designation: 'Software Engineer',
-    email: 'johndoe@gmail.com',
-    phone: '1234567890',
-    profilePic: null,
-  });
-
+  const { showLoader, hideLoader } = useLoader();
+  const [user, setUser] = useState(null);
   const [posts, setPosts] = useState([]);
   const [menuVisible, setMenuVisible] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.fetchFeedPosts().then(setPosts);
+    showLoader();
+    loadCurrentUserData().finally(hideLoader);
   }, []);
+
+  const loadCurrentUserData = async () => {
+    try {
+      setLoading(true);
+      const currentUser = await api.getCurrentUser();
+      const userPosts = await api.getUserPosts('1'); // Current user ID is '1'
+      
+      setUser(currentUser);
+      setPosts(userPosts);
+    } catch (error) {
+      console.error('Error loading current user data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleMenu = () => setMenuVisible(true);
   const closeMenu = () => setMenuVisible(false);
@@ -33,58 +44,83 @@ const ProfileScreen = ({ navigation }) => {
     closeMenu();
     navigation.navigate('EditProfile');
   };
+  
   const handleRegisteredEvents = () => {
     closeMenu();
     navigation.navigate('RegisteredEvents');
   };
 
+  const handleSettings = () => {
+    closeMenu();
+    navigation.navigate('Settings');
+  };
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }}>
+        <Text style={{ color: colors.textPrimary }}>Loading profile...</Text>
+      </View>
+    );
+  }
+
+  if (!user) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }}>
+        <Text style={{ color: colors.textPrimary }}>User not found</Text>
+      </View>
+    );
+  }
+
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
+    <View style={{ flex: 1, backgroundColor: colors.background, padding: 15}}>
       {/* Header */}
       <Header title="PROFILE" />
       
-        {/* Top Bar with 3-dot menu */}
-        <View style={styles.topBar}>
-          <View style={{ flex: 1 }} />
-          <Pressable onPress={handleMenu} hitSlop={12} style={styles.menuButton}>
-            <Icon name="dots-vertical" size={28} color={colors.textPrimary} />
-          </Pressable>
-        </View>
+      {/* Top Bar with 3-dot menu - Always show for current user */}
+      <View style={styles.topBar}>
+        <View style={{ flex: 1 }} />
+        <Pressable onPress={handleMenu} hitSlop={12} style={styles.menuButton}>
+          <Icon name="dots-vertical" size={28} color={colors.textPrimary} />
+        </Pressable>
+      </View>
         
-        <Modal
-          visible={menuVisible}
-          transparent
-          animationType="fade"
-          onRequestClose={closeMenu}
-        >
-          <Pressable style={styles.menuOverlay} onPress={closeMenu}>
-            <View style={styles.menuContainer}>
-              <Pressable style={styles.menuItem} onPress={handleEditProfile}>
-                <Text style={styles.menuText}>Edit Profile</Text>
-              </Pressable>
-              <Pressable style={styles.menuItem} onPress={handleRegisteredEvents}>
-                <Text style={styles.menuText}>Registered Events</Text>
-              </Pressable>
-            </View>
-          </Pressable>
-        </Modal>
-        
-        <ScrollView>
-          <View style={styles.profileInfo}>
-            <Image
-              source={user.profilePic ? { uri: user.profilePic } : require('../assets/icon.png')}
-              style={styles.avatar}
-            />
-            <Text style={styles.name}>{user.name}</Text>
-            <Text style={styles.designation}>{user.designation}</Text>
-            <Text style={styles.info}>{user.email}</Text>
-            <Text style={styles.info}>{user.phone}</Text>
+      <Modal
+        visible={menuVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={closeMenu}
+      >
+        <Pressable style={styles.menuOverlay} onPress={closeMenu}>
+          <View style={styles.menuContainer}>
+            <Pressable style={styles.menuItem} onPress={handleEditProfile}>
+              <Text style={styles.menuText}>Edit Profile</Text>
+            </Pressable>
+            <Pressable style={styles.menuItem} onPress={handleRegisteredEvents}>
+              <Text style={styles.menuText}>Registered Events</Text>
+            </Pressable>
+            <Pressable style={styles.menuItem} onPress={handleSettings}>
+              <Text style={styles.menuText}>Settings</Text>
+            </Pressable>
           </View>
-          <Text style={styles.sectionTitle}>My Posts</Text>
-          {posts.map(post => (
-            <PostCard key={post.id} post={post} style={styles.postCard} />
-          ))}
-        </ScrollView>
+        </Pressable>
+      </Modal>
+        
+      <ScrollView>
+        <View style={styles.profileInfo}>
+          <Image
+            source={user.profilePic ? { uri: user.profilePic } : require('../assets/icon.png')}
+            style={styles.avatar}
+          />
+          <Text style={styles.name}>{user.name}</Text>
+          <Text style={styles.designation}>{user.designation}</Text>
+          <Text style={styles.info}>{user.email}</Text>
+          <Text style={styles.info}>{user.phone}</Text>
+        </View>
+        <Text style={styles.sectionTitle}>My Posts</Text>
+        {posts.map(post => (
+          <PostCard key={post.id} post={post} style={styles.postCard} />
+        ))}
+      </ScrollView>
     </View>
   );
 };
