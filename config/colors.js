@@ -4,6 +4,7 @@ export default {
   primary: '#ffffff',   // Vibrant cyan/blue for CTAs, icons, highlights
   secondary: '#ffffff', // Softer cyan variant for hovers/gradients
   accent: '#1a1a1a',  // Pink accent for highlights
+  button: "#8A2BE2",
   // Backgrounds
   background: '#0d0d0d',        // App background (deep near-black)
   backgroundSecondary: '#1a1a1a', // Slightly lighter for cards/sections

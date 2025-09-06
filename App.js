@@ -2,6 +2,7 @@ import React from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { createStackNavigator } from "@react-navigation/stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import { View } from "react-native";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import SplashScreen from "./screens/Splashscreen";
 import WelcomeScreen from "./screens/Welcome";
@@ -41,35 +42,80 @@ function MainTabs() {
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: colors.backgroundSecondary, // ✅ Dark background
-          borderTopColor: colors.border, // ✅ Subtle border
+          backgroundColor: colors.backgroundSecondary,
+          borderTopWidth: 0,
+          elevation: 0,
+          shadowOpacity: 0,
+          height: 70,
+          paddingBottom: 10,
+          paddingTop: 10,
         },
-        tabBarActiveTintColor: colors.primary,   // ✅ Cyan for active
-        tabBarInactiveTintColor: colors.textMuted, // ✅ Muted gray for inactive
+        tabBarActiveTintColor: colors.white,
+        tabBarInactiveTintColor: colors.textMuted,
+        tabBarShowLabel: false,
         tabBarIcon: ({ focused, color, size }) => {
           let iconName;
+          const isProfile = route.name === "ProfileTab";
+          
           switch (route.name) {
             case "HomeTab":
-              iconName = focused ? "home" : "home-outline";
+              iconName = "home-variant";
               break;
             case "PeopleTab":
-              iconName = focused
-                ? "account-multiple"
-                : "account-multiple-outline";
+              iconName = "account-group";
               break;
             case "AddPostTab":
-              iconName = focused ? "plus-circle" : "plus-circle-outline";
+              iconName = "plus-circle";
               break;
             case "EventTab":
-              iconName = focused ? "calendar" : "calendar-outline";
+              iconName = "calendar";
               break;
             case "ProfileTab":
-              iconName = focused ? "account" : "account-outline";
+              iconName = "account-circle";
               break;
             default:
               iconName = "circle";
           }
-          return <Icon name={iconName} size={size} color={color} />;
+          
+          if (isProfile) {
+            return (
+              <View style={{
+                width: 40,
+                height: 40,
+                borderRadius: 20,
+                backgroundColor: focused ? colors.button : 'transparent',
+                borderWidth: focused ? 2 : 0,
+                borderColor: focused ? colors.button : 'transparent',
+                justifyContent: 'center',
+                alignItems: 'center',
+              }}>
+                <Icon 
+                  name={iconName} 
+                  size={24} 
+                  color={focused ? colors.white : colors.textMuted} 
+                />
+              </View>
+            );
+          }
+          
+          return (
+            <View style={{
+              width: 40,
+              height: 40,
+              borderRadius: 12,
+              backgroundColor: focused ? colors.button : 'transparent',
+              borderWidth: focused ? 2 : 0,
+              borderColor: focused ? colors.button : 'transparent',
+              justifyContent: 'center',
+              alignItems: 'center',
+            }}>
+              <Icon 
+                name={iconName} 
+                size={24} 
+                color={focused ? colors.white : colors.textMuted} 
+              />
+            </View>
+          );
         },
       })}
     >
