@@ -6,16 +6,50 @@ const CURRENT_USER_ID = '1';
 const fakeUsers = [
   { 
     id: '1', 
-    name: 'John Doe', 
-    bio: 'Software Engineer', 
-    location: 'Bangalore', 
+    name: 'Summer', 
+    bio: 'Web Developer and Digital UI/UX Designer', 
+    location: 'Delhi', 
     interests: ['Tech', 'Networking', 'React Native'], 
     profilePic: null,
-    designation: 'Software Engineer',
-    email: 'johndoe@gmail.com',
+    designation: 'Web Developer and Digital UI/UX Designer',
+    email: 'summer@gmail.com',
     phone: '1234567890',
     connections: ['2', '3'], // Connected to Bob and Clara
     pendingRequests: ['4'], // David has sent a request
+    connectionsCount: 500,
+    skills: ['Critical thinking', 'Problem-solving', 'Observation', 'Curiosity', 'Creativity'],
+    workExperience: [
+      {
+        id: 1,
+        company: 'Institute of Public Enterprise',
+        position: 'Post Graduation Diploma in Management',
+        duration: 'Jul 2023 - Apr 2025',
+        description: 'Marketing and Business Analytics'
+      },
+      {
+        id: 2,
+        company: 'Institute of Public Enterprise',
+        position: 'Post Graduation Diploma in Management',
+        duration: 'Jul 2023 - Apr 2025',
+        description: 'Marketing and Business Analytics'
+      }
+    ],
+    education: [
+      {
+        id: 1,
+        institution: 'Institute of Public Enterprise',
+        degree: 'Post Graduation Diploma in Management',
+        duration: 'Jul 2023 - Apr 2025',
+        field: 'Marketing and Business Analytics'
+      },
+      {
+        id: 2,
+        institution: 'Institute of Public Enterprise',
+        degree: 'Post Graduation Diploma in Management',
+        duration: 'Jul 2023 - Apr 2025',
+        field: 'Marketing and Business Analytics'
+      }
+    ]
   },
   { 
     id: '2', 
