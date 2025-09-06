@@ -14,30 +14,42 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path } from 'react-native-svg';
 import colors from '../config/colors';
+import authApi from '../api/AuthApi';
 
 const LoginScreen = ({ navigation }) => {
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async () => {
-    if (!isValidPhone) return;
+    // Validate phone number using AuthApi
+    const phoneValidation = authApi.validatePhoneNumber(phone);
+    if (!phoneValidation.isValid) {
+      Alert.alert('Invalid Phone Number', 'Please enter a valid 10-digit mobile number.');
+      return;
+    }
+
     setLoading(true);
 
-    // Mock API
-    const response = await new Promise((res) =>
-      setTimeout(() => res({ success: true }), 1000)
-    );
-
-    setLoading(false);
-    if (response.success) {
-      console.log('Navigating to OTP with phone:', phone);
-      navigation.navigate('OtpVerification', { phone });
-    } else {
-      Alert.alert('Error', 'Failed to send OTP. Try again.');
+    try {
+      // Call the real Send OTP API with formatted phone number
+      const response = await authApi.sendOtp(phoneValidation.formatted);
+      
+      setLoading(false);
+      
+      if (response.success) {
+        console.log('OTP sent successfully to phone:', phoneValidation.formatted);
+        navigation.navigate('OtpVerification', { phone: phoneValidation.formatted });
+      } else {
+        Alert.alert('Error', response.message || 'Failed to send OTP. Please try again.');
+      }
+    } catch (error) {
+      setLoading(false);
+      console.error('Login error:', error);
+      Alert.alert('Error', 'Network error. Please check your connection and try again.');
     }
   };
 
-  const isValidPhone = /^\d{10}$/.test(phone);
+  const isValidPhone = authApi.validatePhoneNumber(phone).isValid;
 
   return (
     <LinearGradient

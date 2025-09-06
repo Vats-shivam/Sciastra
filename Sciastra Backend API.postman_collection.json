@@ -1,0 +1,1996 @@
+{
+	"info": {
+		"_postman_id": "12607637-80d6-405d-ade3-d098e1f02034",
+		"name": "Sciastra Backend API",
+		"description": "API collection for Sciastra microservices backend (Auth, Profile, Connection, Post & Chat services)",
+		"schema": "https://schema.getpostman.com/json/collection/v2.0.0/collection.json",
+		"_exporter_id": "38735058",
+		"_collection_link": "https://homy88-0508.postman.co/workspace/Team-Workspace~1facd3e1-9fe0-4c6f-8a9c-74c2a25094ec/collection/38735058-12607637-80d6-405d-ade3-d098e1f02034?action=share&source=collection_link&creator=38735058"
+	},
+	"item": [
+		{
+			"name": "Auth Service",
+			"item": [
+				{
+					"name": "Send OTP",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"phoneNumber\": \"+2234567890\"\n}"
+						},
+						"url": "{{auth_base_url}}/auth/send-otp",
+						"description": "Send OTP to phone number for authentication. Rate limited to 5 requests per hour per phone number."
+					},
+					"response": [
+						{
+							"name": "success",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json",
+										"type": "text"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"phoneNumber\": \"+2234567890\"\n}"
+								},
+								"url": "{{auth_base_url}}/auth/send-otp"
+							},
+							"status": "Created",
+							"code": 201,
+							"_postman_previewlanguage": null,
+							"header": [
+								{
+									"key": "X-Powered-By",
+									"value": "Express"
+								},
+								{
+									"key": "Content-Type",
+									"value": "application/json; charset=utf-8"
+								},
+								{
+									"key": "Content-Length",
+									"value": "50"
+								},
+								{
+									"key": "ETag",
+									"value": "W/\"32-pRwUobPmRoJzFLVY41CvCHoem1Q\""
+								},
+								{
+									"key": "Date",
+									"value": "Fri, 05 Sep 2025 20:31:35 GMT"
+								},
+								{
+									"key": "Connection",
+									"value": "keep-alive"
+								},
+								{
+									"key": "Keep-Alive",
+									"value": "timeout=5"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"success\": true,\n    \"message\": \"OTP sent successfully\"\n}"
+						}
+					]
+				},
+				{
+					"name": "Verify OTP",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const response = pm.response.json();",
+									"    if (response.success && response.data) {",
+									"        pm.collectionVariables.set('access_token', response.data.accessToken);",
+									"        pm.collectionVariables.set('refresh_token', response.data.refreshToken);",
+									"        pm.collectionVariables.set('user_id', response.data.userId);",
+									"        console.log('Tokens saved to collection variables');",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"phoneNumber\": \"+1234567890\",\n  \"otp\": \"123456\"\n}"
+						},
+						"url": "{{auth_base_url}}/auth/verify-otp",
+						"description": "Verify OTP and receive access & refresh tokens. Tokens are automatically saved to collection variables."
+					},
+					"response": [
+						{
+							"name": "success",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json",
+										"type": "text"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"phoneNumber\": \"+2234567890\",\n  \"otp\": \"551319\"\n}"
+								},
+								"url": "{{auth_base_url}}/auth/verify-otp"
+							},
+							"status": "Created",
+							"code": 201,
+							"_postman_previewlanguage": null,
+							"header": [
+								{
+									"key": "X-Powered-By",
+									"value": "Express"
+								},
+								{
+									"key": "Content-Type",
+									"value": "application/json; charset=utf-8"
+								},
+								{
+									"key": "Content-Length",
+									"value": "562"
+								},
+								{
+									"key": "ETag",
+									"value": "W/\"232-fXh9u891Jiv7VuI0G87t3ApboeA\""
+								},
+								{
+									"key": "Date",
+									"value": "Fri, 05 Sep 2025 20:32:10 GMT"
+								},
+								{
+									"key": "Connection",
+									"value": "keep-alive"
+								},
+								{
+									"key": "Keep-Alive",
+									"value": "timeout=5"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"success\": true,\n    \"message\": \"OTP verified successfully\",\n    \"data\": {\n        \"accessToken\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjM1MWE1ZTNiLTZmMTktNDhmYi05YzU1LTU4ZTU1NmYwZDAzNyIsInVzZXJJZCI6IjM1MWE1ZTNiLTZmMTktNDhmYi05YzU1LTU4ZTU1NmYwZDAzNyIsInBob25lTnVtYmVyIjoiKzIyMzQ1Njc4OTAiLCJpYXQiOjE3NTcxMDQzMzAsImV4cCI6MTc1NzEwNTIzMCwiYXVkIjoic2NpYXN0cmEtc2VydmljZXMiLCJpc3MiOiJzY2lhc3RyYS1hdXRoIn0.xweEeHDrLZfVaEOVLKDsOPXhMOgdAByIWutVJTkZ1Q8\",\n        \"refreshToken\": \"ace6c2d9775b247cefe70e4431ee1d1d01130de6cd8051d91f8cffc092472255\",\n        \"userId\": \"351a5e3b-6f19-48fb-9c55-58e556f0d037\"\n    }\n}"
+						}
+					]
+				},
+				{
+					"name": "Refresh Token",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const response = pm.response.json();",
+									"    if (response.success && response.data && response.data.accessToken) {",
+									"        pm.collectionVariables.set('access_token', response.data.accessToken);",
+									"        console.log('Access token refreshed and saved');",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"refreshToken\": \"{{refresh_token}}\"\n}"
+						},
+						"url": "{{auth_base_url}}/auth/refresh-token",
+						"description": "Refresh access token using refresh token. New access token is automatically saved."
+					},
+					"response": [
+						{
+							"name": "success",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json",
+										"type": "text"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"refreshToken\": \"{{refresh_token}}\"\n}"
+								},
+								"url": "{{auth_base_url}}/auth/refresh-token"
+							},
+							"status": "Created",
+							"code": 201,
+							"_postman_previewlanguage": null,
+							"header": [
+								{
+									"key": "X-Powered-By",
+									"value": "Express"
+								},
+								{
+									"key": "Content-Type",
+									"value": "application/json; charset=utf-8"
+								},
+								{
+									"key": "Content-Length",
+									"value": "429"
+								},
+								{
+									"key": "ETag",
+									"value": "W/\"1ad-KR4gel/MyGqA7Lbl0lKKKczvIcQ\""
+								},
+								{
+									"key": "Date",
+									"value": "Fri, 05 Sep 2025 20:34:22 GMT"
+								},
+								{
+									"key": "Connection",
+									"value": "keep-alive"
+								},
+								{
+									"key": "Keep-Alive",
+									"value": "timeout=5"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"success\": true,\n    \"message\": \"Access token refreshed\",\n    \"data\": {\n        \"accessToken\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImE2NDdhZGVkLTQwZGMtNDhhYS04YTJlLWI2NzFkM2MxZmU0YyIsInVzZXJJZCI6ImE2NDdhZGVkLTQwZGMtNDhhYS04YTJlLWI2NzFkM2MxZmU0YyIsInBob25lTnVtYmVyIjoiKzEyMzQ1Njc4OTAiLCJpYXQiOjE3NTcxMDQ0NjIsImV4cCI6MTc1NzEwNTM2MiwiYXVkIjoic2NpYXN0cmEtc2VydmljZXMiLCJpc3MiOiJzY2lhc3RyYS1hdXRoIn0.fpb5NOdgKpASwUdV_GS6b6rihHLQjWZyrXpqWxU6Zog\"\n    }\n}"
+						}
+					]
+				},
+				{
+					"name": "Logout",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"refreshToken\": \"{{refresh_token}}\"\n}"
+						},
+						"url": "{{auth_base_url}}/auth/logout",
+						"description": "Logout user and invalidate refresh token."
+					},
+					"response": []
+				},
+				{
+					"name": "Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": "{{auth_base_url}}/",
+						"description": "Auth service health check endpoint."
+					},
+					"response": []
+				}
+			],
+			"description": "Authentication service endpoints for OTP-based authentication"
+		},
+		{
+			"name": "Profile Service",
+			"item": [
+				{
+					"name": "Create/Update Profile",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"John Cena\",\n  \"profession\": \"Software Engineer\",\n  \"email\": \"john@example.com\",\n  \"profilePic\":\"download-1.jpg\",\n  \"experiences\": [\n    {\n      \"company\": \"Tech Corp\",\n      \"role\": \"Senior Software Engineer\",\n      \"startDate\": \"2022-01-15T00:00:00.000Z\",\n      \"endDate\": \"2024-06-30T00:00:00.000Z\",\n      \"description\": \"Led backend development team, architected microservices infrastructure\",\n      \"isCurrentRole\": false\n    },\n    {\n      \"company\": \"StartupXYZ\",\n      \"role\": \"Full Stack Developer\",\n      \"startDate\": \"2024-07-01T00:00:00.000Z\",\n      \"description\": \"Building next-gen social platform with React and Node.js\",\n      \"isCurrentRole\": true\n    }\n  ],\n  \"topics\": [\"JavaScript\", \"Python\", \"Machine Learning\"]\n}"
+						},
+						"url": "{{profile_base_url}}/profile",
+						"description": "Create or update user profile. Requires authentication."
+					},
+					"response": [
+						{
+							"name": "success",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json",
+										"type": "text"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}",
+										"type": "text"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"name\": \"John Cena\",\n  \"profession\": \"Software Engineer\",\n  \"email\": \"john@example.com\",\n  \"profilePic\":\"download-1.jpg\",\n  \"experiences\": [\n    {\n      \"company\": \"Tech Corp\",\n      \"role\": \"Senior Software Engineer\",\n      \"startDate\": \"2022-01-15T00:00:00.000Z\",\n      \"endDate\": \"2024-06-30T00:00:00.000Z\",\n      \"description\": \"Led backend development team, architected microservices infrastructure\",\n      \"isCurrentRole\": false\n    },\n    {\n      \"company\": \"StartupXYZ\",\n      \"role\": \"Full Stack Developer\",\n      \"startDate\": \"2024-07-01T00:00:00.000Z\",\n      \"description\": \"Building next-gen social platform with React and Node.js\",\n      \"isCurrentRole\": true\n    }\n  ],\n  \"topics\": [\"JavaScript\", \"Python\", \"Machine Learning\"]\n}"
+								},
+								"url": "{{profile_base_url}}/profile"
+							},
+							"status": "Created",
+							"code": 201,
+							"_postman_previewlanguage": null,
+							"header": [
+								{
+									"key": "X-Powered-By",
+									"value": "Express"
+								},
+								{
+									"key": "Content-Type",
+									"value": "application/json; charset=utf-8"
+								},
+								{
+									"key": "Content-Length",
+									"value": "1150"
+								},
+								{
+									"key": "ETag",
+									"value": "W/\"47e-qzmQmrJ2iSvQBOW//nBsFL1OmtI\""
+								},
+								{
+									"key": "Date",
+									"value": "Fri, 05 Sep 2025 20:27:11 GMT"
+								},
+								{
+									"key": "Connection",
+									"value": "keep-alive"
+								},
+								{
+									"key": "Keep-Alive",
+									"value": "timeout=5"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"success\": true,\n    \"data\": {\n        \"userId\": \"a647aded-40dc-48aa-8a2e-b671d3c1fe4c\",\n        \"name\": \"John Cena\",\n        \"profession\": \"Software Engineer\",\n        \"profilePic\": \"download-1.jpg\",\n        \"email\": \"john@example.com\",\n        \"topics\": [\n            \"JavaScript\",\n            \"Python\",\n            \"Machine Learning\"\n        ],\n        \"contactSyncStatus\": \"PENDING\",\n        \"createdAt\": \"2025-09-03T17:48:03.832Z\",\n        \"updatedAt\": \"2025-09-05T20:27:11.733Z\",\n        \"experiences\": [\n            {\n                \"id\": \"eb645e81-258e-493a-976e-8e5c615e32ec\",\n                \"profileId\": \"a647aded-40dc-48aa-8a2e-b671d3c1fe4c\",\n                \"company\": \"Tech Corp\",\n                \"role\": \"Senior Software Engineer\",\n                \"startDate\": \"2022-01-15T00:00:00.000Z\",\n                \"endDate\": \"2024-06-30T00:00:00.000Z\",\n                \"description\": \"Led backend development team, architected microservices infrastructure\",\n                \"isCurrentRole\": false,\n                \"createdAt\": \"2025-09-05T20:27:11.763Z\",\n                \"updatedAt\": \"2025-09-05T20:27:11.763Z\"\n            },\n            {\n                \"id\": \"c03555af-ef97-47ee-88ea-3842fd91712c\",\n                \"profileId\": \"a647aded-40dc-48aa-8a2e-b671d3c1fe4c\",\n                \"company\": \"StartupXYZ\",\n                \"role\": \"Full Stack Developer\",\n                \"startDate\": \"2024-07-01T00:00:00.000Z\",\n                \"endDate\": null,\n                \"description\": \"Building next-gen social platform with React and Node.js\",\n                \"isCurrentRole\": true,\n                \"createdAt\": \"2025-09-05T20:27:11.763Z\",\n                \"updatedAt\": \"2025-09-05T20:27:11.763Z\"\n            }\n        ]\n    }\n}"
+						}
+					]
+				},
+				{
+					"name": "Get Profile by User ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							}
+						],
+						"url": "{{profile_base_url}}/profile/{{user_id}}",
+						"description": "Get specific user profile by user ID. Requires authentication."
+					},
+					"response": [
+						{
+							"name": "success",
+							"originalRequest": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}",
+										"type": "text"
+									}
+								],
+								"url": "{{profile_base_url}}/profile/{{user_id}}"
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": null,
+							"header": [
+								{
+									"key": "X-Powered-By",
+									"value": "Express"
+								},
+								{
+									"key": "Content-Type",
+									"value": "application/json; charset=utf-8"
+								},
+								{
+									"key": "Content-Length",
+									"value": "1436"
+								},
+								{
+									"key": "ETag",
+									"value": "W/\"59c-SqT4/ypjJgddQM9Sc981gN++l0A\""
+								},
+								{
+									"key": "Date",
+									"value": "Fri, 05 Sep 2025 20:27:26 GMT"
+								},
+								{
+									"key": "Connection",
+									"value": "keep-alive"
+								},
+								{
+									"key": "Keep-Alive",
+									"value": "timeout=5"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"success\": true,\n    \"data\": {\n        \"userId\": \"a647aded-40dc-48aa-8a2e-b671d3c1fe4c\",\n        \"name\": \"John Cena\",\n        \"profession\": \"Software Engineer\",\n        \"profilePic\": \"http://localhost:9000/uploads/download-1.jpg?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=minioadmin%2F20250905%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20250905T202726Z&X-Amz-Expires=300&X-Amz-Signature=765905bc676828cb3aa30ffc42cdfdfc22d5bf14c024b616843f5ad10bf8935e&X-Amz-SignedHeaders=host\",\n        \"email\": \"john@example.com\",\n        \"topics\": [\n            \"JavaScript\",\n            \"Python\",\n            \"Machine Learning\"\n        ],\n        \"contactSyncStatus\": \"PENDING\",\n        \"createdAt\": \"2025-09-03T17:48:03.832Z\",\n        \"updatedAt\": \"2025-09-05T20:27:11.733Z\",\n        \"experiences\": [\n            {\n                \"id\": \"eb645e81-258e-493a-976e-8e5c615e32ec\",\n                \"profileId\": \"a647aded-40dc-48aa-8a2e-b671d3c1fe4c\",\n                \"company\": \"Tech Corp\",\n                \"role\": \"Senior Software Engineer\",\n                \"startDate\": \"2022-01-15T00:00:00.000Z\",\n                \"endDate\": \"2024-06-30T00:00:00.000Z\",\n                \"description\": \"Led backend development team, architected microservices infrastructure\",\n                \"isCurrentRole\": false,\n                \"createdAt\": \"2025-09-05T20:27:11.763Z\",\n                \"updatedAt\": \"2025-09-05T20:27:11.763Z\"\n            },\n            {\n                \"id\": \"c03555af-ef97-47ee-88ea-3842fd91712c\",\n                \"profileId\": \"a647aded-40dc-48aa-8a2e-b671d3c1fe4c\",\n                \"company\": \"StartupXYZ\",\n                \"role\": \"Full Stack Developer\",\n                \"startDate\": \"2024-07-01T00:00:00.000Z\",\n                \"endDate\": null,\n                \"description\": \"Building next-gen social platform with React and Node.js\",\n                \"isCurrentRole\": true,\n                \"createdAt\": \"2025-09-05T20:27:11.763Z\",\n                \"updatedAt\": \"2025-09-05T20:27:11.763Z\"\n            }\n        ]\n    }\n}"
+						}
+					]
+				},
+				{
+					"name": "Update Profile",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Jane Doe\",\n  \"profession\": \"Senior Software Engineer\",\n  \"email\": \"jane@example.com\",\n  \"experiences\": {\n    \"companies\": [\"Tech Corp\", \"StartupXYZ\", \"BigTech Inc\"],\n    \"yearsOfExperience\": 7\n  },\n  \"topics\": [\"JavaScript\", \"Python\", \"Machine Learning\", \"DevOps\"]\n}"
+						},
+						"url": "{{profile_base_url}}/profile",
+						"description": "Update authenticated user's profile. Requires authentication."
+					},
+					"response": [
+						{
+							"name": "success",
+							"originalRequest": {
+								"method": "PUT",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json",
+										"type": "text"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}",
+										"type": "text"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"name\": \"Jane Doe\",\n  \"profession\": \"Senior Software Engineer\",\n  \"email\": \"jane@example.com\",\n  \"topics\": [\"JavaScript\", \"Python\", \"Machine Learning\", \"DevOps\"]\n}"
+								},
+								"url": "{{profile_base_url}}/profile"
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": null,
+							"header": [
+								{
+									"key": "X-Powered-By",
+									"value": "Express"
+								},
+								{
+									"key": "Content-Type",
+									"value": "application/json; charset=utf-8"
+								},
+								{
+									"key": "Content-Length",
+									"value": "1165"
+								},
+								{
+									"key": "ETag",
+									"value": "W/\"48d-7k0ikk2ghUfoRU6AXdZqMSmVdUY\""
+								},
+								{
+									"key": "Date",
+									"value": "Fri, 05 Sep 2025 20:27:49 GMT"
+								},
+								{
+									"key": "Connection",
+									"value": "keep-alive"
+								},
+								{
+									"key": "Keep-Alive",
+									"value": "timeout=5"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"success\": true,\n    \"data\": {\n        \"userId\": \"a647aded-40dc-48aa-8a2e-b671d3c1fe4c\",\n        \"name\": \"Jane Doe\",\n        \"profession\": \"Senior Software Engineer\",\n        \"profilePic\": \"download-1.jpg\",\n        \"email\": \"jane@example.com\",\n        \"topics\": [\n            \"JavaScript\",\n            \"Python\",\n            \"Machine Learning\",\n            \"DevOps\"\n        ],\n        \"contactSyncStatus\": \"PENDING\",\n        \"createdAt\": \"2025-09-03T17:48:03.832Z\",\n        \"updatedAt\": \"2025-09-05T20:27:49.368Z\",\n        \"experiences\": [\n            {\n                \"id\": \"eb645e81-258e-493a-976e-8e5c615e32ec\",\n                \"profileId\": \"a647aded-40dc-48aa-8a2e-b671d3c1fe4c\",\n                \"company\": \"Tech Corp\",\n                \"role\": \"Senior Software Engineer\",\n                \"startDate\": \"2022-01-15T00:00:00.000Z\",\n                \"endDate\": \"2024-06-30T00:00:00.000Z\",\n                \"description\": \"Led backend development team, architected microservices infrastructure\",\n                \"isCurrentRole\": false,\n                \"createdAt\": \"2025-09-05T20:27:11.763Z\",\n                \"updatedAt\": \"2025-09-05T20:27:11.763Z\"\n            },\n            {\n                \"id\": \"c03555af-ef97-47ee-88ea-3842fd91712c\",\n                \"profileId\": \"a647aded-40dc-48aa-8a2e-b671d3c1fe4c\",\n                \"company\": \"StartupXYZ\",\n                \"role\": \"Full Stack Developer\",\n                \"startDate\": \"2024-07-01T00:00:00.000Z\",\n                \"endDate\": null,\n                \"description\": \"Building next-gen social platform with React and Node.js\",\n                \"isCurrentRole\": true,\n                \"createdAt\": \"2025-09-05T20:27:11.763Z\",\n                \"updatedAt\": \"2025-09-05T20:27:11.763Z\"\n            }\n        ]\n    }\n}"
+						}
+					]
+				},
+				{
+					"name": "Get Upload URL",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"fileName\": \"profile-picture.jpg\",\n  \"fileType\": \"image/jpeg\"\n}"
+						},
+						"url": "{{profile_base_url}}/profile/upload-url",
+						"description": "Generate pre-signed URL for file upload to MinIO. Requires authentication."
+					},
+					"response": [
+						{
+							"name": "success",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json",
+										"type": "text"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}",
+										"type": "text"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"fileName\": \"download-1.jpg\",\n  \"fileType\": \"image/jpeg\"\n}"
+								},
+								"url": "{{profile_base_url}}/profile/upload-url"
+							},
+							"status": "Created",
+							"code": 201,
+							"_postman_previewlanguage": null,
+							"header": [
+								{
+									"key": "X-Powered-By",
+									"value": "Express"
+								},
+								{
+									"key": "Content-Type",
+									"value": "application/json; charset=utf-8"
+								},
+								{
+									"key": "Content-Length",
+									"value": "360"
+								},
+								{
+									"key": "ETag",
+									"value": "W/\"168-3J2pWTMcrFjUiNPi8Ea5GCh5ZsI\""
+								},
+								{
+									"key": "Date",
+									"value": "Fri, 05 Sep 2025 20:13:15 GMT"
+								},
+								{
+									"key": "Connection",
+									"value": "keep-alive"
+								},
+								{
+									"key": "Keep-Alive",
+									"value": "timeout=5"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"success\": true,\n    \"data\": {\n        \"url\": \"http://localhost:9000/uploads/download-1.jpg?Content-Type=image%2Fjpeg&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=minioadmin%2F20250905%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20250905T201315Z&X-Amz-Expires=300&X-Amz-Signature=2a9d3edd07149e045f0a6159ff39ea7663ff452a288acf16820d243879cee3bc&X-Amz-SignedHeaders=host\"\n    }\n}"
+						}
+					]
+				},
+				{
+					"name": "Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": "{{profile_base_url}}/",
+						"description": "Profile service health check endpoint."
+					},
+					"response": []
+				}
+			],
+			"description": "Profile service endpoints for user profile management"
+		},
+		{
+			"name": "Connection Service",
+			"item": [
+				{
+					"name": "Send Connection Request",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"receiverId\": \"target_user_id_here\"\n}"
+						},
+						"url": "{{connection_base_url}}/connections/request",
+						"description": "Send a connection request to another user. Requires authentication."
+					},
+					"response": [
+						{
+							"name": "success",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json",
+										"type": "text"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}",
+										"type": "text"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"receiverId\": \"{{user_id}}\"\n}"
+								},
+								"url": "{{connection_base_url}}/connections/request"
+							},
+							"status": "Created",
+							"code": 201,
+							"_postman_previewlanguage": null,
+							"header": [
+								{
+									"key": "X-Powered-By",
+									"value": "Express"
+								},
+								{
+									"key": "Content-Type",
+									"value": "application/json; charset=utf-8"
+								},
+								{
+									"key": "Content-Length",
+									"value": "199"
+								},
+								{
+									"key": "ETag",
+									"value": "W/\"c7-grUC4Dw/x+tEXhM9SFuhOdqxbvg\""
+								},
+								{
+									"key": "Date",
+									"value": "Fri, 05 Sep 2025 20:33:36 GMT"
+								},
+								{
+									"key": "Connection",
+									"value": "keep-alive"
+								},
+								{
+									"key": "Keep-Alive",
+									"value": "timeout=5"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"success\": true,\n    \"message\": \"Connection request sent successfully\",\n    \"data\": {\n        \"connectionId\": \"d6335467-af83-4f14-be49-ef1679c197f0\",\n        \"receiverId\": \"a647aded-40dc-48aa-8a2e-b671d3c1fe4c\",\n        \"status\": \"PENDING\"\n    }\n}"
+						}
+					]
+				},
+				{
+					"name": "Accept Connection Request",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{connection_base_url}}/connections/accept/:connectionId",
+							"host": [
+								"{{connection_base_url}}"
+							],
+							"path": [
+								"connections",
+								"accept",
+								":connectionId"
+							],
+							"variable": [
+								{
+									"key": "connectionId"
+								}
+							]
+						},
+						"description": "Accept a pending connection request. Replace :connectionId with actual connection ID."
+					},
+					"response": [
+						{
+							"name": "success",
+							"originalRequest": {
+								"method": "PUT",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}",
+										"type": "text"
+									}
+								],
+								"url": "{{connection_base_url}}/connections/accept/{{connectionId}}"
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": null,
+							"header": [
+								{
+									"key": "X-Powered-By",
+									"value": "Express"
+								},
+								{
+									"key": "Content-Type",
+									"value": "application/json; charset=utf-8"
+								},
+								{
+									"key": "Content-Length",
+									"value": "152"
+								},
+								{
+									"key": "ETag",
+									"value": "W/\"98-9LOljImZMEplO2IMLXBpyvLZo/I\""
+								},
+								{
+									"key": "Date",
+									"value": "Fri, 05 Sep 2025 20:32:28 GMT"
+								},
+								{
+									"key": "Connection",
+									"value": "keep-alive"
+								},
+								{
+									"key": "Keep-Alive",
+									"value": "timeout=5"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"success\": true,\n    \"message\": \"Connection request accepted successfully\",\n    \"data\": {\n        \"connectionId\": \"a5a94b17-52b7-4458-bea5-7009bf98ee3d\",\n        \"status\": \"ACCEPTED\"\n    }\n}"
+						}
+					]
+				},
+				{
+					"name": "Reject Connection Request",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{connection_base_url}}/connections/reject/:connectionId",
+							"host": [
+								"{{connection_base_url}}"
+							],
+							"path": [
+								"connections",
+								"reject",
+								":connectionId"
+							],
+							"variable": [
+								{
+									"key": "connectionId"
+								}
+							]
+						},
+						"description": "Reject a pending connection request. Replace :connectionId with actual connection ID."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Sent Requests",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{connection_base_url}}/connections/sent?page=1&limit=10",
+							"host": [
+								"{{connection_base_url}}"
+							],
+							"path": [
+								"connections",
+								"sent"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "10"
+								}
+							]
+						},
+						"description": "Get connection requests sent by the authenticated user. Supports pagination."
+					},
+					"response": [
+						{
+							"name": "success",
+							"originalRequest": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}",
+										"type": "text"
+									}
+								],
+								"url": {
+									"raw": "{{connection_base_url}}/connections/sent?page=1&limit=10",
+									"host": [
+										"{{connection_base_url}}"
+									],
+									"path": [
+										"connections",
+										"sent"
+									],
+									"query": [
+										{
+											"key": "page",
+											"value": "1"
+										},
+										{
+											"key": "limit",
+											"value": "10"
+										}
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": null,
+							"header": [
+								{
+									"key": "X-Powered-By",
+									"value": "Express"
+								},
+								{
+									"key": "Content-Type",
+									"value": "application/json; charset=utf-8"
+								},
+								{
+									"key": "Content-Length",
+									"value": "445"
+								},
+								{
+									"key": "ETag",
+									"value": "W/\"1bd-KZgAqyHrsUNMvaPbwfXwZL7DNW0\""
+								},
+								{
+									"key": "Date",
+									"value": "Fri, 05 Sep 2025 20:30:14 GMT"
+								},
+								{
+									"key": "Connection",
+									"value": "keep-alive"
+								},
+								{
+									"key": "Keep-Alive",
+									"value": "timeout=5"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"success\": true,\n    \"data\": {\n        \"connections\": [\n            {\n                \"id\": \"a5a94b17-52b7-4458-bea5-7009bf98ee3d\",\n                \"user\": {\n                    \"id\": \"351a5e3b-6f19-48fb-9c55-58e556f0d037\",\n                    \"name\": \"Unknown\"\n                },\n                \"status\": \"PENDING\",\n                \"createdAt\": \"2025-09-05T20:28:48.406Z\"\n            },\n            {\n                \"id\": \"a9a3dba3-c5b0-459a-85b8-c224dd44a55b\",\n                \"user\": {\n                    \"id\": \"54b20150-29f2-4341-875d-47b9581bacc4\",\n                    \"name\": \"Unknown\"\n                },\n                \"status\": \"ACCEPTED\",\n                \"createdAt\": \"2025-09-03T17:50:00.237Z\"\n            }\n        ],\n        \"pagination\": {\n            \"page\": 1,\n            \"limit\": 10,\n            \"total\": 2,\n            \"pages\": 1\n        }\n    }\n}"
+						}
+					]
+				},
+				{
+					"name": "Get Received Requests",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{connection_base_url}}/connections/received?page=1&limit=10",
+							"host": [
+								"{{connection_base_url}}"
+							],
+							"path": [
+								"connections",
+								"received"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "10"
+								}
+							]
+						},
+						"description": "Get connection requests received by the authenticated user. Supports pagination."
+					},
+					"response": [
+						{
+							"name": "success",
+							"originalRequest": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}",
+										"type": "text"
+									}
+								],
+								"url": {
+									"raw": "{{connection_base_url}}/connections/received?page=1&limit=10",
+									"host": [
+										"{{connection_base_url}}"
+									],
+									"path": [
+										"connections",
+										"received"
+									],
+									"query": [
+										{
+											"key": "page",
+											"value": "1"
+										},
+										{
+											"key": "limit",
+											"value": "10"
+										}
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": null,
+							"header": [
+								{
+									"key": "X-Powered-By",
+									"value": "Express"
+								},
+								{
+									"key": "Content-Type",
+									"value": "application/json; charset=utf-8"
+								},
+								{
+									"key": "Content-Length",
+									"value": "270"
+								},
+								{
+									"key": "ETag",
+									"value": "W/\"10e-NrXu/5iiPnKtgCMhqkXc2ZXwO5o\""
+								},
+								{
+									"key": "Date",
+									"value": "Fri, 05 Sep 2025 20:34:30 GMT"
+								},
+								{
+									"key": "Connection",
+									"value": "keep-alive"
+								},
+								{
+									"key": "Keep-Alive",
+									"value": "timeout=5"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"success\": true,\n    \"data\": {\n        \"connections\": [\n            {\n                \"id\": \"d6335467-af83-4f14-be49-ef1679c197f0\",\n                \"user\": {\n                    \"id\": \"351a5e3b-6f19-48fb-9c55-58e556f0d037\",\n                    \"name\": \"Unknown\"\n                },\n                \"status\": \"PENDING\",\n                \"createdAt\": \"2025-09-05T20:33:36.163Z\"\n            }\n        ],\n        \"pagination\": {\n            \"page\": 1,\n            \"limit\": 10,\n            \"total\": 1,\n            \"pages\": 1\n        }\n    }\n}"
+						}
+					]
+				},
+				{
+					"name": "Get Connections (Friends)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{connection_base_url}}/connections/friends?page=1&limit=10",
+							"host": [
+								"{{connection_base_url}}"
+							],
+							"path": [
+								"connections",
+								"friends"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "10"
+								}
+							]
+						},
+						"description": "Get all accepted connections for the authenticated user. Supports pagination."
+					},
+					"response": [
+						{
+							"name": "success",
+							"originalRequest": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}",
+										"type": "text"
+									}
+								],
+								"url": {
+									"raw": "{{connection_base_url}}/connections/friends?page=1&limit=10",
+									"host": [
+										"{{connection_base_url}}"
+									],
+									"path": [
+										"connections",
+										"friends"
+									],
+									"query": [
+										{
+											"key": "page",
+											"value": "1"
+										},
+										{
+											"key": "limit",
+											"value": "10"
+										}
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": null,
+							"header": [
+								{
+									"key": "X-Powered-By",
+									"value": "Express"
+								},
+								{
+									"key": "Content-Type",
+									"value": "application/json; charset=utf-8"
+								},
+								{
+									"key": "Content-Length",
+									"value": "253"
+								},
+								{
+									"key": "ETag",
+									"value": "W/\"fd-UFkv7/jx/xs6Bc59r0Cdm/tLRIM\""
+								},
+								{
+									"key": "Date",
+									"value": "Fri, 05 Sep 2025 20:30:24 GMT"
+								},
+								{
+									"key": "Connection",
+									"value": "keep-alive"
+								},
+								{
+									"key": "Keep-Alive",
+									"value": "timeout=5"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"success\": true,\n    \"data\": {\n        \"connections\": [\n            {\n                \"id\": \"a9a3dba3-c5b0-459a-85b8-c224dd44a55b\",\n                \"user\": {\n                    \"id\": \"54b20150-29f2-4341-875d-47b9581bacc4\",\n                    \"name\": \"Unknown\"\n                },\n                \"connectedAt\": \"2025-09-03T17:50:49.779Z\"\n            }\n        ],\n        \"pagination\": {\n            \"page\": 1,\n            \"limit\": 10,\n            \"total\": 1,\n            \"pages\": 1\n        }\n    }\n}"
+						}
+					]
+				},
+				{
+					"name": "Remove Connection",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{connection_base_url}}/connections/:targetUserId",
+							"host": [
+								"{{connection_base_url}}"
+							],
+							"path": [
+								"connections",
+								":targetUserId"
+							],
+							"variable": [
+								{
+									"key": "targetUserId"
+								}
+							]
+						},
+						"description": "Remove an existing connection. Replace :targetUserId with actual user ID."
+					},
+					"response": [
+						{
+							"name": "success",
+							"originalRequest": {
+								"method": "DELETE",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}",
+										"type": "text"
+									}
+								],
+								"url": "{{connection_base_url}}/connections/{{user_id}}"
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": null,
+							"header": [
+								{
+									"key": "X-Powered-By",
+									"value": "Express"
+								},
+								{
+									"key": "Content-Type",
+									"value": "application/json; charset=utf-8"
+								},
+								{
+									"key": "Content-Length",
+									"value": "60"
+								},
+								{
+									"key": "ETag",
+									"value": "W/\"3c-Bis9Dy/jdILM+EFrVNrn6V/8Eh0\""
+								},
+								{
+									"key": "Date",
+									"value": "Fri, 05 Sep 2025 20:32:43 GMT"
+								},
+								{
+									"key": "Connection",
+									"value": "keep-alive"
+								},
+								{
+									"key": "Keep-Alive",
+									"value": "timeout=5"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"success\": true,\n    \"message\": \"Connection removed successfully\"\n}"
+						}
+					]
+				},
+				{
+					"name": "Get Connection Status",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{connection_base_url}}/connections/status/:targetUserId",
+							"host": [
+								"{{connection_base_url}}"
+							],
+							"path": [
+								"connections",
+								"status",
+								":targetUserId"
+							],
+							"variable": [
+								{
+									"key": "targetUserId"
+								}
+							]
+						},
+						"description": "Get connection status between authenticated user and target user. Replace :targetUserId with actual user ID."
+					},
+					"response": [
+						{
+							"name": "success",
+							"originalRequest": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}",
+										"type": "text"
+									}
+								],
+								"url": "{{connection_base_url}}/connections/status/{{user2Id}}"
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": null,
+							"header": [
+								{
+									"key": "X-Powered-By",
+									"value": "Express"
+								},
+								{
+									"key": "Content-Type",
+									"value": "application/json; charset=utf-8"
+								},
+								{
+									"key": "Content-Length",
+									"value": "63"
+								},
+								{
+									"key": "ETag",
+									"value": "W/\"3f-PMKkHDO/pmpkoqqbnM9blGGEjg0\""
+								},
+								{
+									"key": "Date",
+									"value": "Fri, 05 Sep 2025 20:32:48 GMT"
+								},
+								{
+									"key": "Connection",
+									"value": "keep-alive"
+								},
+								{
+									"key": "Keep-Alive",
+									"value": "timeout=5"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"success\": true,\n    \"data\": {\n        \"status\": \"NONE\",\n        \"canSendRequest\": true\n    }\n}"
+						}
+					]
+				},
+				{
+					"name": "Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": "{{connection_base_url}}/",
+						"description": "Connection service health check endpoint."
+					},
+					"response": []
+				}
+			],
+			"description": "Connection service endpoints for managing user connections and networking"
+		},
+		{
+			"name": "Post Service",
+			"item": [
+				{
+					"name": "Posts",
+					"item": [
+						{
+							"name": "Create Post",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n \"content\": \"This is my first post! 🚀\",\n \"media\": [{\n \"type\": \"image\",\n \"url\": \"https://example.com/image1.jpg\",\n \"caption\": \"Beautiful sunset\"\n }],\n \"topicNames\": [\"Technology\", \"Web Development\"]\n}"
+								},
+								"url": "{{post_base_url}}/posts",
+								"description": "Create a post with text, media, and topics."
+							},
+							"response": []
+						},
+						{
+							"name": "Get Post",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{post_base_url}}/posts/:postId",
+									"host": [
+										"{{post_base_url}}"
+									],
+									"path": [
+										"posts",
+										":postId"
+									],
+									"variable": [
+										{
+											"key": "postId"
+										}
+									]
+								},
+								"description": "Get a post by ID."
+							},
+							"response": []
+						},
+						{
+							"name": "Get User Posts",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{post_base_url}}/posts/user/:userId?page=1&limit=10",
+									"host": [
+										"{{post_base_url}}"
+									],
+									"path": [
+										"posts",
+										"user",
+										":userId"
+									],
+									"query": [
+										{
+											"key": "page",
+											"value": "1"
+										},
+										{
+											"key": "limit",
+											"value": "10"
+										}
+									],
+									"variable": [
+										{
+											"key": "userId"
+										}
+									]
+								},
+								"description": "Get posts by user ID with pagination."
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Search",
+					"item": [
+						{
+							"name": "Search Users",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{post_base_url}}/search/users?q=john&page=1&limit=10",
+									"host": [
+										"{{post_base_url}}"
+									],
+									"path": [
+										"search",
+										"users"
+									],
+									"query": [
+										{
+											"key": "q",
+											"value": "john"
+										},
+										{
+											"key": "page",
+											"value": "1"
+										},
+										{
+											"key": "limit",
+											"value": "10"
+										}
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Search Posts",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{post_base_url}}/search/posts?q=javascript&page=1&limit=10",
+									"host": [
+										"{{post_base_url}}"
+									],
+									"path": [
+										"search",
+										"posts"
+									],
+									"query": [
+										{
+											"key": "q",
+											"value": "javascript"
+										},
+										{
+											"key": "page",
+											"value": "1"
+										},
+										{
+											"key": "limit",
+											"value": "10"
+										}
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Search Topics",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{post_base_url}}/search/topics?q=tech&page=1&limit=10",
+									"host": [
+										"{{post_base_url}}"
+									],
+									"path": [
+										"search",
+										"topics"
+									],
+									"query": [
+										{
+											"key": "q",
+											"value": "tech"
+										},
+										{
+											"key": "page",
+											"value": "1"
+										},
+										{
+											"key": "limit",
+											"value": "10"
+										}
+									]
+								}
+							},
+							"response": []
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "Chat Service",
+			"item": [
+				{
+					"name": "Chat Rooms",
+					"item": [
+						{
+							"name": "Create Direct Chat",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"if (pm.response.code === 200) {",
+											"    const response = pm.response.json();",
+											"    if (response.success && response.data.id) {",
+											"        pm.collectionVariables.set('direct_chat_id', response.data.id);",
+											"        console.log('Direct Chat ID saved:', response.data.id);",
+											"    }",
+											"}"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json",
+										"type": "text"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}",
+										"type": "text"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"isGroup\": false,\n  \"memberIds\": [\"target_user_id_here\"]\n}"
+								},
+								"url": "{{chat_base_url}}/chat/rooms",
+								"description": "Create a direct (1-on-1) chat room between two users."
+							},
+							"response": []
+						},
+						{
+							"name": "Create Group Chat",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"if (pm.response.code === 200) {",
+											"    const response = pm.response.json();",
+											"    if (response.success && response.data.id) {",
+											"        pm.collectionVariables.set('group_chat_id', response.data.id);",
+											"        console.log('Group Chat ID saved:', response.data.id);",
+											"    }",
+											"}"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json",
+										"type": "text"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}",
+										"type": "text"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"name\": \"Tech Discussions\",\n  \"isGroup\": true,\n  \"memberIds\": [\"user_id_1\", \"user_id_2\", \"user_id_3\"]\n}"
+								},
+								"url": "{{chat_base_url}}/chat/rooms",
+								"description": "Create a group chat room with multiple users."
+							},
+							"response": []
+						},
+						{
+							"name": "Get User Chat Rooms",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}",
+										"type": "text"
+									}
+								],
+								"url": {
+									"raw": "{{chat_base_url}}/chat/rooms?page=1&limit=10",
+									"host": [
+										"{{chat_base_url}}"
+									],
+									"path": [
+										"chat",
+										"rooms"
+									],
+									"query": [
+										{
+											"key": "page",
+											"value": "1"
+										},
+										{
+											"key": "limit",
+											"value": "10"
+										}
+									]
+								},
+								"description": "Get all chat rooms for the authenticated user with pagination."
+							},
+							"response": []
+						},
+						{
+							"name": "Get Specific Chat Room",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}",
+										"type": "text"
+									}
+								],
+								"url": "{{chat_base_url}}/chat/rooms/{{direct_chat_id}}",
+								"description": "Get details of a specific chat room including members."
+							},
+							"response": []
+						},
+						{
+							"name": "Update Chat Room Name",
+							"request": {
+								"method": "PUT",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json",
+										"type": "text"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}",
+										"type": "text"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"name\": \"Updated Group Name\"\n}"
+								},
+								"url": "{{chat_base_url}}/chat/rooms/{{group_chat_id}}",
+								"description": "Update the name of a group chat room."
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Chat Room Members",
+					"item": [
+						{
+							"name": "Add Members to Group",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json",
+										"type": "text"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}",
+										"type": "text"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"memberIds\": [\"new_user_id_1\", \"new_user_id_2\"]\n}"
+								},
+								"url": "{{chat_base_url}}/chat/rooms/{{group_chat_id}}/members",
+								"description": "Add new members to an existing group chat."
+							},
+							"response": []
+						},
+						{
+							"name": "Remove Member from Group",
+							"request": {
+								"method": "DELETE",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}",
+										"type": "text"
+									}
+								],
+								"url": {
+									"raw": "{{chat_base_url}}/chat/rooms/{{group_chat_id}}/members/:memberId",
+									"host": [
+										"{{chat_base_url}}"
+									],
+									"path": [
+										"chat",
+										"rooms",
+										"{{group_chat_id}}",
+										"members",
+										":memberId"
+									],
+									"variable": [
+										{
+											"key": "memberId"
+										}
+									]
+								},
+								"description": "Remove a member from a group chat. Replace :memberId with actual user ID."
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Messages",
+					"item": [
+						{
+							"name": "Send Text Message",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"if (pm.response.code === 200) {",
+											"    const response = pm.response.json();",
+											"    if (response.success && response.data.id) {",
+											"        pm.collectionVariables.set('latest_message_id', response.data.id);",
+											"        console.log('Message ID saved:', response.data.id);",
+											"    }",
+											"}"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json",
+										"type": "text"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}",
+										"type": "text"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"content\": \"Hello! This is my first message in this chat. 👋 How's everyone doing?\"\n}"
+								},
+								"url": "{{chat_base_url}}/chat/rooms/{{direct_chat_id}}/messages",
+								"description": "Send a text message to a chat room."
+							},
+							"response": []
+						},
+						{
+							"name": "Send Message with Media",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json",
+										"type": "text"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}",
+										"type": "text"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"content\": \"Check out this awesome screenshot from our project! 📸\",\n  \"media\": [\n    {\n      \"type\": \"image\",\n      \"url\": \"https://via.placeholder.com/800x600/007acc/ffffff?text=Project+Screenshot\",\n      \"caption\": \"Latest project progress\",\n      \"size\": \"125440\"\n    }\n  ]\n}"
+								},
+								"url": "{{chat_base_url}}/chat/rooms/{{group_chat_id}}/messages",
+								"description": "Send a message with media attachments to a chat room."
+							},
+							"response": []
+						},
+						{
+							"name": "Get Chat Messages",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}",
+										"type": "text"
+									}
+								],
+								"url": {
+									"raw": "{{chat_base_url}}/chat/rooms/{{direct_chat_id}}/messages?page=1&limit=20",
+									"host": [
+										"{{chat_base_url}}"
+									],
+									"path": [
+										"chat",
+										"rooms",
+										"{{direct_chat_id}}",
+										"messages"
+									],
+									"query": [
+										{
+											"key": "page",
+											"value": "1"
+										},
+										{
+											"key": "limit",
+											"value": "20"
+										}
+									]
+								},
+								"description": "Get messages from a chat room with pagination."
+							},
+							"response": []
+						},
+						{
+							"name": "Get Messages Before Timestamp",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}",
+										"type": "text"
+									}
+								],
+								"url": {
+									"raw": "{{chat_base_url}}/chat/rooms/{{group_chat_id}}/messages?limit=20&before=2024-01-01T00:00:00.000Z",
+									"host": [
+										"{{chat_base_url}}"
+									],
+									"path": [
+										"chat",
+										"rooms",
+										"{{group_chat_id}}",
+										"messages"
+									],
+									"query": [
+										{
+											"key": "limit",
+											"value": "20"
+										},
+										{
+											"key": "before",
+											"value": "2024-01-01T00:00:00.000Z"
+										}
+									]
+								},
+								"description": "Get messages from a chat room before a specific timestamp (for infinite scroll)."
+							},
+							"response": []
+						},
+						{
+							"name": "Mark Message as Read",
+							"request": {
+								"method": "PUT",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}",
+										"type": "text"
+									}
+								],
+								"url": "{{chat_base_url}}/chat/messages/{{latest_message_id}}/read",
+								"description": "Mark a specific message as read by the current user."
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": "{{chat_base_url}}/",
+						"description": "Chat service health check endpoint."
+					},
+					"response": []
+				}
+			],
+			"description": "Chat service endpoints for real-time messaging, chat rooms, and WebSocket functionality"
+		}
+	],
+	"variable": [
+		{
+			"key": "auth_base_url",
+			"value": "http://localhost:3000",
+			"type": "string"
+		},
+		{
+			"key": "profile_base_url",
+			"value": "http://localhost:3001",
+			"type": "string"
+		},
+		{
+			"key": "connection_base_url",
+			"value": "http://localhost:3002",
+			"type": "string"
+		},
+		{
+			"key": "post_base_url",
+			"value": "http://localhost:3003",
+			"type": "string"
+		},
+		{
+			"key": "chat_base_url",
+			"value": "http://localhost:3004",
+			"type": "string"
+		},
+		{
+			"key": "access_token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "refresh_token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "user_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "user2Id",
+			"value": "351a5e3b-6f19-48fb-9c55-58e556f0d037",
+			"type": "default"
+		},
+		{
+			"key": "connectionId",
+			"value": "a5a94b17-52b7-4458-bea5-7009bf98ee3d",
+			"type": "default"
+		}
+	]
+}

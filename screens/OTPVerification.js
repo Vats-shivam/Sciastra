@@ -13,28 +13,59 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import colors from '../config/colors';
+import authApi from '../api/AuthApi';
 
 const OtpVerificationScreen = ({ navigation, route }) => {
   const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
   const phone = route.params?.phone;
   
   console.log('OTP Screen loaded with phone:', phone);
 
   const verifyOtp = async () => {
     setLoading(true);
-    // Comment actual API integration
-    // const response = await api.verifyOtp(sessionId, otp);
-    // Mock behavior: success if OTP is "123456"
-    const response = await new Promise((res) =>
-      setTimeout(() => res(otp === '123456' ? { success: true } : { success: false }), 1000)
-    );
-    setLoading(false);
-    if (response.success) {
-      console.log('OTP verified, navigating to ProfileSetup');
-      navigation.navigate('ProfileSetup');
-    } else {
-      Alert.alert('Invalid OTP', 'Please enter the correct OTP or resend.');
+    
+    try {
+      // Call the real Verify OTP API
+      const response = await authApi.verifyOtp(phone, otp);
+      
+      setLoading(false);
+      
+      if (response.success) {
+        console.log('OTP verified successfully, user authenticated');
+        console.log('User ID:', response.data?.userId);
+        
+        // Navigate to ProfileSetup or main app based on your flow
+        navigation.navigate('ProfileSetup');
+      } else {
+        Alert.alert('Invalid OTP', response.message || 'Please enter the correct OTP or try again.');
+      }
+    } catch (error) {
+      setLoading(false);
+      console.error('OTP verification error:', error);
+      Alert.alert('Error', 'Network error. Please check your connection and try again.');
+    }
+  };
+
+  const resendOtp = async () => {
+    setResendLoading(true);
+    
+    try {
+      const response = await authApi.sendOtp(phone);
+      setResendLoading(false);
+      
+      if (response.success) {
+        Alert.alert('Success', 'OTP has been resent to your phone number.');
+        // Clear current OTP input
+        setOtp('');
+      } else {
+        Alert.alert('Error', response.message || 'Failed to resend OTP. Please try again.');
+      }
+    } catch (error) {
+      setResendLoading(false);
+      console.error('Resend OTP error:', error);
+      Alert.alert('Error', 'Network error. Please check your connection and try again.');
     }
   };
 
@@ -118,8 +149,12 @@ const OtpVerificationScreen = ({ navigation, route }) => {
             {/* Resend Section */}
             <View style={styles.resendContainer}>
               <Text style={styles.resendText}>Didn't receive the code?</Text>
-              <TouchableOpacity>
-                <Text style={styles.resendLink}>Resend OTP</Text>
+              <TouchableOpacity onPress={resendOtp} disabled={resendLoading}>
+                {resendLoading ? (
+                  <ActivityIndicator size="small" color="#8a2be2" />
+                ) : (
+                  <Text style={styles.resendLink}>Resend OTP</Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
