@@ -46,8 +46,6 @@ const onboardingData = [
 
 const OnboardingScreen = ({ navigation }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [phone, setPhone] = useState('');
-  const [loading, setLoading] = useState(false);
   const [showLoginForm, setShowLoginForm] = useState(false);
   
   // Animation references
@@ -106,16 +104,9 @@ const OnboardingScreen = ({ navigation }) => {
     }
   };
 
-  // Handle login
-  const handleLogin = async () => {
-    if (!/^\d{10}$/.test(phone)) return;
-    setLoading(true);
-    const response = await new Promise((res) =>
-      setTimeout(() => res({ success: true }), 1000)
-    );
-    setLoading(false);
-    if (response.success) navigation?.replace?.('MainTabs');
-    else Alert.alert('Error', 'Failed to send OTP. Try again.');
+  // Handle login - navigate to Login screen
+  const handleLogin = () => {
+    navigation.navigate('Login');
   };
 
   // Wave component for the transition effect
@@ -288,42 +279,17 @@ const OnboardingScreen = ({ navigation }) => {
             ]}
           >
             <Text style={styles.logoText}>SciAstra</Text>
-            <Text style={styles.formTitle}>Enter your mobile number</Text>
-            <View style={styles.inputRow}>
-              <View style={styles.countryCode}>
-                <Text style={styles.flag}>🇮🇳</Text>
-                <Text style={styles.countryText}>+91</Text>
-              </View>
-              <TextInput
-                style={styles.input}
-                placeholder="10-digit mobile number"
-                placeholderTextColor="rgba(255,255,255,0.5)"
-                keyboardType="phone-pad"
-                maxLength={10}
-                value={phone}
-                onChangeText={(text) => setPhone(text.replace(/\D/g, ''))}
-              />
-            </View>
+            <Text style={styles.formTitle}>Ready to join our community?</Text>
+            
             <TouchableOpacity
-              style={[
-                styles.loginButton,
-                /^\d{10}$/.test(phone)
-                  ? styles.buttonActive
-                  : styles.buttonDisabled,
-                loading && { opacity: 0.7 },
-              ]}
+              style={styles.loginButton}
               onPress={handleLogin}
-              disabled={!/^\d{10}$/.test(phone) || loading}
             >
               <LinearGradient
                 colors={['#8a2be2', '#9932cc']}
                 style={styles.gradientLoginButton}
               >
-                {loading ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={styles.buttonText}>Continue</Text>
-                )}
+                <Text style={styles.buttonText}>Get Started</Text>
               </LinearGradient>
             </TouchableOpacity>
             

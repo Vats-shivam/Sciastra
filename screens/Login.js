@@ -7,9 +7,13 @@ import {
   StyleSheet,
   Alert,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path } from 'react-native-svg';
+import colors from '../config/colors';
 
 const LoginScreen = ({ navigation }) => {
   const [phone, setPhone] = useState('');
@@ -25,92 +29,88 @@ const LoginScreen = ({ navigation }) => {
     );
 
     setLoading(false);
-    if (response.success) navigation?.replace?.('MainTabs');
-    else Alert.alert('Error', 'Failed to send OTP. Try again.');
+    if (response.success) {
+      console.log('Navigating to OTP with phone:', phone);
+      navigation.navigate('OtpVerification', { phone });
+    } else {
+      Alert.alert('Error', 'Failed to send OTP. Try again.');
+    }
   };
 
   const isValidPhone = /^\d{10}$/.test(phone);
 
   return (
     <LinearGradient
-      colors={['#0f172a', '#1e293b', '#0f172a']}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
+      colors={['#000000', '#0d0020', '#000000']}
       style={styles.container}
     >
-      {/* Logo Section */}
-      <View style={styles.logoContainer}>
-        <View style={styles.logoCircle}>
-          <Svg width={24} height={24} viewBox="0 0 20 20" fill="white">
-            <Path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </Svg>
-        </View>
-        <Text style={styles.logoText}>Sciastra</Text>
-      </View>
-
-      {/* Main Content */}
-      <View style={styles.mainContent}>
-        <Text style={styles.title}>Community</Text>
-        <Text style={styles.subtitle}>
-          Join a vibrant community where{'\n'}
-          collaboration and learning thrive!
-        </Text>
-
-        {/* Dots Indicator */}
-        <View style={styles.dotsContainer}>
-          <View style={[styles.dot, styles.activeDot]} />
-          <View style={styles.dot} />
-          <View style={styles.dot} />
-        </View>
-
-        {/* Phone Input */}
-        <View style={styles.inputRow}>
-          <View style={styles.countryCode}>
-            <Text style={styles.flag}>🇮🇳</Text>
-            <Text style={styles.countryText}>+91</Text>
-          </View>
-          <TextInput
-            style={styles.input}
-            placeholder="10-digit mobile number"
-            placeholderTextColor="#9ca3af"
-            keyboardType="phone-pad"
-            maxLength={10}
-            value={phone}
-            onChangeText={(text) => setPhone(text.replace(/\D/g, ''))}
-          />
-        </View>
-
-        {/* Continue Button */}
-        <TouchableOpacity
-          style={[
-            styles.button,
-            isValidPhone ? styles.buttonActive : styles.buttonDisabled,
-            loading && { opacity: 0.7 },
-          ]}
-          onPress={handleLogin}
-          disabled={!isValidPhone || loading}
+      <SafeAreaView style={styles.safeArea}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.keyboardView}
         >
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text
-              style={[
-                styles.buttonText,
-                !isValidPhone && { color: '#9ca3af' },
-              ]}
-            >
-              Continue
+        <View style={styles.content}>
+          {/* Logo Section */}
+          <View style={styles.logoContainer}>
+            <Text style={styles.logoText}>SciAstra</Text>
+            <Text style={styles.subtitle}>
+              Join a vibrant community where{'\n'}
+              collaboration and learning thrive!
             </Text>
-          )}
-        </TouchableOpacity>
+          </View>
 
-        {/* Terms */}
-        <Text style={styles.terms}>
-          By continuing, you agree to our{' '}
-          <Text style={styles.link}>Terms & Conditions</Text> and{' '}
-          <Text style={styles.link}>Privacy Policy</Text>
-        </Text>
-      </View>
+          {/* Phone Input Section */}
+          <View style={styles.formContainer}>
+            <Text style={styles.formTitle}>Enter your mobile number</Text>
+            
+            <View style={styles.inputRow}>
+              <View style={styles.countryCode}>
+                <Text style={styles.flag}>🇮🇳</Text>
+                <Text style={styles.countryText}>+91</Text>
+              </View>
+              <TextInput
+                style={styles.input}
+                placeholder="10-digit mobile number"
+                placeholderTextColor="rgba(255,255,255,0.5)"
+                keyboardType="phone-pad"
+                maxLength={10}
+                value={phone}
+                onChangeText={(text) => setPhone(text.replace(/\D/g, ''))}
+              />
+            </View>
+
+            {/* Continue Button */}
+            <TouchableOpacity
+              style={[
+                styles.button,
+                isValidPhone && styles.buttonActive,
+                loading && { opacity: 0.7 },
+              ]}
+              onPress={handleLogin}
+              disabled={!isValidPhone || loading}
+            >
+              <LinearGradient
+                colors={isValidPhone ? ['#8a2be2', '#9932cc'] : ['rgba(138, 43, 226, 0.3)', 'rgba(153, 50, 204, 0.3)']}
+                style={styles.gradientButton}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.buttonText}>Continue</Text>
+                )}
+              </LinearGradient>
+            </TouchableOpacity>
+
+            {/* Terms */}
+            <View style={styles.termsContainer}>
+              <Text style={styles.termsText}>
+                By continuing, you agree to our Terms of Service and Privacy Policy
+              </Text>
+            </View>
+          </View>
+        </View>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
     </LinearGradient>
   );
 };
@@ -118,71 +118,58 @@ const LoginScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  safeArea: {
+    flex: 1,
+  },
+  keyboardView: {
+    flex: 1,
+  },
+  content: {
+    flex: 1,
+    justifyContent: 'center',
     paddingHorizontal: 24,
-    paddingVertical: 48,
-    justifyContent: 'space-between',
   },
   logoContainer: {
-    marginTop: 32,
-  },
-  logoCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#06b6d4', // cyan-500
     alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
+    marginBottom: 60,
   },
   logoText: {
-    fontSize: 20,
-    fontWeight: '700',
+    fontSize: 32,
+    fontWeight: 'bold',
     color: 'white',
-  },
-  mainContent: {
-    marginBottom: 64,
-  },
-  title: {
-    fontSize: 36,
-    fontWeight: '700',
-    color: 'white',
-    marginBottom: 12,
+    marginBottom: 20,
+    textAlign: 'center',
   },
   subtitle: {
-    fontSize: 18,
-    color: '#d1d5db',
-    lineHeight: 26,
-    marginBottom: 40,
+    fontSize: 16,
+    color: 'rgba(255,255,255,0.8)',
+    textAlign: 'center',
+    lineHeight: 22,
   },
-  dotsContainer: {
-    flexDirection: 'row',
-    marginBottom: 40,
+  formContainer: {
+    width: '100%',
     alignItems: 'center',
   },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: 'rgba(255,255,255,0.3)',
-    marginHorizontal: 4,
-  },
-  activeDot: {
-    width: 24,
-    backgroundColor: 'white',
+  formTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: 'white',
+    marginBottom: 30,
+    textAlign: 'center',
   },
   inputRow: {
     flexDirection: 'row',
-    marginBottom: 20,
+    marginBottom: 25,
+    width: '100%',
   },
   countryCode: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(255,255,255,0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-    borderRadius: 8,
+    borderRadius: 12,
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingVertical: 14,
     marginRight: 8,
   },
   flag: {
@@ -197,40 +184,39 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     backgroundColor: 'rgba(255,255,255,0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     color: 'white',
     fontSize: 16,
   },
   button: {
-    paddingVertical: 16,
+    width: '100%',
     borderRadius: 12,
-    alignItems: 'center',
-    marginBottom: 20,
+    overflow: 'hidden',
+    marginTop: 10,
   },
   buttonActive: {
-    backgroundColor: '#4b5563', // gray-600
+    opacity: 1,
   },
-  buttonDisabled: {
-    backgroundColor: '#374151', // gray-700
+  gradientButton: {
+    paddingVertical: 16,
+    alignItems: 'center',
+    borderRadius: 12,
   },
   buttonText: {
     fontSize: 18,
-    fontWeight: '500',
+    fontWeight: '600',
     color: 'white',
   },
-  terms: {
-    fontSize: 14,
-    color: '#9ca3af',
-    textAlign: 'center',
-    marginTop: 8,
+  termsContainer: {
+    marginTop: 25,
+    paddingHorizontal: 20,
   },
-  link: {
-    color: '#22d3ee', // cyan-400
-    textDecorationLine: 'underline',
+  termsText: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 12,
+    textAlign: 'center',
   },
 });
 

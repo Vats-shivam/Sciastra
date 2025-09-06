@@ -74,15 +74,11 @@ const ProfileScreen = ({ navigation }) => {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background, padding: 15}}>
       {/* Header */}
-      <Header title="PROFILE" />
-      
-      {/* Top Bar with 3-dot menu - Always show for current user */}
-      <View style={styles.topBar}>
-        <View style={{ flex: 1 }} />
-        <Pressable onPress={handleMenu} hitSlop={12} style={styles.menuButton}>
-          <Icon name="dots-vertical" size={28} color={colors.textPrimary} />
-        </Pressable>
-      </View>
+      <Header 
+        title="PROFILE" 
+        showMenuButton={true}
+        onMenuPress={handleMenu}
+      />
         
       <Modal
         visible={menuVisible}
@@ -126,17 +122,6 @@ const ProfileScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  topBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    paddingTop: 8,
-    paddingBottom: 4,
-    paddingHorizontal: 8,
-  },
-  menuButton: {
-    padding: 4,
-  },
   menuOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.2)',
