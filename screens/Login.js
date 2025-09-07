@@ -31,7 +31,6 @@ const LoginScreen = ({ navigation }) => {
     setLoading(true);
 
     try {
-      // Call the real Send OTP API with formatted phone number
       const response = await authApi.sendOtp(phoneValidation.formatted);
       
       setLoading(false);
@@ -112,6 +111,13 @@ const LoginScreen = ({ navigation }) => {
                 )}
               </LinearGradient>
             </TouchableOpacity>
+
+            {/* Bypass Hint for Testing */}
+            <View style={styles.bypassHint}>
+              <Text style={styles.bypassText}>
+                🔧 Test Mode: Use phone "9999999999" for bypass authentication
+              </Text>
+            </View>
 
             {/* Terms */}
             <View style={styles.termsContainer}>
@@ -228,6 +234,22 @@ const styles = StyleSheet.create({
   termsText: {
     color: 'rgba(255,255,255,0.6)',
     fontSize: 12,
+    textAlign: 'center',
+  },
+  bypassHint: {
+    backgroundColor: 'rgba(138, 43, 226, 0.1)',
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginTop: 15,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(138, 43, 226, 0.3)',
+  },
+  bypassText: {
+    color: '#8a2be2',
+    fontSize: 12,
+    fontWeight: '500',
     textAlign: 'center',
   },
 });

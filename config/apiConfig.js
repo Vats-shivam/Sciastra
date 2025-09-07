@@ -1,12 +1,8 @@
-// API Configuration for Sciastra Backend Services
-// Update these URLs to match your actual backend deployment
-
-// For Android emulator, use 10.0.2.2 instead of localhost
 // For iOS simulator, use localhost
 // For physical device, use your computer's IP address
 const getBaseUrl = (port) => {
   // For Android Emulator, use 10.0.2.2 which maps to localhost on the host machine
-  return `http://10.0.2.2:${port}`;
+  return `http://10.255.221.1:${port}`;
   
   // Alternative configurations:
   // For iOS Simulator or web: return `http://localhost:${port}`;

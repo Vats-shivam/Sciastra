@@ -147,6 +147,15 @@ class AuthApiService {
       // Ensure phone number has country code
       const formattedPhone = phoneNumber.startsWith('+') ? phoneNumber : `+91${phoneNumber}`;
       
+      // Static bypass for testing - phone number 9999999999
+      if (formattedPhone === '+919999999999') {
+        console.log('Using static bypass for phone number:', formattedPhone);
+        return {
+          success: true,
+          message: 'OTP sent successfully (bypass mode)',
+        };
+      }
+      
       const response = await this.makeRequest(`${getApiBaseUrl('auth')}${API_ENDPOINTS.AUTH.SEND_OTP}`, {
         method: 'POST',
         body: JSON.stringify({
@@ -173,6 +182,31 @@ class AuthApiService {
     try {
       // Ensure phone number has country code
       const formattedPhone = phoneNumber.startsWith('+') ? phoneNumber : `+91${phoneNumber}`;
+      
+      // Static bypass for testing - phone number 9999999999 and OTP 123456
+      if (formattedPhone === '+919999999999' && otp === '123456') {
+        console.log('Using static bypass for OTP verification');
+        
+        // Generate mock tokens for bypass mode
+        const mockTokens = {
+          accessToken: 'bypass_access_token_' + Date.now(),
+          refreshToken: 'bypass_refresh_token_' + Date.now(),
+          userId: 'bypass_user_9999999999'
+        };
+        
+        // Store mock tokens
+        await this.storeTokens(
+          mockTokens.accessToken,
+          mockTokens.refreshToken,
+          mockTokens.userId
+        );
+
+        return {
+          success: true,
+          message: 'OTP verified successfully (bypass mode)',
+          data: mockTokens,
+        };
+      }
       
       const response = await this.makeRequest(`${getApiBaseUrl('auth')}${API_ENDPOINTS.AUTH.VERIFY_OTP}`, {
         method: 'POST',

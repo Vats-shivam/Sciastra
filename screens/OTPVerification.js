@@ -146,6 +146,15 @@ const OtpVerificationScreen = ({ navigation, route }) => {
               </LinearGradient>
             </TouchableOpacity>
 
+            {/* Bypass Hint for Testing */}
+            {phone === '+919999999999' && (
+              <View style={styles.bypassHint}>
+                <Text style={styles.bypassText}>
+                  🔧 Test Mode: Use OTP "123456" for bypass
+                </Text>
+              </View>
+            )}
+
             {/* Resend Section */}
             <View style={styles.resendContainer}>
               <Text style={styles.resendText}>Didn't receive the code?</Text>
@@ -268,6 +277,21 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     textDecorationLine: 'underline',
+  },
+  bypassHint: {
+    backgroundColor: 'rgba(138, 43, 226, 0.1)',
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginBottom: 15,
+    borderWidth: 1,
+    borderColor: 'rgba(138, 43, 226, 0.3)',
+  },
+  bypassText: {
+    color: '#8a2be2',
+    fontSize: 12,
+    fontWeight: '500',
+    textAlign: 'center',
   },
 });
 
