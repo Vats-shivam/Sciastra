@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useEffect } from "react";
 import {
   View,
   Text,
@@ -8,13 +8,18 @@ import {
   Image,
   StyleSheet,
   ScrollView,
+  Alert,
+  RefreshControl,
 } from "react-native";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import colors from "../config/colors";
 import Container from "../components/Container";
 import Header from "../components/Header";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
+import ConnectionApi from "../api/ConnectionApi";
+import { useLoader } from "../context/LoaderContext";
 
+// Mock data as fallback
 const mockConnections = Array.from({ length: 50 }, (_, i) => ({
   id: `${i + 1}`,
   name: `Connection ${i + 1}`,
@@ -37,29 +42,98 @@ const PEOPLE_CATEGORIES = [
 
 const ConnectionsScreen = () => {
   const navigation = useNavigation();
+  const { showLoader, hideLoader } = useLoader();
   const [searchQuery, setSearchQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState("invites");
   const [showMoreConnections, setShowMoreConnections] = useState(false);
   const [showMoreInvites, setShowMoreInvites] = useState(false);
+  
+  // Real data from API
+  const [connections, setConnections] = useState([]);
+  const [receivedRequests, setReceivedRequests] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Load data when screen is focused
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [])
+  );
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const [connectionsResult, requestsResult] = await Promise.all([
+        ConnectionApi.getConnections(1, 50), // Get first 50 connections
+        ConnectionApi.getReceivedRequests(1, 50), // Get first 50 received requests
+      ]);
+
+      if (connectionsResult.success) {
+        // Transform API data to match our component structure
+        const transformedConnections = connectionsResult.data.connections?.map(conn => ({
+          id: conn.user.id,
+          name: conn.user.name || 'Unknown',
+          designation: conn.user.profession || 'No designation',
+          profilePic: conn.user.profilePic,
+          mutualConnections: 0, // API doesn't provide this yet
+          connectionId: conn.id,
+        })) || [];
+        setConnections(transformedConnections);
+      } else {
+        console.warn('Failed to load connections:', connectionsResult.error);
+        setConnections(mockConnections); // Fallback to mock data
+      }
+
+      if (requestsResult.success) {
+        // Transform API data to match our component structure
+        const transformedRequests = requestsResult.data.connections?.map(req => ({
+          id: req.user.id,
+          name: req.user.name || 'Unknown',
+          designation: req.user.profession || 'No designation',
+          profilePic: req.user.profilePic,
+          connectionId: req.id,
+          status: req.status,
+        })) || [];
+        setReceivedRequests(transformedRequests);
+      } else {
+        console.warn('Failed to load received requests:', requestsResult.error);
+        setReceivedRequests(mockInvites); // Fallback to mock data
+      }
+    } catch (error) {
+      console.error('Error loading connection data:', error);
+      // Use mock data as fallback
+      setConnections(mockConnections);
+      setReceivedRequests(mockInvites);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadData();
+    setRefreshing(false);
+  };
 
   const filteredConnections = useMemo(
     () =>
-      mockConnections.filter(
+      connections.filter(
         (item) =>
           item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
           item.designation.toLowerCase().includes(searchQuery.toLowerCase())
       ),
-    [searchQuery]
+    [connections, searchQuery]
   );
 
   const filteredInvites = useMemo(
     () =>
-      mockInvites.filter(
+      receivedRequests.filter(
         (item) =>
           item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
           item.designation.toLowerCase().includes(searchQuery.toLowerCase())
       ),
-    [searchQuery]
+    [receivedRequests, searchQuery]
   );
 
   const renderConnection = useCallback(({ item }) => {
@@ -97,6 +171,42 @@ const ConnectionsScreen = () => {
     );
   }, []);
 
+  const handleAcceptRequest = async (connectionId, userName) => {
+    try {
+      showLoader();
+      const result = await ConnectionApi.acceptConnectionRequest(connectionId);
+      if (result.success) {
+        Alert.alert('Success', `Connection request from ${userName} accepted!`);
+        // Refresh data to update the lists
+        await loadData();
+      } else {
+        Alert.alert('Error', result.error || 'Failed to accept connection request');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to accept connection request');
+    } finally {
+      hideLoader();
+    }
+  };
+
+  const handleRejectRequest = async (connectionId, userName) => {
+    try {
+      showLoader();
+      const result = await ConnectionApi.rejectConnectionRequest(connectionId);
+      if (result.success) {
+        Alert.alert('Success', `Connection request from ${userName} rejected`);
+        // Refresh data to update the lists
+        await loadData();
+      } else {
+        Alert.alert('Error', result.error || 'Failed to reject connection request');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to reject connection request');
+    } finally {
+      hideLoader();
+    }
+  };
+
   const renderInvite = useCallback(({ item }) => {
     return (
       <TouchableOpacity 
@@ -123,11 +233,17 @@ const ConnectionsScreen = () => {
           <Text style={styles.designation}>{item.designation}</Text>
         </View>
         <View style={{ flexDirection: "row" }}>
-          <TouchableOpacity style={styles.acceptBtn}>
+          <TouchableOpacity 
+            style={styles.acceptBtn}
+            onPress={() => handleAcceptRequest(item.connectionId, item.name)}
+          >
             <Text style={styles.acceptText}>Accept</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.ignoreBtn}>
-            <Text style={styles.ignoreText}>Ignore</Text>
+          <TouchableOpacity 
+            style={styles.ignoreBtn}
+            onPress={() => handleRejectRequest(item.connectionId, item.name)}
+          >
+            <Text style={styles.ignoreText}>Reject</Text>
           </TouchableOpacity>
         </View>
       </TouchableOpacity>
@@ -173,6 +289,21 @@ const ConnectionsScreen = () => {
             }
             keyExtractor={(item) => item.id}
             renderItem={renderInvite}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                colors={[colors.primary]}
+                tintColor={colors.primary}
+              />
+            }
+            ListEmptyComponent={
+              <View style={styles.emptyContainer}>
+                <Icon name="account-clock" size={48} color={colors.textSecondary} />
+                <Text style={styles.emptyText}>No connection requests</Text>
+                <Text style={styles.emptySubText}>New requests will appear here</Text>
+              </View>
+            }
           />
           {filteredInvites.length > 5 && (
             <TouchableOpacity
@@ -197,6 +328,21 @@ const ConnectionsScreen = () => {
             }
             keyExtractor={(item) => item.id}
             renderItem={renderConnection}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                colors={[colors.primary]}
+                tintColor={colors.primary}
+              />
+            }
+            ListEmptyComponent={
+              <View style={styles.emptyContainer}>
+                <Icon name="account-group" size={48} color={colors.textSecondary} />
+                <Text style={styles.emptyText}>No connections yet</Text>
+                <Text style={styles.emptySubText}>Connect with people to see them here</Text>
+              </View>
+            }
           />
           {filteredConnections.length > 10 && (
             <TouchableOpacity
@@ -219,6 +365,17 @@ const ConnectionsScreen = () => {
       <Header title="PEOPLE" />
       
       <Container style={styles.container}>
+        {/* Header Actions */}
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            style={styles.manageBtn}
+            onPress={() => navigation.navigate('ConnectionRequests')}
+          >
+            <Icon name="cog" size={20} color={colors.primary} />
+            <Text style={styles.manageBtnText}>Manage Requests</Text>
+          </TouchableOpacity>
+        </View>
+
         {/* Search Bar */}
         <TextInput
           style={styles.searchBar}
@@ -353,5 +510,45 @@ const styles = StyleSheet.create({
   catText: { marginLeft: 8, color: colors.textPrimary, fontWeight: "600" },
   catTextActive: { 
     color: colors.black 
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+    paddingHorizontal: 20,
+  },
+  emptyText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    marginTop: 16,
+    textAlign: 'center',
+  },
+  emptySubText: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginBottom: 16,
+  },
+  manageBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  manageBtnText: {
+    marginLeft: 6,
+    color: colors.primary,
+    fontWeight: '600',
+    fontSize: 14,
   },
 });

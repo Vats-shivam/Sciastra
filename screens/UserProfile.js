@@ -4,6 +4,8 @@ import { View, Text, Image, ScrollView, StyleSheet, TouchableOpacity, Alert, Mod
 import Container from '../components/Container';
 import colors from '../config/colors';
 import { api } from '../api/MockApi';
+import ConnectionApi from '../api/ConnectionApi';
+import ProfileApi from '../api/ProfileApi';
 import PostCard from '../components/PostCard';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Header from '../components/Header';
@@ -32,15 +34,39 @@ const UserProfileScreen = ({ navigation, route }) => {
   const loadUserData = async () => {
     try {
       setLoading(true);
-      const [userData, userPosts, status] = await Promise.all([
-        api.getUserById(userId),
-        api.getUserPosts(userId),
-        api.checkConnectionStatus(userId)
-      ]);
       
-      setUser(userData);
+      // Load user profile data
+      const profileResult = await ProfileApi.getProfileById(userId);
+      if (!profileResult.success) {
+        throw new Error(profileResult.error);
+      }
+      
+      // Load connection status
+      const statusResult = await ConnectionApi.getConnectionStatus(userId);
+      let status = 'not_connected';
+      if (statusResult.success) {
+        // Map API status to our internal status
+        switch (statusResult.data.status) {
+          case 'ACCEPTED':
+            status = 'connected';
+            break;
+          case 'PENDING':
+            // Need to determine if it's incoming or outgoing
+            status = 'pending_outgoing'; // Default, will be refined
+            break;
+          case 'NONE':
+          default:
+            status = 'not_connected';
+            break;
+        }
+      }
+      
+      // Load user posts (using mock for now)
+      const userPosts = await api.getUserPosts(userId);
+      
+      setUser(profileResult.data);
       setPosts(userPosts);
-      setConnectionStatus(status.status);
+      setConnectionStatus(status);
     } catch (error) {
       console.error('Error loading user data:', error);
       Alert.alert('Error', 'Failed to load user profile');
@@ -52,9 +78,13 @@ const UserProfileScreen = ({ navigation, route }) => {
   const handleConnect = async () => {
     try {
       showLoader();
-      await api.sendConnectionRequest(userId);
-      setConnectionStatus('pending_outgoing');
-      Alert.alert('Success', 'Connection request sent!');
+      const result = await ConnectionApi.sendConnectionRequest(userId);
+      if (result.success) {
+        setConnectionStatus('pending_outgoing');
+        Alert.alert('Success', 'Connection request sent!');
+      } else {
+        Alert.alert('Error', result.error || 'Failed to send connection request');
+      }
     } catch (error) {
       Alert.alert('Error', 'Failed to send connection request');
     } finally {
@@ -62,12 +92,16 @@ const UserProfileScreen = ({ navigation, route }) => {
     }
   };
 
-  const handleAcceptRequest = async () => {
+  const handleAcceptRequest = async (connectionId) => {
     try {
       showLoader();
-      await api.acceptConnectionRequest(userId);
-      setConnectionStatus('connected');
-      Alert.alert('Success', 'Connection request accepted!');
+      const result = await ConnectionApi.acceptConnectionRequest(connectionId);
+      if (result.success) {
+        setConnectionStatus('connected');
+        Alert.alert('Success', 'Connection request accepted!');
+      } else {
+        Alert.alert('Error', result.error || 'Failed to accept connection request');
+      }
     } catch (error) {
       Alert.alert('Error', 'Failed to accept connection request');
     } finally {
@@ -75,12 +109,16 @@ const UserProfileScreen = ({ navigation, route }) => {
     }
   };
 
-  const handleRejectRequest = async () => {
+  const handleRejectRequest = async (connectionId) => {
     try {
       showLoader();
-      await api.rejectConnectionRequest(userId);
-      setConnectionStatus('not_connected');
-      Alert.alert('Success', 'Connection request rejected');
+      const result = await ConnectionApi.rejectConnectionRequest(connectionId);
+      if (result.success) {
+        setConnectionStatus('not_connected');
+        Alert.alert('Success', 'Connection request rejected');
+      } else {
+        Alert.alert('Error', result.error || 'Failed to reject connection request');
+      }
     } catch (error) {
       Alert.alert('Error', 'Failed to reject connection request');
     } finally {
@@ -104,6 +142,39 @@ const UserProfileScreen = ({ navigation, route }) => {
         friction: 8,
       }).start();
     }
+  };
+
+  const handleRemoveConnection = async () => {
+    Alert.alert(
+      'Remove Connection',
+      `Are you sure you want to remove ${user?.name} from your connections?`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              showLoader();
+              const result = await ConnectionApi.removeConnection(userId);
+              if (result.success) {
+                setConnectionStatus('not_connected');
+                Alert.alert('Success', 'Connection removed successfully');
+              } else {
+                Alert.alert('Error', result.error || 'Failed to remove connection');
+              }
+            } catch (error) {
+              Alert.alert('Error', 'Failed to remove connection');
+            } finally {
+              hideLoader();
+            }
+          },
+        },
+      ]
+    );
   };
 
   const closeConnectionModal = () => {
@@ -213,6 +284,9 @@ const UserProfileScreen = ({ navigation, route }) => {
             <TouchableOpacity style={[styles.actionButton, styles.messageButton]} onPress={handleMessage}>
               <Icon name="message" size={20} color={colors.white} style={{ marginRight: 8 }} />
               <Text style={styles.actionButtonText}>Message</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.actionButton, styles.removeButton]} onPress={handleRemoveConnection}>
+              <Icon name="account-minus" size={20} color={colors.white} />
             </TouchableOpacity>
           </View>
         );
@@ -656,6 +730,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   smallButton: {
+    minWidth: 50,
+    paddingHorizontal: 12,
+  },
+  removeButton: {
+    backgroundColor: '#dc3545',
     minWidth: 50,
     paddingHorizontal: 12,
   },
