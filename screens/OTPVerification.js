@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import colors from '../config/colors';
 import authApi from '../api/AuthApi';
+import profileApi from '../api/ProfileApi';
 
 const OtpVerificationScreen = ({ navigation, route }) => {
   const [otp, setOtp] = useState('');
@@ -36,8 +37,20 @@ const OtpVerificationScreen = ({ navigation, route }) => {
         console.log('OTP verified successfully, user authenticated');
         console.log('User ID:', response.data?.userId);
         
-        // Navigate to ProfileSetup or main app based on your flow
-        navigation.navigate('ProfileSetup');
+        // Check if user already has a profile
+        try {
+          const profileResult = await profileApi.getProfile();
+          if (profileResult.success && profileResult.data) {
+            // User has profile, go to main app
+            navigation.navigate('MainTabs', { screen: 'Profile' });
+          } else {
+            // No profile, go to setup
+            navigation.navigate('ProfileSetup');
+          }
+        } catch (error) {
+          // If profile check fails, go to setup to be safe
+          navigation.navigate('ProfileSetup');
+        }
       } else {
         Alert.alert('Invalid OTP', response.message || 'Please enter the correct OTP or try again.');
       }

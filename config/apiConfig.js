@@ -2,7 +2,7 @@
 // For physical device, use your computer's IP address
 const getBaseUrl = (port) => {
   // For Android Emulator, use 10.0.2.2 which maps to localhost on the host machine
-  return `http://10.255.221.1:${port}`;
+  return `http://10.245.9.1:${port}`;
   
   // Alternative configurations:
   // For iOS Simulator or web: return `http://localhost:${port}`;
@@ -73,9 +73,9 @@ export const API_ENDPOINTS = {
 
 // Request timeout configuration
 export const REQUEST_CONFIG = {
-  TIMEOUT: 10000, // 10 seconds
-  RETRY_ATTEMPTS: 3,
-  RETRY_DELAY: 1000, // 1 second
+  TIMEOUT: 30000, // 30 seconds for profile operations
+  RETRY_ATTEMPTS: 2,
+  RETRY_DELAY: 2000, // 2 seconds
 };
 
 // Storage keys for AsyncStorage
