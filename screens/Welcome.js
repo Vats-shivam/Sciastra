@@ -14,7 +14,6 @@ import {
   FlatList,
   Alert,
 } from 'react-native';
-import Svg, { Path, LinearGradient as SvgLinearGradient, Stop } from 'react-native-svg';
 import { LinearGradient } from 'expo-linear-gradient';
 import LottieView from 'lottie-react-native';
 import colors from '../config/colors';
@@ -49,42 +48,19 @@ const OnboardingScreen = ({ navigation }) => {
   const [showLoginForm, setShowLoginForm] = useState(false);
   
   // Animation references
-  const slideAnim = useRef(new Animated.Value(0)).current; 
   const formSlide = useRef(new Animated.Value(width)).current; 
   const formOpacity = useRef(new Animated.Value(0)).current;
   const flatListRef = useRef(null);
   
-  // Set initial animation when component mounts
-  useEffect(() => {
-    // Ensure first slide is visible
-    slideAnim.setValue(0);
-  }, []);
+  // no heavy entrance animation; we'll animate content per-slide if needed
+  useEffect(() => {}, []);
 
-  // Go to next slide or show login form
   const goToNextSlide = () => {
     if (currentIndex < onboardingData.length - 1) {
-      // Slide current slide to the left
-      Animated.timing(slideAnim, {
-        toValue: -width, // Move to left (negative width)
-        duration: 300,
-        useNativeDriver: true,
-      }).start(() => {
-        // Move to next slide
-        setCurrentIndex(currentIndex + 1);
-        // Reset animation position
-        slideAnim.setValue(width); // Start from right
-        // Scroll FlatList to next slide
-        flatListRef.current?.scrollToIndex({
-          index: currentIndex + 1,
-          animated: false, // We're handling animation manually
-        });
-        // Slide in from right
-        Animated.timing(slideAnim, {
-          toValue: 0, // Move to center
-          duration: 300,
-          useNativeDriver: true,
-        }).start();
-      });
+      const nextIndex = currentIndex + 1;
+      flatListRef.current?.scrollToIndex({ index: nextIndex, animated: true });
+      // update index after a short delay so pagination updates in sync with scroll
+      setTimeout(() => setCurrentIndex(nextIndex), 300);
     } else {
       // Show login form
       setShowLoginForm(true);
@@ -109,60 +85,13 @@ const OnboardingScreen = ({ navigation }) => {
     navigation.navigate('Login');
   };
 
-  // Wave component for the transition effect
-  const WaveComponent = () => {
-    const waveAnim = useRef(new Animated.Value(0)).current;
-    
-    useEffect(() => {
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(waveAnim, {
-            toValue: 1,
-            duration: 4000,
-            useNativeDriver: true,
-          }),
-          Animated.timing(waveAnim, {
-            toValue: 0,
-            duration: 4000,
-            useNativeDriver: true,
-          })
-        ])
-      ).start();
-    }, []);
-    
-    const translateX = waveAnim.interpolate({
-      inputRange: [0, 1],
-      outputRange: [0, -30]
-    });
-    
-    return (
-      <View style={styles.waveContainer}>
-        <Animated.View style={{ transform: [{ translateX }] }}>
-          <Svg height="100" width={width + 30} viewBox={`0 0 ${width + 30} 100`} style={styles.waveSvg}>
-            <SvgLinearGradient id="grad" x1="0" y1="0" x2="0" y2="1">
-              <Stop offset="0" stopColor="rgba(30, 0, 60, 0.95)" />
-              <Stop offset="0.5" stopColor="rgba(13, 0, 32, 0.98)" />
-              <Stop offset="1" stopColor="rgba(0, 0, 0, 0.99)" />
-            </SvgLinearGradient>
-            <Path
-              d={`M0 40 Q${width/8} 10 ${width/4} 30 T${width/2} 15 T${width*3/4} 35 T${width} 20 T${width + 30} 40 V100 H0 Z`}
-              fill="url(#grad)"
-            />
-          </Svg>
-        </Animated.View>
-      </View>
-    );
-  };
+  // removed WaveComponent - simplified static layout
 
   // Render onboarding item
   const renderItem = ({ item }) => {
     return (
-      <Animated.View 
-        style={[
-          styles.slide, 
-          { transform: [{ translateX: slideAnim }] }
-        ]}
-      >
+      <View style={styles.slide}>
+        {/* background image / visual */}
         {item.isLottie ? (
           <LottieView
             source={item.image}
@@ -173,18 +102,23 @@ const OnboardingScreen = ({ navigation }) => {
         ) : (
           <Image source={item.image} style={styles.image} resizeMode="cover" />
         )}
-        <View style={styles.textContainer}>
+
+        {/* bottom gradient area with white text */}
+        <LinearGradient
+          colors={['#000000', '#100717ff']}
+          style={styles.bottomGradient}
+        >
           <Text style={styles.title}>{item.title}</Text>
           <Text style={styles.description}>{item.description}</Text>
-        </View>
-        <WaveComponent />
-      </Animated.View>
+        </LinearGradient>
+      </View>
     );
   };
 
   return (
     <LinearGradient
-      colors={['#000000', '#0d0020', '#000000']} // Mostly black with hints of purple
+      // Main background gradient from black to deep purple
+      colors={['#100717ff', '#0c0513ff']}
       style={styles.container}
     >
       {!showLoginForm ? (
@@ -198,13 +132,17 @@ const OnboardingScreen = ({ navigation }) => {
             pagingEnabled
             showsHorizontalScrollIndicator={false}
             scrollEnabled={false}
+            contentContainerStyle={{ paddingBottom: 240 }}
             keyExtractor={(item) => item.id}
           />
           
 
           
           {/* Navigation container with buttons and pagination */}
-          <View style={styles.navigationContainer}>
+          <LinearGradient
+            colors={['#0c0513ff', '#1A0033']}
+            style={styles.navigationContainer}
+          >
             {/* Pagination dots */}
             <View style={styles.paginationContainer}>
               {onboardingData.map((_, index) => (
@@ -261,7 +199,7 @@ const OnboardingScreen = ({ navigation }) => {
                 </LinearGradient>
               </TouchableOpacity>
             </View>
-          </View>
+          </LinearGradient>
         </View>
       ) : (
         // Login form
@@ -358,39 +296,66 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(138, 43, 226, 0.8)',
     borderWidth: 1.5,
   },
+  // legacy bottom container (kept for safety) - reduced opacity
   textContainer: {
     position: 'absolute',
-    bottom: 250,
+    bottom: 90,
     left: 0,
     right: 0,
     paddingHorizontal: 20,
-    backgroundColor: 'rgba(0, 0, 0, 0.92)', // More opaque black background
-    paddingTop: 25,
-    paddingBottom: 35,
-    borderBottomWidth: 2,
-    borderBottomColor: 'rgba(138, 43, 226, 0.6)', // More visible purple border at bottom
-    zIndex: 15 // Ensure it's above the image but below the wave
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    paddingTop: 16,
+    paddingBottom: 20,
+    borderBottomWidth: 0,
+    zIndex: 12,
+  },
+  // New top text container placed over the image/animation area
+  // Bottom gradient area that holds the slide text
+  bottomGradient: {
+  position: 'absolute',
+  left: 0,
+  right: 0,
+  bottom: 140,
+  paddingHorizontal: 20,
+  paddingTop: 20,
+  paddingBottom: 30,
+  alignItems: 'flex-start',
+  justifyContent: 'center',
+  zIndex: 15,
+  backgroundColor: 'transparent',
+  },
+  titleTop: {
+    // kept for compatibility but will not be used visually
+    display: 'none'
+  },
+  descriptionTop: {
+    display: 'none'
   },
   title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: 'white',
-    textAlign: 'left',
-    marginBottom: 10,
+  fontSize: 24,
+  fontWeight: '700',
+  color: 'white',
+  textAlign: 'left',
+  marginBottom: 8,
   },
   description: {
-    fontSize: 16,
-    color: 'rgba(255,255,255,0.8)',
-    textAlign: 'left',
-    lineHeight: 22,
+  fontSize: 14,
+  color: 'rgba(255,255,255,0.9)',
+  textAlign: 'left',
+  lineHeight: 20,
   },
   navigationContainer: {
-    position: 'absolute',
-    bottom: 30,
-    left: 0,
-    right: 0,
-    paddingHorizontal: 20,
-    zIndex: 20, // Ensure it's above the wave
+  position: 'absolute',
+  bottom: 30,
+  left: 0,
+  right: 0,
+  paddingHorizontal: 20,
+  zIndex: 20,
+  flexDirection: 'column',
+  alignItems: 'center',
+  paddingBottom: 24,
+  paddingTop: 12,
+  backgroundColor: 'transparent',
   },
   paginationContainer: {
     flexDirection: 'row',
@@ -405,10 +370,10 @@ const styles = StyleSheet.create({
     marginHorizontal: 4,
   },
   buttonContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    width: '100%',
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  width: '90%',
   },
   skipButton: {
     padding: 15,
