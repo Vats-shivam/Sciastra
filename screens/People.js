@@ -19,21 +19,6 @@ import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import ConnectionApi from "../api/ConnectionApi";
 import { useLoader } from "../context/LoaderContext";
 
-// Mock data as fallback
-const mockConnections = Array.from({ length: 50 }, (_, i) => ({
-  id: `${i + 1}`,
-  name: `Connection ${i + 1}`,
-  designation: i % 2 === 0 ? "Software Engineer" : "Designer",
-  profilePic: null,
-  mutualConnections: Math.floor(Math.random() * 10), // mocked
-}));
-
-const mockInvites = Array.from({ length: 30 }, (_, i) => ({
-  id: `${i + 51}`,
-  name: `Invite ${i + 1}`,
-  designation: i % 3 === 0 ? "Student" : "Product Manager",
-  profilePic: null,
-}));
 
 const PEOPLE_CATEGORIES = [
   { id: "invites", label: "Invites", icon: "account-plus" },
@@ -82,7 +67,7 @@ const ConnectionsScreen = () => {
         setConnections(transformedConnections);
       } else {
         console.warn('Failed to load connections:', connectionsResult.error);
-        setConnections(mockConnections); // Fallback to mock data
+        setConnections([]); // Set empty array if API fails
       }
 
       if (requestsResult.success) {
@@ -98,13 +83,13 @@ const ConnectionsScreen = () => {
         setReceivedRequests(transformedRequests);
       } else {
         console.warn('Failed to load received requests:', requestsResult.error);
-        setReceivedRequests(mockInvites); // Fallback to mock data
+        setReceivedRequests([]); // Set empty array if API fails
       }
     } catch (error) {
       console.error('Error loading connection data:', error);
-      // Use mock data as fallback
-      setConnections(mockConnections);
-      setReceivedRequests(mockInvites);
+      // Set empty arrays if API fails
+      setConnections([]);
+      setReceivedRequests([]);
     } finally {
       setLoading(false);
     }

@@ -56,28 +56,44 @@ class ConnectionApi {
 
       const headers = getCommonHeaders(true, accessToken);
       
+      // Create AbortController for timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), REQUEST_CONFIG.TIMEOUT);
+      
       const response = await fetch(url, {
         ...options,
         headers: {
           ...headers,
           ...options.headers,
         },
-        timeout: REQUEST_CONFIG.TIMEOUT,
+        signal: controller.signal,
       });
 
-      const data = await response.json();
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
+        const errorText = await response.text();
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch {
+          errorData = { message: errorText };
+        }
+        
         throw {
           response: {
             status: response.status,
-            data,
+            data: errorData,
           },
         };
       }
 
+      const data = await response.json();
       return { success: true, data: data.data || data };
     } catch (error) {
+      if (error.name === 'AbortError') {
+        return { success: false, error: ERROR_MESSAGES.TIMEOUT_ERROR };
+      }
       return this.handleApiError(error, 'request');
     }
   }

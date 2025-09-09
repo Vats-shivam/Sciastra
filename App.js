@@ -12,6 +12,7 @@ import ProfileSetupScreen from "./screens/ProfileSetup";
 import SuggestedConnectionsScreen from "./screens/SuggestedConnection";
 import ChatListScreen from "./screens/ChatList";
 import OneToOneChatScreen from "./screens/OneToOne";
+import ConnectionRequestsScreen from "./screens/ConnectionRequests";
 
 import HomeScreen from "./screens/Home";
 import PeopleScreen from "./screens/People";
@@ -170,6 +171,7 @@ export default function App() {
           <Stack.Screen name="EventDetail" component={EventDetailScreen} />
           <Stack.Screen name="EventRegister" component={EventRegister} />
           <Stack.Screen name="EventPayment" component={EventPayment} />
+          <Stack.Screen name="ConnectionRequests" component={ConnectionRequestsScreen} />
           <Stack.Screen name="RegisteredEvents" component={RegisteredEvents} />
           <Stack.Screen name="EditProfile" component={EditProfileScreen} />
         </Stack.Navigator>
