@@ -16,6 +16,7 @@ const UserProfileScreen = ({ navigation, route }) => {
   const [user, setUser] = useState(null);
   const [posts, setPosts] = useState([]);
   const [connectionStatus, setConnectionStatus] = useState('unknown');
+  const [connectionData, setConnectionData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('About');
   const [showConnectionModal, setShowConnectionModal] = useState(false);
@@ -36,7 +37,7 @@ const UserProfileScreen = ({ navigation, route }) => {
       setLoading(true);
       
       // Load user profile data
-      const profileResult = await ProfileApi.getProfileById(userId);
+      const profileResult = await ProfileApi.getProfile(userId);
       if (!profileResult.success) {
         throw new Error(profileResult.error);
       }
@@ -44,15 +45,20 @@ const UserProfileScreen = ({ navigation, route }) => {
       // Load connection status
       const statusResult = await ConnectionApi.getConnectionStatus(userId);
       let status = 'not_connected';
-      if (statusResult.success) {
+      let connectionInfo = null;
+      
+      if (statusResult.success && statusResult.data) {
+        connectionInfo = statusResult.data;
+        
         // Map API status to our internal status
         switch (statusResult.data.status) {
           case 'ACCEPTED':
             status = 'connected';
             break;
           case 'PENDING':
-            // Need to determine if it's incoming or outgoing
-            status = 'pending_outgoing'; // Default, will be refined
+            // Determine if it's incoming or outgoing based on who sent the request
+            // Assuming the API returns senderId and receiverId or similar
+            status = statusResult.data.isIncoming ? 'pending_incoming' : 'pending_outgoing';
             break;
           case 'NONE':
           default:
@@ -60,6 +66,8 @@ const UserProfileScreen = ({ navigation, route }) => {
             break;
         }
       }
+      
+      setConnectionData(connectionInfo);
       
       // Load user posts (using mock for now)
       const userPosts = await api.getUserPosts(userId);
@@ -80,49 +88,96 @@ const UserProfileScreen = ({ navigation, route }) => {
       showLoader();
       const result = await ConnectionApi.sendConnectionRequest(userId);
       if (result.success) {
-        setConnectionStatus('pending_outgoing');
+        // Refresh connection status to get updated information
+        await refreshConnectionStatus();
         Alert.alert('Success', 'Connection request sent!');
       } else {
         Alert.alert('Error', result.error || 'Failed to send connection request');
       }
     } catch (error) {
+      console.error('Send connection error:', error);
       Alert.alert('Error', 'Failed to send connection request');
     } finally {
       hideLoader();
     }
   };
 
-  const handleAcceptRequest = async (connectionId) => {
+  const handleAcceptRequest = async () => {
     try {
+      if (!connectionData?.connectionId) {
+        Alert.alert('Error', 'Connection ID not found');
+        return;
+      }
+
       showLoader();
-      const result = await ConnectionApi.acceptConnectionRequest(connectionId);
+      const result = await ConnectionApi.acceptConnectionRequest(connectionData.connectionId);
       if (result.success) {
-        setConnectionStatus('connected');
+        // Reload connection status to get updated information
+        await refreshConnectionStatus();
         Alert.alert('Success', 'Connection request accepted!');
       } else {
         Alert.alert('Error', result.error || 'Failed to accept connection request');
       }
     } catch (error) {
+      console.error('Accept request error:', error);
       Alert.alert('Error', 'Failed to accept connection request');
     } finally {
       hideLoader();
     }
   };
 
-  const handleRejectRequest = async (connectionId) => {
+  const handleRejectRequest = async () => {
     try {
+      if (!connectionData?.connectionId) {
+        Alert.alert('Error', 'Connection ID not found');
+        return;
+      }
+
       showLoader();
-      const result = await ConnectionApi.rejectConnectionRequest(connectionId);
+      const result = await ConnectionApi.rejectConnectionRequest(connectionData.connectionId);
       if (result.success) {
-        setConnectionStatus('not_connected');
+        // Reload connection status to get updated information
+        await refreshConnectionStatus();
         Alert.alert('Success', 'Connection request rejected');
       } else {
         Alert.alert('Error', result.error || 'Failed to reject connection request');
       }
     } catch (error) {
+      console.error('Reject request error:', error);
       Alert.alert('Error', 'Failed to reject connection request');
     } finally {
       hideLoader();
+    }
+  };
+
+  // Refresh connection status
+  const refreshConnectionStatus = async () => {
+    try {
+      const statusResult = await ConnectionApi.getConnectionStatus(userId);
+      let status = 'not_connected';
+      let connectionInfo = null;
+      
+      if (statusResult.success && statusResult.data) {
+        connectionInfo = statusResult.data;
+        
+        switch (statusResult.data.status) {
+          case 'ACCEPTED':
+            status = 'connected';
+            break;
+          case 'PENDING':
+            status = statusResult.data.isIncoming ? 'pending_incoming' : 'pending_outgoing';
+            break;
+          case 'NONE':
+          default:
+            status = 'not_connected';
+            break;
+        }
+      }
+      
+      setConnectionData(connectionInfo);
+      setConnectionStatus(status);
+    } catch (error) {
+      console.error('Error refreshing connection status:', error);
     }
   };
 
@@ -132,8 +187,8 @@ const UserProfileScreen = ({ navigation, route }) => {
         userId: userId, 
         userName: user?.name 
       });
-    } else {
-      // Show connection required modal
+    } else if (connectionStatus === 'not_connected') {
+      // Only show modal when user is not connected at all
       setShowConnectionModal(true);
       Animated.spring(modalAnimation, {
         toValue: 1,
@@ -141,6 +196,20 @@ const UserProfileScreen = ({ navigation, route }) => {
         tension: 100,
         friction: 8,
       }).start();
+    } else if (connectionStatus === 'pending_outgoing') {
+      // Show alert for pending request
+      Alert.alert(
+        'Request Pending',
+        'Your connection request is still pending. You can send messages once the request is accepted.',
+        [{ text: 'OK' }]
+      );
+    } else if (connectionStatus === 'pending_incoming') {
+      // Show alert to accept the request first
+      Alert.alert(
+        'Connection Request',
+        'Accept the connection request first to start messaging.',
+        [{ text: 'OK' }]
+      );
     }
   };
 
@@ -161,12 +230,14 @@ const UserProfileScreen = ({ navigation, route }) => {
               showLoader();
               const result = await ConnectionApi.removeConnection(userId);
               if (result.success) {
-                setConnectionStatus('not_connected');
+                // Refresh connection status to get updated information
+                await refreshConnectionStatus();
                 Alert.alert('Success', 'Connection removed successfully');
               } else {
                 Alert.alert('Error', result.error || 'Failed to remove connection');
               }
             } catch (error) {
+              console.error('Remove connection error:', error);
               Alert.alert('Error', 'Failed to remove connection');
             } finally {
               hideLoader();
@@ -493,13 +564,27 @@ const UserProfileScreen = ({ navigation, route }) => {
           >
             <View style={styles.modalHeader}>
               <Icon name="account-heart" size={48} color={colors.button} />
-              <Text style={styles.modalTitle}>Connection Required</Text>
+              <Text style={styles.modalTitle}>Connect to Message</Text>
             </View>
             
             <Text style={styles.modalMessage}>
-              You need to be connected with {user?.name} to send them messages. 
-              Send a connection request first!
+              Connect with {user?.name} to start messaging and unlock more networking opportunities.
             </Text>
+            
+            <View style={styles.connectionBenefits}>
+              <View style={styles.benefitItem}>
+                <Icon name="message-text" size={20} color={colors.primary} />
+                <Text style={styles.benefitText}>Send direct messages</Text>
+              </View>
+              <View style={styles.benefitItem}>
+                <Icon name="account-group" size={20} color={colors.primary} />
+                <Text style={styles.benefitText}>View full profile details</Text>
+              </View>
+              <View style={styles.benefitItem}>
+                <Icon name="share-variant" size={20} color={colors.primary} />
+                <Text style={styles.benefitText}>Share content and insights</Text>
+              </View>
+            </View>
             
             <View style={styles.modalButtons}>
               <TouchableOpacity 
@@ -510,14 +595,14 @@ const UserProfileScreen = ({ navigation, route }) => {
                 }}
               >
                 <Icon name="account-plus" size={20} color={colors.white} style={{ marginRight: 8 }} />
-                <Text style={styles.modalButtonText}>Send Request</Text>
+                <Text style={styles.modalButtonText}>Send Connection Request</Text>
               </TouchableOpacity>
               
               <TouchableOpacity 
                 style={[styles.modalButton, styles.cancelModalButton]} 
                 onPress={closeConnectionModal}
               >
-                <Text style={[styles.modalButtonText, styles.cancelButtonText]}>Cancel</Text>
+                <Text style={[styles.modalButtonText, styles.cancelButtonText]}>Maybe Later</Text>
               </TouchableOpacity>
             </View>
           </Animated.View>
@@ -808,6 +893,21 @@ const styles = StyleSheet.create({
   },
   cancelButtonText: {
     color: colors.textPrimary,
+  },
+  connectionBenefits: {
+    width: '100%',
+    marginBottom: 24,
+  },
+  benefitItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  benefitText: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    marginLeft: 12,
+    flex: 1,
   },
 });
 

@@ -115,7 +115,7 @@ const LoginScreen = ({ navigation }) => {
             {/* Bypass Hint for Testing */}
             <View style={styles.bypassHint}>
               <Text style={styles.bypassText}>
-                🔧 Test Mode: Use phone "9999999999" for bypass authentication
+                🔧 Test Mode: Use phone "1234567890" and OTP "197941" for bypass authentication
               </Text>
             </View>
 

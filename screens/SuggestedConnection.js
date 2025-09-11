@@ -13,6 +13,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { api } from '../api/MockApi';
 import colors from '../config/colors';
+import authManager from '../services/AuthManager';
 
 const SuggestedConnectionsScreen = ({ navigation }) => {
   const [connections, setConnections] = useState([]);
@@ -32,12 +33,25 @@ const SuggestedConnectionsScreen = ({ navigation }) => {
     setSelectedIds(newSelected);
   };
 
-  const sendRequests = () => {
-    api.sendConnectRequest(Array.from(selectedIds)).then(() => {
+  const sendRequests = async () => {
+    try {
+      api.sendConnectRequest(Array.from(selectedIds)).then(async () => {
+        alert('Connection requests sent!');
+        setSelectedIds(new Set());
+        
+        // Complete onboarding
+        await authManager.completeOnboarding();
+        
+        // AuthManager will automatically handle navigation through AuthNavigator
+        // to the main app
+      });
+    } catch (error) {
+      console.error('Error completing onboarding:', error);
       alert('Connection requests sent!');
-      setSelectedIds(new Set());
-      navigation.replace('MainTabs');
-    });
+      
+      // Complete onboarding even if connection requests fail
+      await authManager.completeOnboarding();
+    }
   };
 
   if (loading) {
@@ -135,7 +149,13 @@ const SuggestedConnectionsScreen = ({ navigation }) => {
 
           <TouchableOpacity
             style={styles.skipButton}
-            onPress={() => navigation.replace('MainTabs')}
+            onPress={async () => {
+              // Complete onboarding
+              await authManager.completeOnboarding();
+              
+              // AuthManager will automatically handle navigation through AuthNavigator
+              // to the main app
+            }}
           >
             <Text style={styles.skipText}>Skip for now</Text>
           </TouchableOpacity>

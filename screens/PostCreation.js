@@ -18,6 +18,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import colors from '../config/colors';
 import { api } from '../api/MockApi';
+import postApi from '../api/PostApi';
 import Header from '../components/Header';
 
 const { width } = Dimensions.get('window');
@@ -99,22 +100,56 @@ const PostCreationScreen = ({ navigation }) => {
     
     setLoading(true);
     try {
-      // Commented actual API call
-      // await api.createPost({ text, images: images.map(img => img.uri), visibility });
-      await new Promise(res => setTimeout(res, 1500));
+      // Validate post data
+      const postData = {
+        content: text.trim(),
+        topics: [], // Could be extracted from hashtags in text
+        mediaUrls: [],
+      };
+
+      const validation = postApi.validatePostData(postData);
+      if (!validation.isValid) {
+        Alert.alert('Invalid Post', validation.errors.join('\n'));
+        setLoading(false);
+        return;
+      }
+
+      // Upload images if any
+      if (images.length > 0) {
+        for (const image of images) {
+          try {
+            const uploadResult = await postApi.uploadMedia(image.uri, image.type || 'image/jpeg');
+            if (uploadResult.success) {
+              postData.mediaUrls.push(uploadResult.data.mediaUrl);
+            } else {
+              console.warn('Failed to upload image:', uploadResult.message);
+            }
+          } catch (uploadError) {
+            console.warn('Image upload error:', uploadError);
+          }
+        }
+      }
+
+      // Create the post
+      const result = await postApi.createPost(postData);
       
-      // Clean up memory
-      setText('');
-      setImages([]);
-      setVisibility('public');
-      
-      Alert.alert('Success!', 'Your post has been published successfully.', [
-        {
-          text: 'OK',
-          onPress: () => navigation.goBack(),
-        },
-      ]);
+      if (result.success) {
+        // Clean up memory
+        setText('');
+        setImages([]);
+        setVisibility('public');
+        
+        Alert.alert('Success!', 'Your post has been published successfully.', [
+          {
+            text: 'OK',
+            onPress: () => navigation.goBack(),
+          },
+        ]);
+      } else {
+        Alert.alert('Error', result.message || 'Failed to publish your post. Please try again.');
+      }
     } catch (error) {
+      console.error('Post creation error:', error);
       Alert.alert('Error', 'Failed to publish your post. Please try again.');
     } finally {
       setLoading(false);

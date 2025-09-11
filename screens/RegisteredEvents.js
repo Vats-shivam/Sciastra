@@ -52,7 +52,10 @@ const RegisteredEvents = () => {
               <Text style={styles.info}>Date: {formatDate(event.date)}</Text>
               <Text style={styles.info}>Location: {event.location}</Text>
               <Text style={styles.info}>Payment ID: {event.paymentId}</Text>
-              <Text style={styles.info}>Status: <Text style={styles.statusPaid}>{event.status}</Text></Text>
+              <View style={styles.statusContainer}>
+                <Text style={styles.info}>Status: </Text>
+                <Text style={styles.statusPaid}>{event.status}</Text>
+              </View>
               <Text style={styles.price}>Paid: ₹ {event.price}</Text>
             </View>
           ))
@@ -108,6 +111,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlign: "center",
     marginTop: 40,
+  },
+  statusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 2,
   },
 });
 

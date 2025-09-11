@@ -17,7 +17,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import colors from '../config/colors';
-import profileApi from '../api/ProfileApi';
+import authManager from '../services/AuthManager';
 import authApi from '../api/AuthApi';
 import { useLoader } from '../context/LoaderContext';
 
@@ -53,15 +53,15 @@ const ProfileSetupScreen = ({ navigation, route }) => {
 
   const checkAuthStatus = async () => {
     try {
-      const authStatus = await authApi.checkAuthStatus();
-      if (!authStatus.isAuthenticated) {
+      const authState = authManager.getAuthState();
+      if (!authState.isAuthenticated) {
         Alert.alert(
           'Authentication Required',
-          'Please complete OTP verification first.',
+          'Please complete authentication first.',
           [
             {
-              text: 'Go to Login',
-              onPress: () => navigation.navigate('OTPVerification'),
+              text: 'OK',
+              onPress: () => authManager.logout(), // This will trigger navigation back to login
             },
           ]
         );
@@ -70,7 +70,8 @@ const ProfileSetupScreen = ({ navigation, route }) => {
       setIsAuthenticated(true);
     } catch (error) {
       console.error('Auth check error:', error);
-      navigation.navigate('OTPVerification');
+      // Let AuthManager handle the logout and navigation
+      authManager.logout();
     }
   };
 
@@ -132,18 +133,12 @@ const ProfileSetupScreen = ({ navigation, route }) => {
       location: location.trim() || undefined,
     };
 
-    const validation = profileApi.validateProfileData(profileData);
-    if (!validation.isValid) {
-      Alert.alert('Invalid Information', validation.errors.join('\n'));
-      return;
-    }
-
     setIsLoading(true);
     showLoader();
 
     try {
-      // Create profile using the new API structure
-      const result = await profileApi.createOrUpdateProfile(profileData);
+      // Complete profile setup using AuthManager
+      const result = await authManager.completeProfileSetup(profileData, photoUri);
 
       if (result.success) {
         Alert.alert(
@@ -152,7 +147,10 @@ const ProfileSetupScreen = ({ navigation, route }) => {
           [
             {
               text: 'Continue',
-              onPress: () => navigation.navigate('MainTabs', { screen: 'Profile' }),
+              onPress: () => {
+                // AuthManager will automatically handle navigation through AuthNavigator
+                // based on the auth state (onboarding needed or main app)
+              },
             },
           ]
         );

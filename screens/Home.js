@@ -14,6 +14,7 @@ import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { useNavigation } from "@react-navigation/native";
 import colors from "../config/colors";
 import { api } from "../api/MockApi";
+import postApi from "../api/PostApi";
 import PostCard from "../components/PostCard";
 import Header from "../components/Header";
 import { useLoader } from "../context/LoaderContext";
@@ -30,27 +31,134 @@ const HomeScreen = () => {
   const [searchResultsPeople, setSearchResultsPeople] = useState([]);
 
   useEffect(() => {
-    showLoader();
-    api.fetchFeedPosts().then((posts) => {
-      setFeedPosts(posts);
-      hideLoader();
-    });
+    loadFeedPosts();
   }, []);
 
-  const performSearch = (query) => {
-    const lowerQ = query.toLowerCase();
-    setSearchResultsPosts(
-      feedPosts.filter(
-        (p) =>
-          p.text.toLowerCase().includes(lowerQ) ||
-          p.author.toLowerCase().includes(lowerQ)
-      )
-    );
-    api.fetchSuggestedConnections().then((users) => {
+  // Debounced search effect
+  useEffect(() => {
+    if (!searching) return;
+    
+    console.log('🕐 Home Search - Debounce trigger:', JSON.stringify({
+      searchText: searchText,
+      searching: searching,
+      willSearchIn: '500ms'
+    }));
+    
+    const timeoutId = setTimeout(() => {
+      console.log('🚀 Home Search - Debounce executing search for:', searchText);
+      performSearch(searchText);
+    }, 500); // 500ms debounce
+
+    return () => {
+      console.log('🔄 Home Search - Debounce cancelled for:', searchText);
+      clearTimeout(timeoutId);
+    };
+  }, [searchText, searching]);
+
+  const loadFeedPosts = async () => {
+    showLoader();
+    try {
+      const result = await postApi.getFeedPosts(null, 15);
+      if (result.success) {
+        setFeedPosts(result.data.posts || []);
+      } else {
+        console.error('Failed to load feed posts:', result.message);
+        // Fallback to mock data
+        const posts = await api.fetchFeedPosts();
+        setFeedPosts(posts);
+      }
+    } catch (error) {
+      console.error('Error loading feed posts:', error);
+      // Fallback to mock data
+      const posts = await api.fetchFeedPosts();
+      setFeedPosts(posts);
+    } finally {
+      hideLoader();
+    }
+  };
+
+  const performSearch = async (query) => {
+    if (!query.trim()) {
+      setSearchResultsPosts([]);
+      setSearchResultsPeople([]);
+      return;
+    }
+
+    // Don't search if query is less than 2 characters
+    if (query.trim().length < 2) {
+      setSearchResultsPosts([]);
+      setSearchResultsPeople([]);
+      return;
+    }
+
+    try {
+      console.log('🔍 Home Search - Making request with query:', JSON.stringify({
+        query: query,
+        queryLength: query.length,
+        trimmedLength: query.trim().length,
+        type: 'all',
+        page: 1,
+        limit: 10
+      }));
+
+      // Search using the new PostApi
+      const searchResult = await postApi.search(query, 'all', 1, 10);
+      
+      console.log('🔍 Home Search - Response received:', JSON.stringify({
+        success: searchResult.success,
+        message: searchResult.message,
+        dataKeys: searchResult.data ? Object.keys(searchResult.data) : null,
+        postsCount: searchResult.data?.posts?.length,
+        usersCount: searchResult.data?.users?.length
+      }));
+      
+      if (searchResult.success) {
+        const data = searchResult.data;
+        setSearchResultsPosts(data.posts || []);
+        setSearchResultsPeople(data.users || []);
+      } else {
+        // Don't log short query validation as an error
+        if (searchResult.message?.includes('at least 2 characters')) {
+          // Just clear results for short queries - this is expected behavior
+          setSearchResultsPosts([]);
+          setSearchResultsPeople([]);
+          return;
+        }
+        console.error('Search failed:', searchResult.message);
+        // Fallback to local search
+        const lowerQ = query.toLowerCase();
+        setSearchResultsPosts(
+          feedPosts.filter(
+            (p) =>
+              (p.text && p.text.toLowerCase().includes(lowerQ)) ||
+              (p.content && p.content.toLowerCase().includes(lowerQ)) ||
+              (p.author && p.author.toLowerCase().includes(lowerQ))
+          )
+        );
+        
+        const users = await api.fetchSuggestedConnections();
+        setSearchResultsPeople(
+          users.filter((u) => u.name.toLowerCase().includes(lowerQ))
+        );
+      }
+    } catch (error) {
+      console.error('Search error:', error);
+      // Fallback to local search
+      const lowerQ = query.toLowerCase();
+      setSearchResultsPosts(
+        feedPosts.filter(
+          (p) =>
+            (p.text && p.text.toLowerCase().includes(lowerQ)) ||
+            (p.content && p.content.toLowerCase().includes(lowerQ)) ||
+            (p.author && p.author.toLowerCase().includes(lowerQ))
+        )
+      );
+      
+      const users = await api.fetchSuggestedConnections();
       setSearchResultsPeople(
         users.filter((u) => u.name.toLowerCase().includes(lowerQ))
       );
-    });
+    }
   };
 
   const clearSearch = () => {
@@ -167,10 +275,7 @@ const HomeScreen = () => {
             placeholderTextColor={colors.textMuted}
             style={styles.searchInput}
             value={searchText}
-            onChangeText={(text) => {
-              setSearchText(text);
-              performSearch(text);
-            }}
+            onChangeText={setSearchText}
           />
         </View>
       )}
@@ -210,7 +315,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     flex: 1,
     paddingHorizontal: 12,
-    height: 4,
+    height: 40,
     borderWidth: 1,
     borderColor: colors.border,
   },
@@ -219,7 +324,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     flex: 1,
     color: colors.textPrimary,
-    height: 20,
+    height: 40,
   },
 
   breadcrumbs: {

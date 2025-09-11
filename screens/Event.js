@@ -1,9 +1,11 @@
-import React, { useMemo } from "react";
-import { View, Text, StyleSheet, Image, TextInput, TouchableOpacity, ScrollView, FlatList } from "react-native";
+import React, { useState, useEffect, useMemo } from "react";
+import { View, Text, StyleSheet, Image, TextInput, TouchableOpacity, ScrollView, FlatList, RefreshControl } from "react-native";
 import colors from "../config/colors";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import EventCard from "../components/EventCard";
 import Header from "../components/Header";
+import eventsApi from "../api/EventsApi";
+import { useLoader } from "../context/LoaderContext";
 
 const CATEGORIES = [
   { id: "for-you", label: "For You", icon: "star" },
@@ -72,13 +74,65 @@ function CategoryTabs() {
 }
 
 const EventScreen = ({ navigation }) => {
+  const { showLoader, hideLoader } = useLoader();
+  const [events, setEvents] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('for-you');
+  
   const goDetail = (event) => navigation.navigate("EventDetail", { event });
-  const spotlight = useMemo(() => mockEvents.slice(0, 3), []);
-  const featured = useMemo(() => mockEvents.slice(3, 6), []);
-  const trending = useMemo(() => mockEvents.slice(1, 5), []);
-  const publicEvents = useMemo(() => mockEvents.slice(2, 6), []);
-  const college = useMemo(() => mockEvents.slice(0, 4), []);
-  const upcoming = useMemo(() => mockEvents.slice(4, 8), []);
+
+  useEffect(() => {
+    loadEvents();
+  }, []);
+
+  const loadEvents = async () => {
+    setLoading(true);
+    showLoader();
+    try {
+      const result = await eventsApi.getAllEvents(1, 20);
+      if (result.success) {
+        setEvents(result.data.events || []);
+      } else {
+        console.error('Failed to load events:', result.message);
+        // Fallback to mock data
+        setEvents(mockEvents);
+      }
+    } catch (error) {
+      console.error('Error loading events:', error);
+      // Fallback to mock data
+      setEvents(mockEvents);
+    } finally {
+      setLoading(false);
+      hideLoader();
+    }
+  };
+
+  const handleSearch = async (query) => {
+    setSearchQuery(query);
+    if (!query.trim()) {
+      await loadEvents();
+      return;
+    }
+
+    try {
+      const result = await eventsApi.searchEvents(query, {}, 1, 20);
+      if (result.success) {
+        setEvents(result.data.events || []);
+      } else {
+        console.error('Search failed:', result.message);
+      }
+    } catch (error) {
+      console.error('Search error:', error);
+    }
+  };
+
+  const spotlight = useMemo(() => events.slice(0, 3), [events]);
+  const featured = useMemo(() => events.slice(3, 6), [events]);
+  const trending = useMemo(() => events.slice(1, 5), [events]);
+  const publicEvents = useMemo(() => events.slice(2, 6), [events]);
+  const college = useMemo(() => events.slice(0, 4), [events]);
+  const upcoming = useMemo(() => events.slice(4, 8), [events]);
 
   const renderHorizontal = (data) => (
     <FlatList

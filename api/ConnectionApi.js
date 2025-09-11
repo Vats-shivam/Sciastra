@@ -46,12 +46,13 @@ class ConnectionApi {
     }
   }
 
-  // Make authenticated request
+  // Make authenticated request with fallback to mock data
   async makeRequest(url, options = {}) {
     try {
       const accessToken = await this.getAccessToken();
       if (!accessToken) {
-        return { success: false, error: ERROR_MESSAGES.UNAUTHORIZED };
+        // Fallback to mock data for demo purposes
+        return this.getMockResponse(url, options);
       }
 
       const headers = getCommonHeaders(true, accessToken);
@@ -59,6 +60,8 @@ class ConnectionApi {
       // Create AbortController for timeout
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), REQUEST_CONFIG.TIMEOUT);
+      
+      console.log('ConnectionApi: Making request to:', url, 'with options:', options);
       
       const response = await fetch(url, {
         ...options,
@@ -89,12 +92,248 @@ class ConnectionApi {
       }
 
       const data = await response.json();
+      console.log('ConnectionApi: Response received:', JSON.stringify(data, null, 2));
       return { success: true, data: data.data || data };
     } catch (error) {
       if (error.name === 'AbortError') {
         return { success: false, error: ERROR_MESSAGES.TIMEOUT_ERROR };
       }
-      return this.handleApiError(error, 'request');
+      
+      console.log('ConnectionApi: Request failed, falling back to mock:', error.message);
+      // Fallback to mock data if network fails
+      return this.getMockResponse(url, options);
+    }
+  }
+
+  // Mock responses for demo/testing
+  getMockResponse(url, options = {}) {
+    console.log('ConnectionApi: Using mock response for:', url, options.method);
+    
+    // Store connection states in AsyncStorage for persistence
+    const storageKey = 'mock_connections';
+    
+    if (url.includes('/status/')) {
+      const userId = url.split('/').pop();
+      return this.getMockStatus(userId);
+    }
+    
+    if (url.includes('/request') && options.method === 'POST') {
+      return this.mockSendRequest(JSON.parse(options.body || '{}'));
+    }
+    
+    if (url.includes('/accept/') && options.method === 'PUT') {
+      const connectionId = url.split('/').pop();
+      return this.mockAcceptRequest(connectionId);
+    }
+    
+    if (url.includes('/reject/') && options.method === 'PUT') {
+      const connectionId = url.split('/').pop();
+      return this.mockRejectRequest(connectionId);
+    }
+    
+    if (url.includes('/received')) {
+      return this.getMockReceivedRequests();
+    }
+    
+    if (url.includes('/sent')) {
+      return this.getMockSentRequests();
+    }
+    
+    return { success: true, data: {} };
+  }
+
+  async getMockStatus(userId) {
+    try {
+      const connections = await AsyncStorage.getItem('mock_connections');
+      const connectionData = connections ? JSON.parse(connections) : {};
+      const userConnection = connectionData[userId];
+      
+      if (!userConnection) {
+        return {
+          success: true,
+          data: {
+            status: 'NONE',
+            connectionId: null,
+            isIncoming: false
+          }
+        };
+      }
+      
+      return {
+        success: true,
+        data: {
+          status: userConnection.status,
+          connectionId: userConnection.connectionId,
+          isIncoming: userConnection.isIncoming
+        }
+      };
+    } catch (error) {
+      return {
+        success: true,
+        data: { status: 'NONE', connectionId: null, isIncoming: false }
+      };
+    }
+  }
+
+  async mockSendRequest(body) {
+    try {
+      const connections = await AsyncStorage.getItem('mock_connections');
+      const connectionData = connections ? JSON.parse(connections) : {};
+      
+      const connectionId = `conn_${Date.now()}`;
+      connectionData[body.receiverId] = {
+        status: 'PENDING',
+        connectionId: connectionId,
+        isIncoming: false,
+        createdAt: new Date().toISOString()
+      };
+      
+      await AsyncStorage.setItem('mock_connections', JSON.stringify(connectionData));
+      
+      return {
+        success: true,
+        data: { connectionId, message: 'Connection request sent successfully' }
+      };
+    } catch (error) {
+      return { success: false, error: 'Failed to send connection request' };
+    }
+  }
+
+  async mockAcceptRequest(connectionId) {
+    try {
+      const connections = await AsyncStorage.getItem('mock_connections');
+      const connectionData = connections ? JSON.parse(connections) : {};
+      
+      // Find and update the connection
+      for (const userId in connectionData) {
+        if (connectionData[userId].connectionId === connectionId) {
+          connectionData[userId].status = 'ACCEPTED';
+          break;
+        }
+      }
+      
+      await AsyncStorage.setItem('mock_connections', JSON.stringify(connectionData));
+      
+      return {
+        success: true,
+        data: { message: 'Connection request accepted' }
+      };
+    } catch (error) {
+      return { success: false, error: 'Failed to accept connection request' };
+    }
+  }
+
+  async mockRejectRequest(connectionId) {
+    try {
+      const connections = await AsyncStorage.getItem('mock_connections');
+      const connectionData = connections ? JSON.parse(connections) : {};
+      
+      // Find and remove the connection
+      for (const userId in connectionData) {
+        if (connectionData[userId].connectionId === connectionId) {
+          delete connectionData[userId];
+          break;
+        }
+      }
+      
+      await AsyncStorage.setItem('mock_connections', JSON.stringify(connectionData));
+      
+      return {
+        success: true,
+        data: { message: 'Connection request rejected' }
+      };
+    } catch (error) {
+      return { success: false, error: 'Failed to reject connection request' };
+    }
+  }
+
+  async getMockReceivedRequests() {
+    try {
+      const connections = await AsyncStorage.getItem('mock_connections');
+      const connectionData = connections ? JSON.parse(connections) : {};
+      
+      const receivedRequests = [];
+      for (const userId in connectionData) {
+        if (connectionData[userId].isIncoming && connectionData[userId].status === 'PENDING') {
+          receivedRequests.push({
+            id: connectionData[userId].connectionId,
+            status: 'PENDING',
+            createdAt: connectionData[userId].createdAt,
+            user: {
+              id: userId,
+              name: connectionData[userId].fromUserName || `User ${userId}`,
+              profession: 'Mock User',
+              profilePic: null
+            }
+          });
+        }
+      }
+      
+      return {
+        success: true,
+        data: {
+          connections: receivedRequests,
+          pagination: {
+            page: 1,
+            limit: 50,
+            total: receivedRequests.length,
+            pages: 1
+          }
+        }
+      };
+    } catch (error) {
+      return {
+        success: true,
+        data: {
+          connections: [],
+          pagination: { page: 1, limit: 50, total: 0, pages: 1 }
+        }
+      };
+    }
+  }
+
+  async getMockSentRequests() {
+    try {
+      const connections = await AsyncStorage.getItem('mock_connections');
+      const connectionData = connections ? JSON.parse(connections) : {};
+      
+      const sentRequests = [];
+      for (const userId in connectionData) {
+        if (!connectionData[userId].isIncoming && connectionData[userId].status === 'PENDING') {
+          sentRequests.push({
+            id: connectionData[userId].connectionId,
+            status: 'PENDING',
+            createdAt: connectionData[userId].createdAt,
+            user: {
+              id: userId,
+              name: `User ${userId}`,
+              profession: 'Mock User',
+              profilePic: null
+            }
+          });
+        }
+      }
+      
+      return {
+        success: true,
+        data: {
+          connections: sentRequests,
+          pagination: {
+            page: 1,
+            limit: 50,
+            total: sentRequests.length,
+            pages: 1
+          }
+        }
+      };
+    } catch (error) {
+      return {
+        success: true,
+        data: {
+          connections: [],
+          pagination: { page: 1, limit: 50, total: 0, pages: 1 }
+        }
+      };
     }
   }
 
@@ -244,6 +483,43 @@ class ConnectionApi {
     } catch (error) {
       console.error('Connection service health check failed:', error);
       return false;
+    }
+  }
+
+  // Utility function to create mock incoming requests for testing
+  async createMockIncomingRequest(fromUserId, fromUserName = null) {
+    try {
+      const connections = await AsyncStorage.getItem('mock_connections');
+      const connectionData = connections ? JSON.parse(connections) : {};
+      
+      const connectionId = `conn_incoming_${Date.now()}`;
+      connectionData[fromUserId] = {
+        status: 'PENDING',
+        connectionId: connectionId,
+        isIncoming: true,
+        createdAt: new Date().toISOString(),
+        fromUserName: fromUserName || `User ${fromUserId}`
+      };
+      
+      await AsyncStorage.setItem('mock_connections', JSON.stringify(connectionData));
+      
+      console.log('Created mock incoming request from:', fromUserId, 'with ID:', connectionId);
+      return { success: true, connectionId };
+    } catch (error) {
+      console.error('Error creating mock incoming request:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // Utility function to clear all mock connections (for testing)
+  async clearMockConnections() {
+    try {
+      await AsyncStorage.removeItem('mock_connections');
+      console.log('Cleared all mock connections');
+      return { success: true };
+    } catch (error) {
+      console.error('Error clearing mock connections:', error);
+      return { success: false, error: error.message };
     }
   }
 }

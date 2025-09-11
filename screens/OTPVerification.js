@@ -13,8 +13,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import colors from '../config/colors';
+import authManager from '../services/AuthManager';
 import authApi from '../api/AuthApi';
-import profileApi from '../api/ProfileApi';
 
 const OtpVerificationScreen = ({ navigation, route }) => {
   const [otp, setOtp] = useState('');
@@ -28,31 +28,18 @@ const OtpVerificationScreen = ({ navigation, route }) => {
     setLoading(true);
     
     try {
-      // Call the real Verify OTP API
-      const response = await authApi.verifyOtp(phone, otp);
+      const result = await authManager.login(phone, otp);
       
-      setLoading(false);
-      
-      if (response.success) {
+      if (result.success) {
         console.log('OTP verified successfully, user authenticated');
-        console.log('User ID:', response.data?.userId);
         
-        // Check if user already has a profile
-        try {
-          const profileResult = await profileApi.getProfile();
-          if (profileResult.success && profileResult.data) {
-            // User has profile, go to main app
-            navigation.navigate('MainTabs', { screen: 'Profile' });
-          } else {
-            // No profile, go to setup
-            navigation.navigate('ProfileSetup');
-          }
-        } catch (error) {
-          // If profile check fails, go to setup to be safe
-          navigation.navigate('ProfileSetup');
-        }
+        // AuthManager will automatically handle navigation through AuthNavigator
+        // based on the auth state (profile setup needed, onboarding needed, or main app)
+        // The navigation is handled by the AuthNavigator component
+        
       } else {
-        Alert.alert('Invalid OTP', response.message || 'Please enter the correct OTP or try again.');
+        setLoading(false);
+        Alert.alert('Invalid OTP', result.message || 'Please enter the correct OTP or try again.');
       }
     } catch (error) {
       setLoading(false);

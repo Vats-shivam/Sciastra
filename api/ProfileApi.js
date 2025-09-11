@@ -37,10 +37,21 @@ class ProfileApiService {
         const timeoutId = setTimeout(() => controller.abort(), REQUEST_CONFIG.TIMEOUT);
         config.signal = controller.signal;
 
+        console.log('Profile API: Making fetch request to:', url);
+        console.log('Profile API: Request config:', JSON.stringify({
+          method: config.method,
+          headers: config.headers,
+          body: config.body
+        }, null, 2));
+
         const response = await fetch(url, config);
         clearTimeout(timeoutId);
 
+        console.log('Profile API: Raw response status:', response.status);
+        console.log('Profile API: Raw response headers:', response.headers.get('content-type'));
+
         const data = await response.json();
+        console.log('Profile API: Parsed response data:', JSON.stringify(data, null, 2));
 
         // Handle token expiration
         if (response.status === 401 && !options.skipRefresh) {
@@ -115,7 +126,7 @@ class ProfileApiService {
       if (response.success && response.data) {
         return {
           success: true,
-          uploadUrl: response.data.uploadUrl,
+          uploadUrl: response.data.url,
           imageUrl: response.data.imageUrl,
         };
       } else {
@@ -131,37 +142,37 @@ class ProfileApiService {
   }
 
   // Upload image to presigned URL
-  async uploadImage(uploadUrl, imageUri, fileType) {
-    try {
-      // Create form data for image upload
-      const formData = new FormData();
-      formData.append('file', {
-        uri: imageUri,
-        type: fileType,
-        name: 'profile-image.jpg',
-      });
+  async uploadImage(fileName, uploadUrl, imageUri, fileType) {
+  try {
+    console.log('Uploading image to URL:', uploadUrl);
+    console.log('Image URI:', imageUri);
 
-      const response = await fetch(uploadUrl, {
-        method: 'PUT',
-        body: formData,
-        headers: {
-          'Content-Type': fileType,
-        },
-      });
+    // Convert local file URI to blob
+    const fileBlob = await fetch(imageUri).then(res => res.blob());
 
-      if (response.ok) {
-        return { success: true };
-      } else {
-        throw new Error('Failed to upload image');
-      }
-    } catch (error) {
-      console.error('Upload Image Error:', error);
-      return {
-        success: false,
-        message: error.message || 'Failed to upload image. Please try again.',
-      };
+    const response = await fetch(uploadUrl, {
+      method: 'PUT',       // Must be PUT
+      body: fileBlob,      // Raw binary
+      headers: {
+        'Content-Type': fileType, // Must match the type used to generate presigned URL
+      },
+    });
+
+    if (response.ok) {
+      return { success: true };
+    } else {
+      console.error('S3 Upload Response Status:', response.status);
+      throw new Error(`Failed to upload image. Status: ${response.status}`);
     }
+  } catch (error) {
+    console.error('Upload Image Error:', error.message);
+    return {
+      success: false,
+      message: error.message || 'Failed to upload image. Please try again.',
+    };
   }
+}
+
 
   // Create or update user profile
   async createOrUpdateProfile(profileData) {
@@ -172,7 +183,7 @@ class ProfileApiService {
       }
 
       // Check if we're in bypass mode (for demo)
-      if (userId === 'bypass_user_9999999999') {
+      if (userId === 'bypass_user_1234567890') {
         console.log('Using bypass mode for profile creation');
         
         // Create mock profile data for bypass mode
@@ -209,10 +220,17 @@ class ProfileApiService {
         topics: profileData.topics || [],
       };
 
-      const response = await this.makeRequest(`${this.baseUrl}${API_ENDPOINTS.PROFILE.CREATE_UPDATE}`, {
+      const url = `${this.baseUrl}${API_ENDPOINTS.PROFILE.CREATE_UPDATE}`;
+      console.log('Profile API: Making request to URL:', url);
+      console.log('Profile API: Request payload:', JSON.stringify(payload, null, 2));
+      console.log('Profile API: User ID:', userId);
+
+      const response = await this.makeRequest(url, {
         method: 'POST',
         body: JSON.stringify(payload),
       });
+
+      console.log('Profile API: Response received:', JSON.stringify(response, null, 2));
 
       if (response.success) {
         // Store profile data locally for quick access
@@ -271,7 +289,7 @@ class ProfileApiService {
       }
 
       // Check for bypass mode or cached profile first
-      if (targetUserId === 'bypass_user_9999999999') {
+      if (targetUserId === 'bypass_user_1234567890') {
         const cachedProfile = await this.getCachedProfile();
         if (cachedProfile) {
           return {
@@ -333,7 +351,7 @@ class ProfileApiService {
       }
 
       // Check for bypass mode - save locally without API call
-      if (userId === 'bypass_user_9999999999') {
+      if (userId === 'bypass_user_1234567890') {
         const updatedProfile = {
           ...profileData,
           userId,
@@ -418,14 +436,14 @@ class ProfileApiService {
         if (!uploadUrlResult.success) {
           throw new Error(uploadUrlResult.message);
         }
-
+        console.log('Obtained upload URL:', uploadUrlResult);
         // Upload image
-        const uploadResult = await this.uploadImage(uploadUrlResult.uploadUrl, imageUri, fileType);
+        const uploadResult = await this.uploadImage(fileName,uploadUrlResult.uploadUrl, imageUri, fileType);
         if (!uploadResult.success) {
           throw new Error(uploadResult.message);
         }
 
-        profileImageUrl = uploadUrlResult.imageUrl;
+        profileImageUrl = fileName;
       }
 
       // Create/update profile with image URL

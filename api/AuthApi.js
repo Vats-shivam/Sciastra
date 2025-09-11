@@ -79,10 +79,38 @@ class AuthApiService {
 
         config.signal = controller.signal;
 
+        console.log('AuthApi: Making request to:', url);
+        console.log('AuthApi: Request config:', JSON.stringify({
+          method: config.method,
+          headers: config.headers,
+          body: config.body
+        }, null, 2));
+
         const response = await fetch(url, config);
         clearTimeout(timeoutId);
+        
+        console.log('AuthApi: Response status:', response.status);
+        console.log('AuthApi: Response headers:', response.headers.get('content-type'));
 
-        const data = await response.json();
+        // Check if response is JSON
+        const contentType = response.headers.get('content-type');
+        let data;
+        
+        if (contentType && contentType.includes('application/json')) {
+          data = await response.json();
+          console.log('AuthApi: JSON response data:', JSON.stringify(data, null, 2));
+        } else {
+          // Non-JSON response (likely HTML error page)
+          const textResponse = await response.text();
+          console.warn('Non-JSON response received. Status:', response.status, 'URL:', url);
+          console.warn('Response text:', textResponse.substring(0, 300));
+          
+          // Create a standardized error response
+          data = {
+            success: false,
+            message: this.getErrorMessage(response.status, 'Service temporarily unavailable'),
+          };
+        }
 
         // Handle token expiration
         if (response.status === 401 && this.refreshToken && !options.skipRefresh) {
@@ -147,8 +175,8 @@ class AuthApiService {
       // Ensure phone number has country code
       const formattedPhone = phoneNumber.startsWith('+') ? phoneNumber : `+91${phoneNumber}`;
       
-      // Static bypass for testing - phone number 9999999999
-      if (formattedPhone === '+919999999999') {
+      // Static bypass for testing - phone number 1234567890 (as per integration prompt)
+      if (formattedPhone === '+911234567890' || phoneNumber === '1234567890') {
         console.log('Using static bypass for phone number:', formattedPhone);
         return {
           success: true,
@@ -156,7 +184,11 @@ class AuthApiService {
         };
       }
       
-      const response = await this.makeRequest(`${getApiBaseUrl('auth')}${API_ENDPOINTS.AUTH.SEND_OTP}`, {
+      const url = `${getApiBaseUrl('auth')}${API_ENDPOINTS.AUTH.SEND_OTP}`;
+      console.log('Making OTP request to URL:', url);
+      console.log('Request body:', JSON.stringify({ phoneNumber: formattedPhone }));
+      
+      const response = await this.makeRequest(url, {
         method: 'POST',
         body: JSON.stringify({
           phoneNumber: formattedPhone,
@@ -170,6 +202,17 @@ class AuthApiService {
       };
     } catch (error) {
       console.error('Send OTP Error:', error);
+      
+      // Fallback to bypass mode if API fails for test number
+      const cleanPhone = phoneNumber.replace(/\D/g, '');
+      if (cleanPhone === '1234567890') {
+        console.log('API failed, using bypass mode for test phone number');
+        return {
+          success: true,
+          message: 'OTP sent successfully (bypass mode - API unavailable)',
+        };
+      }
+      
       return {
         success: false,
         message: error.message || 'Failed to send OTP. Please try again.',
@@ -183,15 +226,15 @@ class AuthApiService {
       // Ensure phone number has country code
       const formattedPhone = phoneNumber.startsWith('+') ? phoneNumber : `+91${phoneNumber}`;
       
-      // Static bypass for testing - phone number 9999999999 and OTP 123456
-      if (formattedPhone === '+919999999999' && otp === '123456') {
+      // Static bypass for testing - phone number 1234567890 and OTP 197941 (as per integration prompt)
+      if (formattedPhone === '+911234567890' && otp === '197941') {
         console.log('Using static bypass for OTP verification');
         
         // Generate mock tokens for bypass mode
         const mockTokens = {
           accessToken: 'bypass_access_token_' + Date.now(),
           refreshToken: 'bypass_refresh_token_' + Date.now(),
-          userId: 'bypass_user_9999999999'
+          userId: 'bypass_user_1234567890'
         };
         
         // Store mock tokens

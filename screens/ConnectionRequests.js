@@ -38,19 +38,82 @@ const ConnectionRequestsScreen = () => {
   useFocusEffect(
     useCallback(() => {
       loadData();
+      // Create some mock incoming requests for testing if none exist
+      createTestData();
     }, [])
   );
+
+  const createTestData = async () => {
+    try {
+      // Check if we already have test data
+      const result = await ConnectionApi.getReceivedRequests(1, 1);
+      if (result.success && result.data.connections && result.data.connections.length === 0) {
+        console.log('Creating test connection requests...');
+        await ConnectionApi.createMockIncomingRequest('user123', 'John Doe');
+        await ConnectionApi.createMockIncomingRequest('user456', 'Jane Smith');
+        // Reload data after creating test requests
+        setTimeout(() => loadData(), 1000);
+      }
+    } catch (error) {
+      console.log('Error creating test data:', error);
+    }
+  };
+
+  // Debug function to manually check all endpoints
+  const debugBackendEndpoints = async () => {
+    console.log('=== DEBUGGING BACKEND ENDPOINTS ===');
+    
+    try {
+      const [receivedResult, sentResult, friendsResult] = await Promise.all([
+        ConnectionApi.getReceivedRequests(1, 100),
+        ConnectionApi.getSentRequests(1, 100),
+        ConnectionApi.getConnections(1, 100),
+      ]);
+      
+      console.log('🔍 RECEIVED CONNECTIONS:', JSON.stringify(receivedResult, null, 2));
+      console.log('🔍 SENT CONNECTIONS:', JSON.stringify(sentResult, null, 2));
+      console.log('🔍 FRIENDS/CONNECTIONS:', JSON.stringify(friendsResult, null, 2));
+      
+      console.log('=== END DEBUG ===');
+    } catch (error) {
+      console.error('Debug error:', error);
+    }
+  };
 
   const loadData = async () => {
     try {
       setLoading(true);
+      
+      // Debug: Call the debug function to see all endpoints
+      await debugBackendEndpoints();
+      
       const [receivedResult, sentResult] = await Promise.all([
         ConnectionApi.getReceivedRequests(1, 100),
         ConnectionApi.getSentRequests(1, 100),
       ]);
 
+      console.log('ConnectionRequests: Received result:', JSON.stringify(receivedResult, null, 2));
+      
       if (receivedResult.success) {
-        const transformedReceived = receivedResult.data.connections?.map(req => ({
+        const connections = receivedResult.data.connections || [];
+        console.log('ConnectionRequests: Raw received connections:', JSON.stringify(connections, null, 2));
+        
+        // Log all connection statuses to debug the issue
+        connections.forEach((conn, index) => {
+          console.log(`ConnectionRequests: Connection ${index} status:`, conn.status, 'ID:', conn.id, 'User:', conn.user?.name);
+        });
+        
+        // Filter only PENDING requests (exclude ACCEPTED, REJECTED, etc.)
+        const pendingReceived = connections.filter(req => {
+          const isPending = req.status === 'PENDING';
+          if (!isPending) {
+            console.log(`ConnectionRequests: Filtering out non-pending connection - Status: ${req.status}, User: ${req.user?.name}`);
+          }
+          return isPending;
+        });
+        console.log('ConnectionRequests: Filtered pending received:', JSON.stringify(pendingReceived, null, 2));
+        
+        const transformedReceived = pendingReceived.map(req => ({
           id: req.user.id,
           name: req.user.name || 'Unknown',
           designation: req.user.profession || 'No designation',
@@ -58,15 +121,37 @@ const ConnectionRequestsScreen = () => {
           connectionId: req.id,
           status: req.status,
           createdAt: req.createdAt,
-        })) || [];
+        }));
+        
+        console.log('ConnectionRequests: Transformed received requests:', transformedReceived);
         setReceivedRequests(transformedReceived);
       } else {
         console.warn('Failed to load received requests:', receivedResult.error);
         setReceivedRequests([]);
       }
 
+      console.log('ConnectionRequests: Sent result:', JSON.stringify(sentResult, null, 2));
+      
       if (sentResult.success) {
-        const transformedSent = sentResult.data.connections?.map(req => ({
+        const connections = sentResult.data.connections || [];
+        console.log('ConnectionRequests: Raw sent connections:', JSON.stringify(connections, null, 2));
+        
+        // Log all connection statuses to debug the issue
+        connections.forEach((conn, index) => {
+          console.log(`ConnectionRequests: Sent Connection ${index} status:`, conn.status, 'ID:', conn.id, 'User:', conn.user?.name);
+        });
+        
+        // Filter only PENDING requests (exclude ACCEPTED, REJECTED, etc.)
+        const pendingSent = connections.filter(req => {
+          const isPending = req.status === 'PENDING';
+          if (!isPending) {
+            console.log(`ConnectionRequests: Filtering out non-pending sent connection - Status: ${req.status}, User: ${req.user?.name}`);
+          }
+          return isPending;
+        });
+        console.log('ConnectionRequests: Filtered pending sent:', JSON.stringify(pendingSent, null, 2));
+        
+        const transformedSent = pendingSent.map(req => ({
           id: req.user.id,
           name: req.user.name || 'Unknown',
           designation: req.user.profession || 'No designation',
@@ -74,7 +159,9 @@ const ConnectionRequestsScreen = () => {
           connectionId: req.id,
           status: req.status,
           createdAt: req.createdAt,
-        })) || [];
+        }));
+        
+        console.log('ConnectionRequests: Transformed sent requests:', transformedSent);
         setSentRequests(transformedSent);
       } else {
         console.warn('Failed to load sent requests:', sentResult.error);
@@ -96,15 +183,29 @@ const ConnectionRequestsScreen = () => {
 
   const handleAcceptRequest = async (connectionId, userName) => {
     try {
+      console.log('ConnectionRequests: Accepting request with connectionId:', connectionId, 'userName:', userName);
       showLoader();
+      
+      // Log the before state
+      console.log('ConnectionRequests: BEFORE accept - received requests count:', receivedRequests.length);
+      
       const result = await ConnectionApi.acceptConnectionRequest(connectionId);
+      console.log('ConnectionRequests: Accept result:', JSON.stringify(result, null, 2));
+      
       if (result.success) {
         Alert.alert('Success', `Connection request from ${userName} accepted!`);
-        await loadData();
+        console.log('ConnectionRequests: Reloading data after accept...');
+        
+        // Wait a moment before reloading to ensure backend has processed
+        setTimeout(async () => {
+          await loadData();
+          console.log('ConnectionRequests: AFTER accept reload - received requests count:', receivedRequests.length);
+        }, 1000);
       } else {
         Alert.alert('Error', result.error || 'Failed to accept connection request');
       }
     } catch (error) {
+      console.error('ConnectionRequests: Accept error:', error);
       Alert.alert('Error', 'Failed to accept connection request');
     } finally {
       hideLoader();

@@ -4,8 +4,8 @@ import { View, Text, Image, ScrollView, StyleSheet, TouchableOpacity, Alert, Ref
 import Container from '../components/Container';
 import colors from '../config/colors';
 import { api } from '../api/MockApi';
-import profileApi from '../api/ProfileApi';
-import authApi from '../api/AuthApi';
+import authManager from '../services/AuthManager';
+import postApi from '../api/PostApi';
 import PostCard from '../components/PostCard';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { Modal, Pressable } from 'react-native';
@@ -42,16 +42,15 @@ const ProfileScreen = ({ navigation }) => {
   const initializeProfile = async () => {
     showLoader();
     try {
-      const authStatus = await authApi.checkAuthStatus();
-      if (!authStatus.isAuthenticated) {
-        navigation.navigate('OTPVerification');
+      const authState = authManager.getAuthState();
+      if (!authState.isAuthenticated) {
+        // AuthNavigator will handle navigation to login
         return;
       }
       setIsAuthenticated(true);
       await loadCurrentUserData();
     } catch (error) {
       console.error('Profile initialization error:', error);
-      navigation.navigate('OTPVerification');
     } finally {
       hideLoader();
     }
@@ -61,21 +60,22 @@ const ProfileScreen = ({ navigation }) => {
     try {
       setLoading(true);
       
-      // Try to get profile from API first
-      const profileResult = await profileApi.getProfile();
+      // Get user profile from AuthManager
+      authManager.refreshUserData();
+      const currentUser = authManager.getCurrentUser();
       
-      if (profileResult.success && profileResult.data) {
+      if (currentUser) {
         // Transform API data to match UI expectations
         const transformedUser = {
-          id: profileResult.data.userId,
-          name: profileResult.data.name,
-          designation: profileResult.data.profession || 'User',
-          bio: profileResult.data.bio || 'Add a bio to tell others about yourself',
-          profilePic: profileResult.data.profilePic,
-          email: profileResult.data.email,
+          id: currentUser.userId,
+          name: currentUser.name,
+          designation: currentUser.profession || 'User',
+          bio: currentUser.bio || 'Add a bio to tell others about yourself',
+          profilePic: currentUser.profilePic,
+          email: currentUser.email,
           connectionsCount: 0, // Will be updated when connection service is integrated
-          skills: profileResult.data.topics || [],
-          workExperience: profileResult.data.experiences?.map(exp => ({
+          skills: currentUser.topics || [],
+          workExperience: currentUser.experiences?.map(exp => ({
             id: exp.id,
             company: exp.company,
             position: exp.role,
@@ -84,27 +84,50 @@ const ProfileScreen = ({ navigation }) => {
             isCurrentRole: exp.isCurrentRole
           })) || [],
           education: [], // Will be added when education endpoints are available
-          rawData: profileResult.data // Keep original data for updates
+          rawData: currentUser // Keep original data for updates
         };
         setUser(transformedUser);
       } else {
         // If no profile exists, show setup prompt
         Alert.alert(
-          'Profile Setup Required',
+          'Profile Setup Required', 
           'Please complete your profile setup to continue.',
           [
             {
               text: 'Setup Profile',
-              onPress: () => navigation.navigate('ProfileSetup'),
+              onPress: () => {
+                // Clear user data to trigger profile setup flow
+                authManager.authState.user = null;
+                authManager.notifyListeners();
+              },
             },
           ]
         );
         return;
       }
       
-      // Load posts (using mock for now)
-      const userPosts = await api.getUserPosts('1');
-      setPosts(userPosts);
+      // Load user posts using PostApi
+      try {
+        const userId = authManager.getCurrentUser()?.userId;
+        if (userId) {
+          const postsResult = await postApi.getUserPosts(userId, 1, 10);
+          if (postsResult.success) {
+            // Extract posts array from the response data structure
+            const postsArray = postsResult.data?.posts || postsResult.data || [];
+            setPosts(Array.isArray(postsArray) ? postsArray : []);
+          } else {
+            console.error('Failed to load user posts:', postsResult.message);
+            // Fallback to mock data
+            const userPosts = await api.getUserPosts('1');
+            setPosts(userPosts);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading user posts:', error);
+        // Fallback to mock data
+        const userPosts = await api.getUserPosts('1');
+        setPosts(userPosts);
+      }
     } catch (error) {
       console.error('Error loading current user data:', error);
       // Fallback to mock data or show error
@@ -120,7 +143,7 @@ const ProfileScreen = ({ navigation }) => {
 
   const handleEditProfile = () => {
     closeMenu();
-    navigation.navigate('ProfileSetup', { editMode: true, existingData: user });
+    navigation.navigate('EditProfile', { existingData: user });
   };
   
   const handleRegisteredEvents = () => {
@@ -382,9 +405,11 @@ const ProfileScreen = ({ navigation }) => {
   const renderPostsSection = () => (
     <ScrollView style={styles.tabContent}>
       <View style={styles.postsContainer}>
-        {posts.map(post => (
+        {posts && Array.isArray(posts) ? posts.map(post => (
           <PostCard key={post.id} post={post} style={styles.postCard} />
-        ))}
+        )) : (
+          <Text style={styles.emptyText}>No posts yet</Text>
+        )}
       </View>
     </ScrollView>
   );
@@ -582,9 +607,11 @@ const ProfileScreen = ({ navigation }) => {
           </View>
         ) : (
           <View style={styles.postsContainer}>
-            {posts.map(post => (
+            {posts && Array.isArray(posts) ? posts.map(post => (
               <PostCard key={post.id} post={post} style={styles.postCard} />
-            ))}
+            )) : (
+              <Text style={styles.emptyText}>No posts yet</Text>
+            )}
           </View>
         )}
       </ScrollView>

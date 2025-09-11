@@ -1,73 +1,101 @@
-// For iOS simulator, use localhost
-// For physical device, use your computer's IP address
+// API Configuration according to MOBILE_INTEGRATION_PROMPT.md
 const getBaseUrl = (port) => {
-  // For Android Emulator, use 10.0.2.2 which maps to localhost on the host machine
-  return `http://10.245.9.1:${port}`;
+  // If using ngrok with API Gateway (single endpoint for all services)
+  const NGROK_URL = "https://e580d8fcfdd7.ngrok-free.app";
+  
+  // Check if ngrok is being used as API Gateway (single endpoint)
+  if (NGROK_URL) {
+    // Return ngrok URL for API Gateway setup
+    return NGROK_URL;
+  }
+  
+  // For direct service access (individual ports)
+  return `http://localhost:${port}`;
   
   // Alternative configurations:
-  // For iOS Simulator or web: return `http://localhost:${port}`;
+  // For Android Emulator: return `http://10.0.2.2:${port}`;
   // For physical device: return `http://YOUR_COMPUTER_IP:${port}`;
+  // For production: return `https://api.sciastra.com`;
 };
 
 export const API_ENDPOINTS = {
-  // Auth Service - Port 3000
+  // Auth Service - Port 3000 (nginx routes /auth/ -> auth-service:3000/)
   AUTH: {
     BASE_URL: getBaseUrl(3000),
-    SEND_OTP: '/auth/send-otp',
-    VERIFY_OTP: '/auth/verify-otp',
-    REFRESH_TOKEN: '/auth/refresh-token',
-    LOGOUT: '/auth/logout',
-    HEALTH: '/',
+    SEND_OTP: '/auth/auth/send-otp',
+    VERIFY_OTP: '/auth/auth/verify-otp',
+    REFRESH_TOKEN: '/auth/auth/refresh-token',
+    LOGOUT: '/auth/auth/logout',
+    HEALTH: '/auth/auth',
   },
   
-  // Profile Service - Port 3001
+  // Profile Service - Port 3001 (nginx routes /profile/ -> profile-service:3001/)
   PROFILE: {
     BASE_URL: getBaseUrl(3001),
-    CREATE_UPDATE: '/profile',
-    GET_BY_ID: '/profile',
-    UPDATE: '/profile',
-    UPLOAD_URL: '/profile/upload-url',
-    HEALTH: '/',
+    CREATE_UPDATE: '/profile/profile',
+    GET_BY_ID: '/profile/profile',
+    UPDATE: '/profile/profile',
+    UPLOAD_URL: '/profile/profile/upload-url',
+    HEALTH: '/profile/profile/health',
   },
   
-  // Connection Service - Port 3002
+  // Connection Service - Port 3002 (nginx routes /connection/ -> connection-service:3002/)
   CONNECTION: {
     BASE_URL: getBaseUrl(3002),
-    SEND_REQUEST: '/connections/request',
-    ACCEPT_REQUEST: '/connections/accept',
-    REJECT_REQUEST: '/connections/reject',
-    GET_SENT: '/connections/sent',
-    GET_RECEIVED: '/connections/received',
-    GET_FRIENDS: '/connections/friends',
-    REMOVE: '/connections',
-    GET_STATUS: '/connections/status',
-    HEALTH: '/',
+    SEND_REQUEST: '/connection/connections/request',
+    ACCEPT_REQUEST: '/connection/connections/accept',
+    REJECT_REQUEST: '/connection/connections/reject',
+    GET_SENT: '/connection/connections/sent',
+    GET_RECEIVED: '/connection/connections/received',
+    GET_FRIENDS: '/connection/connections/friends',
+    REMOVE: '/connection/connections',
+    GET_STATUS: '/connection/connections/status',
+    HEALTH: '/connection/connections/health',
   },
   
-  // Post Service - Port 3003
+  // Post Service - Port 3003 (nginx routes /post/ -> post-service:3003/)
   POST: {
     BASE_URL: getBaseUrl(3003),
-    CREATE: '/posts',
-    GET_BY_ID: '/posts',
-    GET_USER_POSTS: '/posts/user',
-    SEARCH_USERS: '/search/users',
-    SEARCH_POSTS: '/search/posts',
-    SEARCH_TOPICS: '/search/topics',
+    CREATE: '/post/posts',
+    GET_BY_ID: '/post/posts',
+    GET_FEED: '/post/posts/feed',
+    GET_TRENDING: '/post/posts/trending',
+    GET_USER_POSTS: '/post/posts/user',
+    SEARCH_USERS: '/post/search/users',
+    SEARCH_POSTS: '/post/posts/search/posts',
+    SEARCH_TOPICS: '/post/search/topics',
+    UPLOAD_MEDIA: '/post/posts/upload',
+    HEALTH: '/post/posts/health',
   },
   
-  // Chat Service - Port 3004
+  // Chat Service - Port 3004 (nginx routes /chat/ -> chat-service:3004/)
   CHAT: {
     BASE_URL: getBaseUrl(3004),
-    CREATE_ROOM: '/chat/rooms',
-    GET_ROOMS: '/chat/rooms',
-    GET_ROOM: '/chat/rooms',
-    UPDATE_ROOM: '/chat/rooms',
-    ADD_MEMBERS: '/chat/rooms',
-    REMOVE_MEMBER: '/chat/rooms',
-    SEND_MESSAGE: '/chat/rooms',
-    GET_MESSAGES: '/chat/rooms',
-    MARK_READ: '/chat/messages',
-    HEALTH: '/',
+    CREATE_ROOM: '/chat/chat/rooms',
+    GET_ROOMS: '/chat/chat/rooms',
+    GET_ROOM: '/chat/chat/rooms',
+    UPDATE_ROOM: '/chat/chat/rooms',
+    ADD_MEMBERS: '/chat/chat/rooms',
+    REMOVE_MEMBER: '/chat/chat/rooms',
+    SEND_MESSAGE: '/chat/chat/rooms',
+    GET_MESSAGES: '/chat/chat/rooms',
+    MARK_READ: '/chat/chat/messages',
+    HEALTH: '/chat/chat/',
+    // WebSocket endpoints
+    SOCKET_URL: getBaseUrl(3004),
+  },
+  
+  // Events Service - Port 3006 (nginx routes /events/ -> events-service:3006/)
+  EVENTS: {
+    BASE_URL: getBaseUrl(3006),
+    GET_ALL: '/events/events',
+    GET_BY_ID: '/events/events',
+    SEARCH: '/events/events/search',
+    REGISTER: '/events/events',
+    CANCEL_REGISTRATION: '/events/events',
+    GET_REGISTERED: '/events/events/registered',
+    GET_REGISTRATION_STATUS: '/events/events',
+    HEALTH: '/events/events/health',
   },
 };
 
@@ -106,6 +134,8 @@ export const getApiBaseUrl = (service) => {
       return API_ENDPOINTS.POST.BASE_URL;
     case 'chat':
       return API_ENDPOINTS.CHAT.BASE_URL;
+    case 'events':
+      return API_ENDPOINTS.EVENTS.BASE_URL;
     default:
       throw new Error(`Unknown service: ${service}`);
   }
