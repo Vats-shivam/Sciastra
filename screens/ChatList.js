@@ -12,7 +12,7 @@ import {
   SafeAreaView,
   StatusBar
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+// Navigation prop is now passed directly to the component
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import colors from '../config/colors';
 import chatApi from '../api/ChatApi';
@@ -48,8 +48,7 @@ const initialChats = [
   },
 ];
 
-const ChatListScreen = () => {
-  const navigation = useNavigation();
+const ChatListScreen = ({ navigation }) => {
   const { showLoader, hideLoader } = useLoader();
   const [chats, setChats] = useState(initialChats);
   const [loading, setLoading] = useState(false);
