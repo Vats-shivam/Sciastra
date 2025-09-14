@@ -249,36 +249,38 @@ const HomeScreen = () => {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      {/* Header */}
-      {!searching ? (
-        <Header
-          title="SCICOMM"
-          showSearchIcon={true}
-          showChatIcon={true}
-          onSearchPress={() => setSearching(true)}
-          onChatPress={() => navigation.navigate("ChatList")}
-        />
-      ) : (
-        <View style={styles.searchBar}>
-          <Icon
-            name="arrow-left"
-            size={24}
-            color={colors.textPrimary}
-            onPress={() => {
-              setSearching(false);
-              clearSearch();
-            }}
+      {/* Header with Search */}
+      <View style={styles.headerContainer}>
+        {!searching ? (
+          <Header
+            title="SCICOMM"
+            showSearchIcon={true}
+            showChatIcon={true}
+            onSearchPress={() => setSearching(true)}
+            onChatPress={() => navigation.navigate("ChatList")}
           />
-          <TextInput
-            autoFocus
-            placeholder="Search posts or people"
-            placeholderTextColor={colors.textMuted}
-            style={styles.searchInput}
-            value={searchText}
-            onChangeText={setSearchText}
-          />
-        </View>
-      )}
+        ) : (
+          <View style={styles.searchBar}>
+            <Icon
+              name="arrow-left"
+              size={20}
+              color={colors.textPrimary}
+              onPress={() => {
+                setSearching(false);
+                clearSearch();
+              }}
+            />
+            <TextInput
+              autoFocus
+              placeholder="Search posts or people"
+              placeholderTextColor={colors.textMuted}
+              style={styles.searchInput}
+              value={searchText}
+              onChangeText={setSearchText}
+            />
+          </View>
+        )}
+      </View>
 
       {/* Trending Chips */}
       {searching && !searchText && (
@@ -308,23 +310,31 @@ const HomeScreen = () => {
 };
 
 const styles = StyleSheet.create({
+  headerContainer: {
+    paddingTop: Platform.OS === 'ios' ? 40 : 8,
+    paddingBottom: 8,
+    backgroundColor: colors.background,
+  },
   searchBar: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: colors.card,
     borderRadius: 20,
-    flex: 1,
-    paddingHorizontal: 12,
     height: 40,
+    marginHorizontal: 12,
+    paddingHorizontal: 12,
     borderWidth: 1,
     borderColor: colors.border,
   },
   searchInput: {
     marginLeft: 8,
-    fontSize: 15,
+    fontSize: 14,
     flex: 1,
     color: colors.textPrimary,
-    height: 40,
+    height: 38,
+    padding: 0,
+    margin: 0,
+    includeFontPadding: false,
   },
 
   breadcrumbs: {
