@@ -1,12 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { io } from 'socket.io-client';
-import { 
-  API_ENDPOINTS, 
-  STORAGE_KEYS, 
-  REQUEST_CONFIG, 
+import {
+  API_ENDPOINTS,
+  STORAGE_KEYS,
+  REQUEST_CONFIG,
   ERROR_MESSAGES,
   getApiBaseUrl,
-  getCommonHeaders 
+  getCommonHeaders
 } from '../config/apiConfig';
 import authApi from './AuthApi';
 
@@ -285,14 +285,15 @@ class ChatApiService {
         this.socket.disconnect();
       }
 
-      // Initialize socket connection
-      this.socket = io(API_ENDPOINTS.CHAT.SOCKET_URL, {
-        auth: {
-          token: accessToken
-        },
-        transports: ['websocket'],
-        timeout: 5000,
-      });
+      // Initialize socket connection - Note: /chat path for nginx routing
+      const socketUrl = `${API_ENDPOINTS.CHAT.SOCKET_URL}/chat`;
+      console.log('ChatApi: Connecting to socket URL:', socketUrl);
+
+      this.socket = io(socketUrl, {
+    auth: { token: accessToken },
+    transports: ['websocket', 'polling'],
+    path: '/socket.io/',
+  });
 
       // Socket event handlers
       this.socket.on('connect', () => {
@@ -307,23 +308,65 @@ class ChatApiService {
 
       this.socket.on('connect_error', (error) => {
         console.error('Chat socket connection error:', error.message);
+        console.log('Chat service may not be running. Falling back to demo mode.');
         this.isConnected = false;
       });
 
-      // Message events
-      this.socket.on('message', (data) => {
-        console.log('New message received:', data);
+      this.socket.on('reconnect_failed', () => {
+        console.log('Chat socket reconnection failed. Using offline mode.');
+        this.isConnected = false;
+      });
+
+      // New message events (updated to match backend specs)
+      this.socket.on('new:message', (data) => {
+        console.log('🔥 NEW MESSAGE EVENT RECEIVED:', data);
+        console.log('🔥 Message content:', data.content);
+        console.log('🔥 Message sender:', data.sender);
+        console.log('🔥 Message room:', data.chatRoomId);
         this.handleIncomingMessage(data);
       });
 
-      this.socket.on('typing', (data) => {
+      // Room events
+      this.socket.on('joined:room', (data) => {
+        console.log('Joined room:', data);
+      });
+
+      this.socket.on('left:room', (data) => {
+        console.log('Left room:', data);
+      });
+
+      // Typing events
+      this.socket.on('user:typing', (data) => {
         console.log('User typing:', data);
         this.handleTypingEvent(data);
       });
 
-      this.socket.on('message_read', (data) => {
+      // Message read events
+      this.socket.on('message:read', (data) => {
         console.log('Message read:', data);
         this.handleMessageReadEvent(data);
+      });
+
+      // User status events
+      this.socket.on('user:online', (data) => {
+        console.log('User online:', data);
+        this.handleUserStatusEvent({ ...data, status: 'online' });
+      });
+
+      this.socket.on('user:offline', (data) => {
+        console.log('User offline:', data);
+        this.handleUserStatusEvent({ ...data, status: 'offline' });
+      });
+
+      // Notifications
+      this.socket.on('notification', (data) => {
+        console.log('Notification received:', data);
+        this.handleNotificationEvent(data);
+      });
+
+      // Error handling
+      this.socket.on('error', (error) => {
+        console.error('Socket error:', error);
       });
 
       return true;
@@ -344,11 +387,17 @@ class ChatApiService {
 
   // Handle incoming messages
   handleIncomingMessage(messageData) {
-    const roomId = messageData.roomId;
+    const roomId = messageData.chatRoomId || messageData.roomId;
+    console.log('🔥 HANDLING MESSAGE FOR ROOM:', roomId);
+    console.log('🔥 AVAILABLE LISTENERS:', Array.from(this.messageListeners.keys()));
+
     const listeners = this.messageListeners.get(roomId);
-    
+
     if (listeners) {
+      console.log('🔥 FOUND LISTENERS, CALLING CALLBACKS:', listeners.size);
       listeners.forEach(callback => callback(messageData));
+    } else {
+      console.log('🔥 NO LISTENERS FOUND FOR ROOM:', roomId);
     }
   }
 
@@ -366,10 +415,22 @@ class ChatApiService {
   handleMessageReadEvent(readData) {
     const roomId = readData.roomId;
     const listeners = this.messageListeners.get(roomId);
-    
+
     if (listeners) {
       listeners.forEach(callback => callback({ type: 'message_read', ...readData }));
     }
+  }
+
+  // Handle user status events
+  handleUserStatusEvent(statusData) {
+    console.log('User status changed:', statusData);
+    // You can add listeners for user status if needed
+  }
+
+  // Handle notification events
+  handleNotificationEvent(notificationData) {
+    console.log('Notification received:', notificationData);
+    // You can add listeners for notifications if needed
   }
 
   // Add message listener
@@ -377,17 +438,31 @@ class ChatApiService {
     if (!this.messageListeners.has(roomId)) {
       this.messageListeners.set(roomId, new Set());
     }
-    this.messageListeners.get(roomId).add(callback);
+
+    const listeners = this.messageListeners.get(roomId);
+
+    // Remove any existing identical callback to prevent duplicates
+    listeners.delete(callback);
+
+    // Add the callback
+    listeners.add(callback);
+
+    console.log(`📝 Added message listener for room ${roomId}. Total listeners: ${listeners.size}`);
   }
 
   // Remove message listener
   removeMessageListener(roomId, callback) {
     const listeners = this.messageListeners.get(roomId);
     if (listeners) {
-      listeners.delete(callback);
+      const removed = listeners.delete(callback);
+      console.log(`🗑️ Removed message listener for room ${roomId}. Success: ${removed}. Remaining: ${listeners.size}`);
+
       if (listeners.size === 0) {
         this.messageListeners.delete(roomId);
+        console.log(`🗑️ Removed all listeners for room ${roomId}`);
       }
+    } else {
+      console.log(`🗑️ No listeners found for room ${roomId}`);
     }
   }
 
@@ -396,21 +471,51 @@ class ChatApiService {
     if (!this.typingListeners.has(roomId)) {
       this.typingListeners.set(roomId, new Set());
     }
-    this.typingListeners.get(roomId).add(callback);
+
+    const listeners = this.typingListeners.get(roomId);
+
+    // Remove any existing identical callback to prevent duplicates
+    listeners.delete(callback);
+
+    // Add the callback
+    listeners.add(callback);
+
+    console.log(`⌨️ Added typing listener for room ${roomId}. Total listeners: ${listeners.size}`);
   }
 
   // Remove typing listener
   removeTypingListener(roomId, callback) {
     const listeners = this.typingListeners.get(roomId);
     if (listeners) {
-      listeners.delete(callback);
+      const removed = listeners.delete(callback);
+      console.log(`🗑️ Removed typing listener for room ${roomId}. Success: ${removed}. Remaining: ${listeners.size}`);
+
       if (listeners.size === 0) {
         this.typingListeners.delete(roomId);
+        console.log(`🗑️ Removed all typing listeners for room ${roomId}`);
       }
+    } else {
+      console.log(`🗑️ No typing listeners found for room ${roomId}`);
     }
   }
 
-  // Create or get direct chat room
+  // Clear all listeners for a room
+  clearRoomListeners(roomId) {
+    const messageListeners = this.messageListeners.get(roomId);
+    const typingListeners = this.typingListeners.get(roomId);
+
+    if (messageListeners) {
+      this.messageListeners.delete(roomId);
+      console.log(`🧹 Cleared ${messageListeners.size} message listeners for room ${roomId}`);
+    }
+
+    if (typingListeners) {
+      this.typingListeners.delete(roomId);
+      console.log(`🧹 Cleared ${typingListeners.size} typing listeners for room ${roomId}`);
+    }
+  }
+
+  // Find or create direct chat room (prevents duplicates)
   async createOrGetDirectChat(participantUserId) {
     try {
       const userId = authApi.getCurrentUserId();
@@ -423,25 +528,63 @@ class ChatApiService {
       }
 
       // Check for bypass mode
+      
+
+      // Use the new find-or-create endpoint to prevent duplicates
+      const response = await this.makeRequest(`${this.baseUrl}/chat/chat/rooms/find/${participantUserId}`, {
+        method: 'GET',
+      });
+      console.log('ChatApi',response);
+      if (response.success) {
+        console.log('ChatApi: Find-or-create result:', response.message || 'Room found/created');
+        return {
+          success: true,
+          data: response.data,
+        };
+      } else {
+        throw new Error(response.message || 'Failed to find or create chat room');
+      }
+    } catch (error) {
+      console.error('Create/Get Direct Chat Error:', error);
+      return {
+        success: false,
+        message: error.message || 'Failed to create/get chat room. Please try again.',
+      };
+    }
+  }
+
+  // Create group chat room
+  async createGroupChat(memberIds, groupName) {
+    try {
+      const userId = authApi.getCurrentUserId();
+      if (!userId) {
+        throw new Error(ERROR_MESSAGES.UNAUTHORIZED);
+      }
+
+      if (!memberIds || memberIds.length === 0) {
+        throw new Error('Member IDs are required for group chat');
+      }
+
+      // Check for bypass mode
       if (userId === 'bypass_user_1234567890') {
-        console.log('Using bypass mode for direct chat creation');
-        
+        console.log('Using bypass mode for group chat creation');
+
         const mockRoom = {
-          id: `direct_${userId}_${participantUserId}`,
-          isGroup: false,
+          id: `group_${Date.now()}`,
+          isGroup: true,
+          name: groupName || 'Group Chat',
           participants: [
             {
               userId: userId,
               name: 'You',
               profilePic: null,
             },
-            {
-              userId: participantUserId,
-              name: 'Demo User',
+            ...memberIds.map((id, index) => ({
+              userId: id,
+              name: `User ${index + 1}`,
               profilePic: null,
-            }
+            }))
           ],
-          lastMessage: null,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         };
@@ -453,28 +596,30 @@ class ChatApiService {
       }
 
       const payload = {
-        isGroup: false,
-        memberIds: [participantUserId],
+        isGroup: true,
+        memberIds: memberIds,
+        name: groupName,
       };
 
-      const response = await this.makeRequest(`${this.baseUrl}${API_ENDPOINTS.CHAT.CREATE_ROOM}`, {
+      const response = await this.makeRequest(`${this.baseUrl}/chat/chat/rooms`, {
         method: 'POST',
         body: JSON.stringify(payload),
       });
 
       if (response.success) {
+        console.log('ChatApi: Group chat created successfully');
         return {
           success: true,
           data: response.data,
         };
       } else {
-        throw new Error(response.message || 'Failed to create chat room');
+        throw new Error(response.message || 'Failed to create group chat');
       }
     } catch (error) {
-      console.error('Create/Get Direct Chat Error:', error);
+      console.error('Create Group Chat Error:', error);
       return {
         success: false,
-        message: error.message || 'Failed to create chat. Please try again.',
+        message: error.message || 'Failed to create group chat. Please try again.',
       };
     }
   }
@@ -525,7 +670,7 @@ class ChatApiService {
         };
       }
 
-      const url = `${this.baseUrl}${API_ENDPOINTS.CHAT.GET_ROOMS}?page=${page}&limit=${limit}`;
+      const url = `${this.baseUrl}/chat/chat/rooms?page=${page}&limit=${limit}`;
 
       const response = await this.makeRequest(url, {
         method: 'GET',
@@ -592,9 +737,15 @@ class ChatApiService {
 
       // Send via WebSocket if connected
       if (this.isConnected && this.socket) {
-        this.socket.emit('send_message', {
+        console.log('🚀 SENDING MESSAGE VIA WEBSOCKET:', {
           roomId: roomId,
-          ...payload,
+          content: content,
+          media: payload.media,
+        });
+        this.socket.emit('send:message', {
+          roomId: roomId,
+          content: content,
+          media: payload.media, // optional media attachment
         });
 
         // Create temporary message for immediate UI update
@@ -615,7 +766,7 @@ class ChatApiService {
       }
 
       // Fallback to HTTP API
-      const response = await this.makeRequest(`${this.baseUrl}${API_ENDPOINTS.CHAT.SEND_MESSAGE}/${roomId}/messages`, {
+      const response = await this.makeRequest(`${this.baseUrl}/chat/chat/rooms/${roomId}/messages`, {
         method: 'POST',
         body: JSON.stringify(payload),
       });
@@ -688,7 +839,7 @@ class ChatApiService {
         };
       }
 
-      const url = `${this.baseUrl}${API_ENDPOINTS.CHAT.GET_MESSAGES}/${roomId}/messages?page=${page}&limit=${limit}`;
+      const url = `${this.baseUrl}/chat/chat/rooms/${roomId}/messages?page=${page}&limit=${limit}`;
 
       const response = await this.makeRequest(url, {
         method: 'GET',
@@ -732,22 +883,26 @@ class ChatApiService {
         };
       }
 
-      const payload = {
-        messageIds: messageIds,
-      };
+      // For now, mark each message individually as the backend expects single message ID
+      // This could be optimized to support bulk operations if the backend supports it
+      const promises = messageIds.map(messageId =>
+        this.makeRequest(`${this.baseUrl}/chat/messages/${messageId}/read`, {
+          method: 'PUT',
+        })
+      );
 
-      const response = await this.makeRequest(`${this.baseUrl}${API_ENDPOINTS.CHAT.MARK_READ}`, {
-        method: 'PUT',
-        body: JSON.stringify(payload),
-      });
+      const responses = await Promise.all(promises);
 
-      if (response.success) {
+      // Check if all responses are successful
+      const allSuccessful = responses.every(response => response.success);
+
+      if (allSuccessful) {
         return {
           success: true,
-          message: response.message || 'Messages marked as read',
+          message: 'Messages marked as read',
         };
       } else {
-        throw new Error(response.message || 'Failed to mark messages as read');
+        throw new Error('Failed to mark some messages as read');
       }
     } catch (error) {
       console.error('Mark Messages Read Error:', error);
@@ -773,10 +928,11 @@ class ChatApiService {
       }
 
       if (this.isConnected && this.socket) {
-        this.socket.emit('typing', {
-          roomId: roomId,
-          isTyping: isTyping,
-        });
+        if (isTyping) {
+          this.socket.emit('typing:start', { roomId });
+        } else {
+          this.socket.emit('typing:stop', { roomId });
+        }
       }
     } catch (error) {
       console.error('Send Typing Indicator Error:', error);
@@ -798,7 +954,13 @@ class ChatApiService {
       }
 
       if (this.isConnected && this.socket) {
-        this.socket.emit('join_room', { roomId });
+        console.log('🏠 JOINING ROOM VIA WEBSOCKET:', roomId);
+        this.socket.emit('join:room', { roomId });
+      } else {
+        console.log('🚨 CANNOT JOIN ROOM - NOT CONNECTED:', {
+          isConnected: this.isConnected,
+          hasSocket: !!this.socket
+        });
       }
     } catch (error) {
       console.error('Join Room Error:', error);
@@ -820,7 +982,7 @@ class ChatApiService {
       }
 
       if (this.isConnected && this.socket) {
-        this.socket.emit('leave_room', { roomId });
+        this.socket.emit('leave:room', { roomId });
       }
     } catch (error) {
       console.error('Leave Room Error:', error);
@@ -830,6 +992,36 @@ class ChatApiService {
   // Get connection status
   isSocketConnected() {
     return this.isConnected;
+  }
+
+  // Mark message as read via WebSocket
+  markMessageAsReadViaSocket(messageId, roomId) {
+    try {
+      const userId = authApi.getCurrentUserId();
+      if (!userId) {
+        return;
+      }
+
+      // Check for bypass mode
+      if (userId === 'bypass_user_1234567890') {
+        console.log('Using bypass mode for marking message as read');
+        return;
+      }
+
+      if (this.isConnected && this.socket) {
+        this.socket.emit('mark:read', {
+          messageId: messageId,
+          roomId: roomId,
+        });
+      }
+    } catch (error) {
+      console.error('Mark Message as Read via Socket Error:', error);
+    }
+  }
+
+  // Get current user ID for bypass checking
+  getCurrentUserId() {
+    return authApi.getCurrentUserId();
   }
 }
 

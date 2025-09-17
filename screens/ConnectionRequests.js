@@ -492,7 +492,7 @@ const ConnectionRequestsScreen = () => {
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    flex: 0,
     backgroundColor: colors.background,
     padding: 16,
   },

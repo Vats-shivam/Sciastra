@@ -6,6 +6,7 @@ import colors from '../config/colors';
 import { api } from '../api/MockApi';
 import ConnectionApi from '../api/ConnectionApi';
 import ProfileApi from '../api/ProfileApi';
+import chatApi from '../api/ChatApi';
 import PostCard from '../components/PostCard';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Header from '../components/Header';
@@ -181,12 +182,36 @@ const UserProfileScreen = ({ navigation, route }) => {
     }
   };
 
-  const handleMessage = () => {
+  const handleMessage = async () => {
     if (connectionStatus === 'connected') {
-      navigation.navigate('OneToOneChat', { 
-        userId: userId, 
-        userName: user?.name 
-      });
+      try {
+        showLoader();
+        console.log('Starting chat with user:', user?.name);
+
+        // Create or get direct chat room with this user
+        const chatResult = await chatApi.createOrGetDirectChat(userId);
+
+        if (chatResult.success) {
+          console.log('Chat room created/found:', chatResult.data);
+
+          // Navigate to OneToOneChat screen with user details
+          navigation.navigate('OneToOneChat', {
+            userId: userId,
+            userName: user?.name,
+            avatar: user?.profilePic,
+            isOnline: true, // Default to online since we don't have real-time status yet
+            roomId: chatResult.data.id,
+          });
+        } else {
+          console.error('Failed to create/get chat room:', chatResult.message);
+          Alert.alert('Error', 'Failed to start chat. Please try again.');
+        }
+      } catch (error) {
+        console.error('Error starting chat:', error);
+        Alert.alert('Error', 'Failed to start chat. Please try again.');
+      } finally {
+        hideLoader();
+      }
     } else if (connectionStatus === 'not_connected') {
       // Only show modal when user is not connected at all
       setShowConnectionModal(true);

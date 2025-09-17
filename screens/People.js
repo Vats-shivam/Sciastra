@@ -17,6 +17,7 @@ import Container from "../components/Container";
 import Header from "../components/Header";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import ConnectionApi from "../api/ConnectionApi";
+import chatApi from "../api/ChatApi";
 import { useLoader } from "../context/LoaderContext";
 
 
@@ -121,6 +122,37 @@ const ConnectionsScreen = () => {
     [receivedRequests, searchQuery]
   );
 
+  const handleMessagePress = async (connection) => {
+    try {
+      showLoader();
+      console.log('Starting chat with connection:', connection);
+
+      // Create or get direct chat room with this user
+      const chatResult = await chatApi.createOrGetDirectChat(connection.id);
+
+      if (chatResult.success) {
+        console.log('Chat room created/found:', chatResult.data);
+
+        // Navigate to OneToOneChat screen with user details
+        navigation.navigate('OneToOneChat', {
+          userId: connection.id,
+          userName: connection.name,
+          avatar: connection.profilePic,
+          isOnline: true, // Default to online since we don't have real-time status yet
+          roomId: chatResult.data.id,
+        });
+      } else {
+        console.error('Failed to create/get chat room:', chatResult.message);
+        Alert.alert('Error', 'Failed to start chat. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error starting chat:', error);
+      Alert.alert('Error', 'Failed to start chat. Please try again.');
+    } finally {
+      hideLoader();
+    }
+  };
+
   const renderConnection = useCallback(({ item }) => {
     return (
       <TouchableOpacity 
@@ -149,7 +181,10 @@ const ConnectionsScreen = () => {
             {item.mutualConnections} mutual connections
           </Text>
         </View>
-        <TouchableOpacity style={styles.actionBtn}>
+        <TouchableOpacity
+          style={styles.actionBtn}
+          onPress={() => handleMessagePress(item)}
+        >
           <Text style={styles.actionBtnText}>Message</Text>
         </TouchableOpacity>
       </TouchableOpacity>
@@ -242,13 +277,14 @@ const ConnectionsScreen = () => {
       contentContainerStyle={{ paddingHorizontal: 12 }}
       style={{ marginTop: 10 }}
     >
-      {PEOPLE_CATEGORIES.map((cat, idx) => (
+      {PEOPLE_CATEGORIES.map((cat) => (
         <TouchableOpacity
           key={cat.id}
           style={[
             styles.catChip,
             activeCategory === cat.id && styles.catChipActive,
           ]}
+          
           onPress={() => setActiveCategory(cat.id)}
         >
           <Icon
@@ -282,6 +318,7 @@ const ConnectionsScreen = () => {
                 tintColor={colors.primary}
               />
             }
+            contentContainerStyle={{ paddingBottom: 40, flexGrow: 1 }}
             ListEmptyComponent={
               <View style={styles.emptyContainer}>
                 <Icon name="account-clock" size={48} color={colors.textSecondary} />
@@ -384,7 +421,7 @@ export default ConnectionsScreen;
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    flex: 0,
     backgroundColor: colors.background,
     padding: 16,
   },
@@ -489,7 +526,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     marginRight: 10,
     height: 42,
-    marginBottom: 30,
+    marginBottom: 10,
   },
   catChipActive: { backgroundColor: colors.white },
   catText: { marginLeft: 8, color: colors.textPrimary, fontWeight: "600" },

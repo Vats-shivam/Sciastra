@@ -28,7 +28,10 @@ const OneToOneChatScreen = ({ route, navigation }) => {
   const [input, setInput] = useState('');
   const [chatRoom, setChatRoom] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [isTyping, setIsTyping] = useState(false);
+  const [typingUsers, setTypingUsers] = useState([]);
   const flatListRef = useRef(null);
+  const typingTimeoutRef = useRef(null);
   const currentUserId = isMock ? 'currentUser123' : authApi.getCurrentUserId();
   
   // Mock messages for Alice Johnson
@@ -79,14 +82,16 @@ const OneToOneChatScreen = ({ route, navigation }) => {
 
   useEffect(() => {
     initializeChat();
-    
+
     return () => {
       // Cleanup listeners when component unmounts
       if (chatRoom?.id) {
+        console.log('🧹 Cleaning up all listeners for room:', chatRoom.id);
+        chatApi.clearRoomListeners(chatRoom.id);
         chatApi.leaveRoom(chatRoom.id);
       }
     };
-  }, []);
+  }, [chatRoom?.id]);
 
   useEffect(() => {
     if (flatListRef.current) {
@@ -98,7 +103,7 @@ const OneToOneChatScreen = ({ route, navigation }) => {
     try {
       console.log('OneToOneChat: Initializing chat with userId:', userId, 'userName:', userName);
       setLoading(true);
-      
+
       if (isMock) {
         // Use mock data for Alice Johnson
         setMessages(mockMessages);
@@ -110,34 +115,44 @@ const OneToOneChatScreen = ({ route, navigation }) => {
         // Create or get direct chat room
         const roomResult = await chatApi.createOrGetDirectChat(userId);
         console.log('OneToOneChat: Room creation result:', roomResult);
-        
+
         if (roomResult.success) {
           const room = roomResult.data;
           setChatRoom(room);
-          
+
           // Load messages for this room
           const messagesResult = await chatApi.getMessages(room.id, 1, 50);
           console.log('OneToOneChat: Messages result:', messagesResult);
-          
+
           if (messagesResult.success) {
             const apiMessages = messagesResult.data.messages || [];
             const formattedMessages = apiMessages.map(msg => ({
               id: msg.id,
               text: msg.content,
-              sender: msg.senderId === currentUserId ? 'me' : 'other',
+              sender: msg.sender?.id === currentUserId ? 'me' : 'other',
               createdAt: msg.createdAt,
+              read: msg.read || false,
               originalMessage: msg
             }));
             console.log('OneToOneChat: Formatted messages:', formattedMessages);
             setMessages(formattedMessages);
           }
-          
+
+          // Clean up any existing listeners first to prevent duplicates
+          console.log('🧹 Clearing existing listeners before adding new ones');
+          chatApi.clearRoomListeners(room.id);
+
           // Join room for real-time updates
           chatApi.joinRoom(room.id);
-          
+
           // Add message listener
+          console.log('🔧 Adding message listener for room:', room.id);
           chatApi.addMessageListener(room.id, handleNewMessage);
-          
+
+          // Add typing listener
+          console.log('🔧 Adding typing listener for room:', room.id);
+          chatApi.addTypingListener(room.id, handleTypingEvent);
+
           // Set navigation title
           navigation.setOptions({
             title: userName || 'Chat'
@@ -156,28 +171,107 @@ const OneToOneChatScreen = ({ route, navigation }) => {
   };
 
   const handleNewMessage = (messageData) => {
-    console.log('OneToOneChat: New message received:', messageData);
-    
+    console.log('🎯 OneToOneChat: New message received:', messageData);
+    console.log('🎯 Current room ID:', chatRoom?.id);
+    console.log('🎯 Message room ID:', messageData.chatRoomId || messageData.roomId);
+
     if (messageData.type === 'message_read') {
-      // Handle read receipts
+      // Handle read receipts - update message read status
+      setMessages(prevMessages =>
+        prevMessages.map(msg =>
+          msg.id === messageData.messageId ? { ...msg, read: true } : msg
+        )
+      );
       return;
     }
-    
+
+    // Handle new message from 'new:message' event
     const newMessage = {
       id: messageData.id,
       text: messageData.content,
-      sender: messageData.senderId === currentUserId ? 'me' : 'other',
+      sender: messageData.sender?.id === currentUserId ? 'me' : 'other',
       createdAt: messageData.createdAt,
+      read: false,
       originalMessage: messageData
     };
-    
+
+    console.log('🎯 Formatted new message:', newMessage);
+
     setMessages(prevMessages => {
-      // Avoid duplicates
-      const exists = prevMessages.find(msg => msg.id === newMessage.id);
-      if (exists) return prevMessages;
-      
+      // Avoid duplicates by checking both real ID and temporary ID
+      const existsById = prevMessages.find(msg => msg.id === newMessage.id);
+      const existsByContent = prevMessages.find(msg =>
+        msg.text === newMessage.text &&
+        msg.sender === newMessage.sender &&
+        Math.abs(new Date(msg.createdAt).getTime() - new Date(newMessage.createdAt).getTime()) < 10000 // Within 10 seconds
+      );
+
+      if (existsById || existsByContent) {
+        console.log('🎯 Message already exists (by ID or content), skipping');
+        return prevMessages;
+      }
+
+      // If this is our own message, replace the temporary message
+      if (newMessage.sender === 'me') {
+        console.log('🎯 Replacing temporary message with real message');
+        return prevMessages.map(msg => {
+          // Replace temporary message with real message
+          if (msg.id.startsWith('temp_') &&
+              msg.text === newMessage.text &&
+              msg.sender === 'me') {
+            return { ...newMessage };
+          }
+          return msg;
+        });
+      }
+
+      console.log('🎯 Adding new message to state');
       return [...prevMessages, newMessage];
     });
+  };
+
+  const handleTypingEvent = (typingData) => {
+    console.log('OneToOneChat: Typing event received:', typingData);
+
+    if (typingData.userId === currentUserId) {
+      return; // Ignore our own typing events
+    }
+
+    if (typingData.isTyping) {
+      setTypingUsers(prev => {
+        if (!prev.includes(typingData.userId)) {
+          return [...prev, typingData.userId];
+        }
+        return prev;
+      });
+    } else {
+      setTypingUsers(prev => prev.filter(id => id !== typingData.userId));
+    }
+  };
+
+  const handleInputChange = (text) => {
+    setInput(text);
+
+    if (!isMock && chatRoom) {
+      // Send typing start indicator
+      if (!isTyping && text.length > 0) {
+        setIsTyping(true);
+        chatApi.sendTypingIndicator(chatRoom.id, true);
+      }
+
+      // Reset typing timeout
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+
+      // Set timeout to stop typing indicator
+      typingTimeoutRef.current = setTimeout(() => {
+        if (isTyping) {
+          setIsTyping(false);
+          chatApi.sendTypingIndicator(chatRoom.id, false);
+        }
+      }, 2000);
+    }
   };
 
   const handleSend = async () => {
@@ -186,13 +280,14 @@ const OneToOneChatScreen = ({ route, navigation }) => {
     const messageText = input.trim();
     setInput('');
     
-    // Create new message
+    // Create new message with temporary ID
     const newMessage = {
-      id: Date.now().toString(),
+      id: 'temp_' + Date.now(),
       text: messageText,
       sender: 'me',
       createdAt: new Date().toISOString(),
-      read: false
+      read: false,
+      status: 'sending' // Mark as sending
     };
     
     setMessages(prev => [...prev, newMessage]);
@@ -221,11 +316,16 @@ const OneToOneChatScreen = ({ route, navigation }) => {
           // Remove the optimistic message
           setMessages(prev => prev.filter(msg => msg.id !== newMessage.id));
         } else {
-          // Update the message with the server's ID and timestamp if needed
-          setMessages(prev => 
-            prev.map(msg => 
-              msg.id === newMessage.id 
-                ? { ...msg, id: result.data.id, createdAt: result.data.createdAt } 
+          // Update the temporary message with server data
+          setMessages(prev =>
+            prev.map(msg =>
+              msg.id === newMessage.id
+                ? {
+                    ...msg,
+                    id: result.data.id,
+                    createdAt: result.data.createdAt,
+                    status: 'sent' // Mark as successfully sent
+                  }
                 : msg
             )
           );
@@ -329,13 +429,22 @@ const OneToOneChatScreen = ({ route, navigation }) => {
         />
       </KeyboardAvoidingView>
 
+      {/* Typing Indicator */}
+      {typingUsers.length > 0 && (
+        <View style={styles.typingContainer}>
+          <Text style={styles.typingText}>
+            {userName} is typing...
+          </Text>
+        </View>
+      )}
+
       {/* Message Input */}
       <View style={styles.inputContainer}>
         <View style={styles.inputWrapper}>
           <TextInput
             style={styles.input}
             value={input}
-            onChangeText={setInput}
+            onChangeText={handleInputChange}
             placeholder="Type a message..."
             placeholderTextColor={colors.textMuted}
             multiline
@@ -506,6 +615,16 @@ const styles = StyleSheet.create({
   },
   sendButtonDisabled: {
     opacity: 0.5,
+  },
+  typingContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: colors.background,
+  },
+  typingText: {
+    fontSize: 12,
+    color: colors.textMuted,
+    fontStyle: 'italic',
   },
 });
 

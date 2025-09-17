@@ -65,8 +65,9 @@ const ChatListScreen = ({ navigation }) => {
         isMock: true
       });
     } else {
+      console.log(chat,"ssssssssssss")
       navigation.navigate('OneToOneChat', { 
-        userId: chat.id, 
+        userId: getOtherParticipantId(chat.room), 
         userName: chat.name,
         avatar: chat.avatar,
         isOnline: chat.isOnline
@@ -95,17 +96,20 @@ const ChatListScreen = ({ navigation }) => {
       console.log('ChatList: Get chat rooms result:', result);
       
       if (result.success) {
-        const rooms = result.data || [];
+        const rooms = result.data.chatRooms || [];
         console.log('ChatList: Received rooms:', rooms);
-        
+
         const formattedChats = rooms.map(room => ({
           id: room.id,
           name: getOtherParticipantName(room),
-          lastMessage: room.lastMessage?.content || 'No messages yet',
-          unread: room.unreadCount || 0,
+          lastMessage: room.messages?.[0]?.content || 'No messages yet',
+          time: room.messages?.[0] ? new Date(room.messages[0].createdAt).toLocaleDateString() : 'No time',
+          unread: 0, // Backend doesn't provide unread count yet
+          avatar: getOtherParticipantAvatar(room),
+          isOnline: true, // Default to online since we don't have real-time status
           room: room,
         }));
-        
+
         console.log('ChatList: Formatted chats:', formattedChats);
         setChats(formattedChats);
       } else {
@@ -117,13 +121,28 @@ const ChatListScreen = ({ navigation }) => {
       setLoading(false);
     }
   };
+  const getOtherParticipantId = (room) => {
+    if (!room.isGroup && room.members) {
+      const otherMember = room.members.find(member => member.user.id !== chatApi.getCurrentUserId?.());
+      return otherMember?.user?.id || null;
+    }
+    return null;
+  }
 
   const getOtherParticipantName = (room) => {
-    if (room.type === 'direct' && room.participants) {
-      const otherParticipant = room.participants.find(p => p.userId !== chatApi.getCurrentUserId?.());
-      return otherParticipant?.name || 'Unknown User';
+    if (!room.isGroup && room.members) {
+      const otherMember = room.members.find(member => member.user.id !== chatApi.getCurrentUserId?.());
+      return otherMember?.user?.profile?.name || 'Unknown User';
     }
     return room.name || 'Chat Room';
+  };
+
+  const getOtherParticipantAvatar = (room) => {
+    if (!room.isGroup && room.members) {
+      const otherMember = room.members.find(member => member.user.id !== chatApi.getCurrentUserId?.());
+      return otherMember?.user?.profile?.profilePic || 'https://randomuser.me/api/portraits/men/1.jpg';
+    }
+    return 'https://randomuser.me/api/portraits/men/1.jpg';
   };
 
   const onRefresh = async () => {
