@@ -210,25 +210,57 @@ class ChatApiService {
       // Send message fallback
       const body = JSON.parse(options.body || '{}');
       const roomId = url.split('/')[4]; // Extract room ID from URL
-      
+
       const demoMessage = {
         id: 'demo_msg_' + Date.now(),
         roomId: roomId,
         senderId: authApi.getCurrentUserId(),
         content: body.content,
         messageType: body.messageType || 'text',
+        media: body.media || null, // Include media if present
         createdAt: new Date().toISOString(),
         readBy: [],
       };
-      
+
       // Simulate real-time delivery
       setTimeout(() => {
         this.handleIncomingMessage(demoMessage);
       }, 100);
-      
+
       return {
         success: true,
         data: demoMessage
+      };
+    }
+
+    if (url.includes('/media/upload') && options.method === 'POST') {
+      // Media upload fallback
+      console.log('ChatApi: Demo media upload fallback');
+
+      // Generate a mock media key
+      const mockMediaKey = `demo-media/${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+      return {
+        success: true,
+        data: {
+          mediaKey: mockMediaKey,
+          uploadUrl: 'demo://uploaded',
+          message: {
+            id: 'demo_media_msg_' + Date.now(),
+            roomId: options.body?.get?.('roomId') || 'demo_room',
+            senderId: authApi.getCurrentUserId(),
+            content: '',
+            media: {
+              key: mockMediaKey,
+              type: 'image',
+              mimeType: 'image/jpeg',
+              fileName: 'demo-image.jpg',
+              displayUrl: 'https://picsum.photos/300/200'
+            },
+            createdAt: new Date().toISOString(),
+            readBy: [],
+          }
+        }
       };
     }
     
@@ -1022,6 +1054,374 @@ class ChatApiService {
   // Get current user ID for bypass checking
   getCurrentUserId() {
     return authApi.getCurrentUserId();
+  }
+
+  // Media Upload Methods
+
+  // Get presigned URL for media upload
+  async getMediaUploadUrl(fileName, fileType, roomId) {
+    try {
+      const userId = authApi.getCurrentUserId();
+      if (!userId) {
+        throw new Error(ERROR_MESSAGES.UNAUTHORIZED);
+      }
+
+      const payload = {
+        fileName: fileName,
+        fileType: fileType, // e.g., 'image/jpeg', 'image/png', 'video/mp4'
+        roomId: roomId
+      };
+
+      const response = await this.makeRequest(`${this.baseUrl}/chat/chat/media/upload-url`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+
+      if (response.success) {
+        console.log('🔍 FULL UPLOAD URL RESPONSE:', JSON.stringify(response.data, null, 2));
+
+        // Validate the upload URL
+        if (!response.data.uploadUrl || response.data.uploadUrl.length < 50) {
+          console.error('🚨 INVALID UPLOAD URL:', response.data.uploadUrl);
+          throw new Error('Invalid upload URL received from server');
+        }
+
+        return {
+          success: true,
+          data: response.data, // { uploadUrl, mediaKey, expiresIn: 300 }
+        };
+      } else {
+        throw new Error(response.message || 'Failed to get upload URL');
+      }
+    } catch (error) {
+      console.error('Get Media Upload URL Error:', error);
+      return {
+        success: false,
+        message: error.message || 'Failed to get upload URL. Please try again.',
+      };
+    }
+  }
+
+  // Upload file directly to S3 using presigned URL
+  async uploadMediaFile(uploadUrl, fileUri, fileType) {
+    try {
+      console.log('🚀 UPLOADING TO S3:', {
+        uploadUrl: uploadUrl,
+        fileUri: fileUri,
+        fileType: fileType
+      });
+
+      // Read the file as blob/binary data for S3 upload
+      const fileResponse = await fetch(fileUri);
+      const fileBlob = await fileResponse.blob();
+
+      console.log('🚀 FILE BLOB INFO:', {
+        size: fileBlob.size,
+        type: fileBlob.type
+      });
+
+      // Try different upload methods based on the URL structure
+      let response;
+
+      // Check if this looks like a proper presigned URL
+      if (uploadUrl.includes('?')) {
+        console.log('🚀 Using presigned URL upload with PUT');
+        // Standard presigned URL upload
+        response = await fetch(uploadUrl, {
+          method: 'PUT',
+          body: fileBlob,
+          headers: {
+            'Content-Type': fileType,
+          },
+        });
+      } else {
+        console.log('🚀 Using FormData upload with POST');
+        // Fallback to FormData POST (some S3 configurations use this)
+        const formData = new FormData();
+        formData.append('file', {
+          uri: fileUri,
+          type: fileType,
+          name: `upload.${fileType.split('/')[1]}`
+        });
+
+        response = await fetch(uploadUrl, {
+          method: 'POST',
+          body: formData,
+          headers: {
+            // Don't set Content-Type for FormData, let browser set it with boundary
+          },
+        });
+      }
+
+      console.log('🚀 S3 UPLOAD RESPONSE:', {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok,
+        headers: Object.fromEntries(response.headers.entries())
+      });
+
+      // Log response body for debugging
+      if (!response.ok) {
+        const responseText = await response.text();
+        console.log('🚀 S3 ERROR RESPONSE:', responseText);
+      }
+
+      return response.ok;
+    } catch (error) {
+      console.error('Upload Media File Error:', error);
+      console.error('Upload error details:', {
+        message: error.message,
+        stack: error.stack
+      });
+      return false;
+    }
+  }
+
+  // Send message with media attachment
+  async sendMediaMessage(roomId, content, mediaKey, mediaType, fileName, fileType) {
+    try {
+      const userId = authApi.getCurrentUserId();
+      if (!userId) {
+        throw new Error(ERROR_MESSAGES.UNAUTHORIZED);
+      }
+
+      if (!roomId || !mediaKey) {
+        throw new Error('Room ID and media key are required');
+      }
+
+      const mediaObject = {
+        key: mediaKey,           // S3 key for the uploaded file
+        type: mediaType,         // 'image' or 'video'
+        mimeType: fileType,      // 'image/jpeg', 'video/mp4', etc.
+        fileName: fileName,
+        uploadedAt: new Date().toISOString()
+      };
+
+      const payload = {
+        content: content || '', // Optional text with media
+        media: mediaObject
+      };
+
+      // Send via WebSocket if connected
+      if (this.isConnected && this.socket) {
+        console.log('🚀 SENDING MEDIA MESSAGE VIA WEBSOCKET:', {
+          roomId: roomId,
+          content: content,
+          media: mediaObject,
+        });
+
+        this.socket.emit('send:message', {
+          roomId: roomId,
+          content: content || '',
+          media: mediaObject
+        });
+
+        // Create temporary message for immediate UI update
+        const tempMessage = {
+          id: 'temp_' + Date.now(),
+          roomId: roomId,
+          senderId: userId,
+          content: content || '',
+          media: mediaObject,
+          createdAt: new Date().toISOString(),
+          status: 'sending',
+        };
+
+        return {
+          success: true,
+          data: tempMessage,
+        };
+      }
+
+      // Fallback to HTTP API
+      const response = await this.makeRequest(`${this.baseUrl}/chat/chat/rooms/${roomId}/messages`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+
+      if (response.success) {
+        return {
+          success: true,
+          data: response.data,
+        };
+      } else {
+        throw new Error(response.message || 'Failed to send media message');
+      }
+    } catch (error) {
+      console.error('Send Media Message Error:', error);
+      return {
+        success: false,
+        message: error.message || 'Failed to send media message. Please try again.',
+      };
+    }
+  }
+
+  // Alternative upload method - direct to backend
+  async uploadMediaDirect(roomId, imageUri, fileType) {
+    try {
+      const fileName = imageUri.split('/').pop();
+
+      const formData = new FormData();
+      formData.append('file', {
+        uri: imageUri,
+        type: fileType,
+        name: fileName
+      });
+      formData.append('roomId', roomId);
+
+      const response = await this.makeRequest(`${this.baseUrl}/chat/media/upload`, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      return response;
+    } catch (error) {
+      console.error('Direct upload error:', error);
+      return { success: false, message: error.message };
+    }
+  }
+
+  // Complete flow: Select media → Upload → Send message
+  async sendImageMessage(roomId, imageUri, caption = '') {
+    try {
+      // Step 1: Get file info
+      const fileName = imageUri.split('/').pop();
+      const fileType = this.getFileTypeFromUri(imageUri);
+
+      // Step 2: Try presigned URL upload first
+      try {
+        const uploadResult = await this.getMediaUploadUrl(fileName, fileType, roomId);
+
+        if (uploadResult.success) {
+          // Step 3: Upload to S3
+          const uploadSuccess = await this.uploadMediaFile(
+            uploadResult.data.uploadUrl,
+            imageUri,
+            fileType
+          );
+
+          if (uploadSuccess) {
+            // Step 4: Send message with media
+            const messageResult = await this.sendMediaMessage(
+              roomId,
+              caption,
+              uploadResult.data.mediaKey,
+              'image',
+              fileName,
+              fileType
+            );
+
+            return messageResult;
+          } else {
+            console.log('🔄 Presigned upload failed, trying direct upload...');
+          }
+        }
+      } catch (presignedError) {
+        console.log('🔄 Presigned URL method failed, trying direct upload...', presignedError.message);
+      }
+
+      // Fallback: Direct upload to backend
+      console.log('🚀 Using direct upload fallback');
+      const directUploadResult = await this.uploadMediaDirect(roomId, imageUri, fileType);
+
+      if (directUploadResult.success) {
+        // If direct upload includes the complete message, return it
+        if (directUploadResult.data.message) {
+          return directUploadResult;
+        }
+
+        // Otherwise, send the message with the uploaded media key
+        return await this.sendMediaMessage(
+          roomId,
+          caption,
+          directUploadResult.data.mediaKey,
+          'image',
+          fileName,
+          fileType
+        );
+      } else {
+        throw new Error(directUploadResult.message || 'All upload methods failed');
+      }
+
+    } catch (error) {
+      console.error('Error sending image message:', error);
+      return {
+        success: false,
+        message: error.message || 'Failed to send image. Please try again.',
+      };
+    }
+  }
+
+  // Complete flow: Select video → Upload → Send message
+  async sendVideoMessage(roomId, videoUri, caption = '') {
+    try {
+      // Step 1: Get file info
+      const fileName = videoUri.split('/').pop();
+      const fileType = this.getFileTypeFromUri(videoUri);
+
+      // Step 2: Get upload URL
+      const uploadResult = await this.getMediaUploadUrl(fileName, fileType, roomId);
+      if (!uploadResult.success) {
+        throw new Error(uploadResult.message);
+      }
+
+      // Step 3: Upload to S3
+      const uploadSuccess = await this.uploadMediaFile(
+        uploadResult.data.uploadUrl,
+        videoUri,
+        fileType
+      );
+
+      if (!uploadSuccess) {
+        throw new Error('Failed to upload media');
+      }
+
+      // Step 4: Send message with media
+      const messageResult = await this.sendMediaMessage(
+        roomId,
+        caption,
+        uploadResult.data.mediaKey,
+        'video',
+        fileName,
+        fileType
+      );
+
+      return messageResult;
+    } catch (error) {
+      console.error('Error sending video message:', error);
+      return {
+        success: false,
+        message: error.message || 'Failed to send video. Please try again.',
+      };
+    }
+  }
+
+  // Helper method to determine file type from URI
+  getFileTypeFromUri(uri) {
+    const extension = uri.split('.').pop().toLowerCase();
+    const mimeTypes = {
+      'jpg': 'image/jpeg',
+      'jpeg': 'image/jpeg',
+      'png': 'image/png',
+      'gif': 'image/gif',
+      'webp': 'image/webp',
+      'mp4': 'video/mp4',
+      'mov': 'video/quicktime',
+      'avi': 'video/avi',
+      'm4v': 'video/mp4',
+      'mkv': 'video/x-matroska'
+    };
+    return mimeTypes[extension] || 'image/jpeg';
+  }
+
+  // Get media display URL for rendering in chat
+  getMediaDisplayUrl(mediaKey) {
+    // Construct the S3 URL directly
+    const bucketUrl = 'https://scistra-app-uploads.s3.ap-south-1.amazonaws.com';
+    return `${bucketUrl}/${mediaKey}`;
   }
 }
 

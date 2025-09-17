@@ -10,7 +10,8 @@ import {
   Image,
   TextInput,
   SafeAreaView,
-  StatusBar
+  StatusBar,
+  Platform
 } from 'react-native';
 // Navigation prop is now passed directly to the component
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -152,9 +153,7 @@ const ChatListScreen = ({ navigation }) => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={colors.backgroundSecondary} />
-      
+    <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity 
@@ -245,7 +244,7 @@ const ChatListScreen = ({ navigation }) => {
           )
         )}
       />
-    </SafeAreaView>
+    </View>
   );
 };
 
@@ -258,7 +257,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 16,
+    paddingTop:40,
+    paddingBottom: 8,
     backgroundColor: colors.backgroundSecondary,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
