@@ -37,20 +37,12 @@ const HomeScreen = () => {
   // Debounced search effect
   useEffect(() => {
     if (!searching) return;
-    
-    console.log('🕐 Home Search - Debounce trigger:', JSON.stringify({
-      searchText: searchText,
-      searching: searching,
-      willSearchIn: '500ms'
-    }));
-    
+
     const timeoutId = setTimeout(() => {
-      console.log('🚀 Home Search - Debounce executing search for:', searchText);
       performSearch(searchText);
     }, 500); // 500ms debounce
 
     return () => {
-      console.log('🔄 Home Search - Debounce cancelled for:', searchText);
       clearTimeout(timeoutId);
     };
   }, [searchText, searching]);
@@ -62,13 +54,11 @@ const HomeScreen = () => {
       if (result.success) {
         setFeedPosts(result.data.posts || []);
       } else {
-        console.error('Failed to load feed posts:', result.message);
         // Fallback to mock data
         const posts = await api.fetchFeedPosts();
         setFeedPosts(posts);
       }
     } catch (error) {
-      console.error('Error loading feed posts:', error);
       // Fallback to mock data
       const posts = await api.fetchFeedPosts();
       setFeedPosts(posts);
@@ -92,25 +82,8 @@ const HomeScreen = () => {
     }
 
     try {
-      console.log('🔍 Home Search - Making request with query:', JSON.stringify({
-        query: query,
-        queryLength: query.length,
-        trimmedLength: query.trim().length,
-        type: 'all',
-        page: 1,
-        limit: 10
-      }));
-
       // Search using the new PostApi
       const searchResult = await postApi.search(query, 'all', 1, 10);
-      
-      console.log('🔍 Home Search - Response received:', JSON.stringify({
-        success: searchResult.success,
-        message: searchResult.message,
-        dataKeys: searchResult.data ? Object.keys(searchResult.data) : null,
-        postsCount: searchResult.data?.posts?.length,
-        usersCount: searchResult.data?.users?.length
-      }));
       
       if (searchResult.success) {
         const data = searchResult.data;
@@ -124,7 +97,6 @@ const HomeScreen = () => {
           setSearchResultsPeople([]);
           return;
         }
-        console.error('Search failed:', searchResult.message);
         // Fallback to local search
         const lowerQ = query.toLowerCase();
         setSearchResultsPosts(
@@ -142,7 +114,6 @@ const HomeScreen = () => {
         );
       }
     } catch (error) {
-      console.error('Search error:', error);
       // Fallback to local search
       const lowerQ = query.toLowerCase();
       setSearchResultsPosts(

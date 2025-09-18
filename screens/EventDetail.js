@@ -1,11 +1,13 @@
-import React from "react";
-import { View, Text, Image, StyleSheet, ScrollView, TouchableOpacity, FlatList } from "react-native";
+import React, { useState, useEffect } from "react";
+import { View, Text, Image, StyleSheet, ScrollView, TouchableOpacity, FlatList, ActivityIndicator } from "react-native";
 import Container from "../components/Container";
 import Button from "../components/Button";
 import Card from "../components/Card";
 import colors from "../config/colors";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import Header from "../components/Header";
+import eventsApi from "../api/EventsApi";
+import { useNotification } from "../contexts/NotificationContext";
 
 const mockEvent = {
   banner_url: require("../assets/splash-icon.png"),
@@ -54,13 +56,73 @@ const guestLineup = [
 const galleryImages = [1, 2, 3, 4, 5, 6, 7].map((i) => ({ id: `img${i}` }));
 
 const EventDetailScreen = ({ route, navigation }) => {
-  const event = route?.params?.event || mockEvent;
+  const { eventId } = route?.params || {};
+  const initialEvent = route?.params?.event;
+
+  const [event, setEvent] = useState(initialEvent || null);
+  const [loading, setLoading] = useState(!initialEvent);
+  const { showError } = useNotification();
+
   const isEventOver = false;
-  const isPriceAvailable = event.cheapest_ticket_price != null;
+  const isPriceAvailable = event?.cheapest_ticket_price != null;
+
+  useEffect(() => {
+    if (eventId && !initialEvent) {
+      loadEventDetails();
+    }
+  }, [eventId]);
+
+  const loadEventDetails = async () => {
+    try {
+      setLoading(true);
+      const result = await eventsApi.getEventById(eventId);
+      if (result.success) {
+        setEvent(result.data);
+      } else {
+        showError('Failed to load event details');
+        setEvent(mockEvent); // Fallback to mock data
+      }
+    } catch (error) {
+      showError('Something went wrong while loading event details');
+      setEvent(mockEvent); // Fallback to mock data
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleRegister = () => {
     navigation.navigate("EventRegister", { event });
   };
+
+  if (loading) {
+    return (
+      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+        <Header title="EVENT DETAIL" />
+        <View style={styles.loadingContent}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.loadingText}>Loading event details...</Text>
+        </View>
+      </View>
+    );
+  }
+
+  if (!event) {
+    return (
+      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+        <Header title="EVENT DETAIL" />
+        <View style={styles.loadingContent}>
+          <Icon name="alert-circle-outline" size={48} color={colors.textSecondary} />
+          <Text style={styles.errorText}>Event not found</Text>
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={() => navigation.goBack()}
+          >
+            <Text style={styles.retryButtonText}>Go Back</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -370,6 +432,40 @@ const styles = StyleSheet.create({
   },
   startsFrom: { fontSize: 13, color: colors.textPrimary },
   price: { fontSize: 22, fontWeight: "700", color: colors.white },
+
+  // Loading and Error States
+  loadingContainer: {
+    flex: 1,
+  },
+  loadingContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginTop: 12,
+  },
+  errorText: {
+    fontSize: 18,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginTop: 12,
+    marginBottom: 20,
+  },
+  retryButton: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: colors.white,
+    fontWeight: '600',
+  },
 });
 
 export default EventDetailScreen;

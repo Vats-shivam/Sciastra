@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -20,6 +20,7 @@ import colors from '../config/colors';
 import { api } from '../api/MockApi';
 import postApi from '../api/PostApi';
 import Header from '../components/Header';
+import authManager from '../services/AuthManager';
 
 const { width } = Dimensions.get('window');
 
@@ -30,6 +31,24 @@ const PostCreationScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState('');
   const [textInputFocused, setTextInputFocused] = useState(false);
+  const [userName, setUserName] = useState('You'); // Default fallback
+
+  // Load user information on component mount
+  useEffect(() => {
+    const loadUserInfo = () => {
+      try {
+        const currentUser = authManager.getCurrentUser();
+        if (currentUser?.name) {
+          setUserName(currentUser.name);
+        }
+      } catch (error) {
+        console.log('Could not load user info, using fallback');
+        // Keep default 'You' fallback
+      }
+    };
+
+    loadUserInfo();
+  }, []);
 
   const pickImages = async () => {
     if (images.length >= 5) {
@@ -229,7 +248,7 @@ const PostCreationScreen = ({ navigation }) => {
               style={styles.userAvatar}
             />
             <View>
-              <Text style={styles.userName}>Your Name</Text>
+              <Text style={styles.userName}>{userName}</Text>
               <TouchableOpacity
                 style={styles.visibilitySelector}
                 onPress={() => {

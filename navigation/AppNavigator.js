@@ -8,7 +8,7 @@ import MainTabNavigator from './MainTabNavigator';
 import ChatListScreen from '../screens/ChatList';
 import OneToOneChatScreen from '../screens/OneToOne';
 import ConnectionRequestsScreen from '../screens/ConnectionRequests';
-import PostDetailScreen from '../screens/Post';
+import PostDetailScreen from '../screens/PostDetail';
 import SettingsScreen from '../screens/Settings';
 import UserProfileScreen from '../screens/UserProfile';
 import EventDetailScreen from '../screens/EventDetail';
