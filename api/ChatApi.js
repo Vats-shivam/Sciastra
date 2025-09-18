@@ -237,8 +237,17 @@ class ChatApiService {
       // Media upload fallback
       console.log('ChatApi: Demo media upload fallback');
 
+      // Extract roomId from FormData
+      let roomId = 'demo_room';
+      if (options.body && options.body._parts) {
+        const roomIdPart = options.body._parts.find(part => part[0] === 'roomId');
+        if (roomIdPart) {
+          roomId = roomIdPart[1];
+        }
+      }
+
       // Generate a mock media key
-      const mockMediaKey = `demo-media/${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const mockMediaKey = `demo-media/${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
 
       return {
         success: true,
@@ -247,7 +256,7 @@ class ChatApiService {
           uploadUrl: 'demo://uploaded',
           message: {
             id: 'demo_media_msg_' + Date.now(),
-            roomId: options.body?.get?.('roomId') || 'demo_room',
+            roomId: roomId,
             senderId: authApi.getCurrentUserId(),
             content: '',
             media: {
@@ -1269,12 +1278,11 @@ class ChatApiService {
       });
       formData.append('roomId', roomId);
 
-      const response = await this.makeRequest(`${this.baseUrl}/chat/media/upload`, {
+      // Don't set Content-Type for FormData - let the browser set it with proper boundary
+      const response = await this.makeRequest(`${this.baseUrl}/chat/chat/media/upload`, {
         method: 'POST',
         body: formData,
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
+        // Remove Content-Type header to let FormData set it properly with boundary
       });
 
       return response;
@@ -1328,9 +1336,19 @@ class ChatApiService {
       const directUploadResult = await this.uploadMediaDirect(roomId, imageUri, fileType);
 
       if (directUploadResult.success) {
-        // If direct upload includes the complete message, return it
+        // If direct upload includes the complete message (demo mode), return it
         if (directUploadResult.data.message) {
-          return directUploadResult;
+          console.log('🎯 Demo upload returned complete message:', directUploadResult.data.message);
+
+          // Simulate the message being received
+          setTimeout(() => {
+            this.handleIncomingMessage(directUploadResult.data.message);
+          }, 100);
+
+          return {
+            success: true,
+            data: directUploadResult.data.message
+          };
         }
 
         // Otherwise, send the message with the uploaded media key
@@ -1419,9 +1437,18 @@ class ChatApiService {
 
   // Get media display URL for rendering in chat
   getMediaDisplayUrl(mediaKey) {
-    // Construct the S3 URL directly
-    const bucketUrl = 'https://scistra-app-uploads.s3.ap-south-1.amazonaws.com';
-    return `${bucketUrl}/${mediaKey}`;
+    // Use the proxy endpoint instead of direct S3 URL
+    return `${this.baseUrl}/chat/chat/media/proxy?key=${encodeURIComponent(mediaKey)}`;
+  }
+
+  // Helper method to get image source with headers
+  getImageSource(mediaKey, userToken) {
+    return {
+      uri: this.getMediaDisplayUrl(mediaKey),
+      headers: {
+        'Authorization': `Bearer ${userToken}`,
+      },
+    };
   }
 }
 

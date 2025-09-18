@@ -26,10 +26,12 @@ const REACTIONS = [
 ];
 
 const PostCard = ({ post }) => {
+  // console.log(JSON.stringify(post, null, 2)); // Use this to debug the post data
   const navigation = useNavigation();
   const [showFullDescription, setShowFullDescription] = useState(false);
-  const [reactions, setReactions] = useState(post.reactions || {});
+  const [userReaction, setUserReaction] = useState(post.userReaction); // Track the current user's reaction
   const [showReactionPicker, setShowReactionPicker] = useState(false);
+  const [reactions, setReactions] = useState(post.counts.reactions); // Use reactions from the counts object
 
   // Fullscreen image modal
   const [selectedImage, setSelectedImage] = useState(null);
@@ -37,10 +39,37 @@ const PostCard = ({ post }) => {
   const handleReaction = (type) => {
     setReactions((prev) => {
       const newReactions = { ...prev };
-      newReactions[type] = (newReactions[type] || 0) + 1;
+      // Decrement the previous reaction count if it exists
+      if (userReaction && newReactions[userReaction]) {
+        newReactions[userReaction] -= 1;
+        if (newReactions[userReaction] === 0) {
+          delete newReactions[userReaction];
+        }
+      }
+      // Increment the new reaction count
+      if (newReactions[type]) {
+        newReactions[type] += 1;
+      } else {
+        newReactions[type] = 1;
+      }
       return newReactions;
     });
+    setUserReaction(type);
     setShowReactionPicker(false);
+  };
+  
+  const handleRemoveReaction = () => {
+    setReactions((prev) => {
+      const newReactions = { ...prev };
+      if (userReaction && newReactions[userReaction]) {
+        newReactions[userReaction] -= 1;
+        if (newReactions[userReaction] === 0) {
+          delete newReactions[userReaction];
+        }
+      }
+      return newReactions;
+    });
+    setUserReaction(null);
   };
 
   const totalReactions = Object.values(reactions).reduce(
@@ -52,11 +81,34 @@ const PostCard = ({ post }) => {
   );
 
   // Handle multiple images (default to array)
-  const images = Array.isArray(post.images)
-    ? post.images
-    : post.imageUri
-    ? [post.imageUri]
+  const images = Array.isArray(post.media)
+    ? post.media.filter((item) => item.mediaType === "image").map((item) => item.uri)
     : [];
+
+  const timeAgo = (date) => {
+    const seconds = Math.floor((new Date() - new Date(date)) / 1000);
+    let interval = seconds / 31536000;
+    if (interval > 1) {
+      return Math.floor(interval) + "y ago";
+    }
+    interval = seconds / 2592000;
+    if (interval > 1) {
+      return Math.floor(interval) + "m ago";
+    }
+    interval = seconds / 86400;
+    if (interval > 1) {
+      return Math.floor(interval) + "d ago";
+    }
+    interval = seconds / 3600;
+    if (interval > 1) {
+      return Math.floor(interval) + "h ago";
+    }
+    interval = seconds / 60;
+    if (interval > 1) {
+      return Math.floor(interval) + "min ago";
+    }
+    return Math.floor(seconds) + "s ago";
+  };
 
   return (
     <Pressable
@@ -67,18 +119,17 @@ const PostCard = ({ post }) => {
       <View style={styles.header}>
         <TouchableOpacity
           onPress={() => {
-            // Check if this is the current user
-            if (post.authorId === '1') { // Current user ID is '1'
+            if (post.author.id === "1") {
               navigation.navigate("ProfileTab");
             } else {
-              navigation.navigate("UserProfile", { userId: post.authorId });
+              navigation.navigate("UserProfile", { userId: post.author.id });
             }
           }}
         >
           <Image
             source={
-              post.profilePic
-                ? { uri: post.profilePic }
+              post.author.profile.profilePic
+                ? { uri: post.author.profile.profilePic }
                 : require("../assets/icon.png")
             }
             style={styles.avatar}
@@ -87,25 +138,27 @@ const PostCard = ({ post }) => {
         <TouchableOpacity
           style={{ flex: 1, paddingLeft: 10 }}
           onPress={() => {
-            // Check if this is the current user
-            if (post.authorId === '1') { // Current user ID is '1'
+            if (post.author.id === "1") {
               navigation.navigate("ProfileTab");
             } else {
-              navigation.navigate("UserProfile", { userId: post.authorId });
+              navigation.navigate("UserProfile", { userId: post.author.id });
             }
           }}
         >
-          <Text style={styles.author}>{post.author}</Text>
-          <Text style={styles.subTitle}>{post.subTitle || "Professional"}</Text>
-          <Text style={styles.timestamp}>{post.timeAgo || "1h ago"}</Text>
+          <Text style={styles.author}>{post.author.profile.name}</Text>
+          <Text style={styles.subTitle}>
+            {post.author.profile.profession || "Professional"}
+          </Text>
+          <Text style={styles.timestamp}>
+            {timeAgo(post.createdAt)}
+          </Text>
         </TouchableOpacity>
         <TouchableOpacity
           onPress={() => {
-            // Check if this is the current user
-            if (post.authorId === '1') { // Current user ID is '1'
+            if (post.author.id === "1") {
               navigation.navigate("ProfileTab");
             } else {
-              navigation.navigate("UserProfile", { userId: post.authorId });
+              navigation.navigate("UserProfile", { userId: post.author.id });
             }
           }}
         >
@@ -114,21 +167,23 @@ const PostCard = ({ post }) => {
       </View>
 
       {/* Description */}
-      <TouchableOpacity
-        onPress={() => setShowFullDescription(!showFullDescription)}
-        activeOpacity={0.8}
-        style={{ marginVertical: 8 }}
-      >
-        <Text
-          numberOfLines={showFullDescription ? 0 : 3}
-          style={styles.description}
+      {post.content && (
+        <TouchableOpacity
+          onPress={() => setShowFullDescription(!showFullDescription)}
+          activeOpacity={0.8}
+          style={{ marginVertical: 8 }}
         >
-          {post.text}
-        </Text>
-        {!showFullDescription && post.text?.length > 100 && (
-          <Text style={styles.showMore}>See More</Text>
-        )}
-      </TouchableOpacity>
+          <Text
+            numberOfLines={showFullDescription ? 0 : 3}
+            style={styles.description}
+          >
+            {post.content}
+          </Text>
+          {!showFullDescription && post.content.length > 100 && (
+            <Text style={styles.showMore}>See More</Text>
+          )}
+        </TouchableOpacity>
+      )}
 
       {/* Image Carousel */}
       {images.length > 0 && (
@@ -196,7 +251,9 @@ const PostCard = ({ post }) => {
                 </View>
               ))}
             </View>
-            <Text style={styles.reactionCount}>{totalReactions} Reacted</Text>
+            <Text style={styles.reactionCount}>
+              {totalReactions} Reacted
+            </Text>
           </View>
         ) : (
           <Text style={styles.statsText}>Be the first to react</Text>
@@ -204,7 +261,9 @@ const PostCard = ({ post }) => {
         <TouchableOpacity
           onPress={() => navigation.navigate("PostDetail", { postId: post.id })}
         >
-          <Text style={styles.statsText}>{post.comments.length} Comments</Text>
+          <Text style={styles.statsText}>
+            {post.counts.comments} Comments
+          </Text>
         </TouchableOpacity>
       </View>
 
@@ -212,12 +271,12 @@ const PostCard = ({ post }) => {
       <View style={styles.actions}>
         <Pressable
           onLongPress={() => setShowReactionPicker(true)}
-          onPress={() => handleReaction("like")}
+          onPress={() => userReaction ? handleRemoveReaction() : handleReaction("like")}
         >
           <Icon
-            name="thumb-up-outline"
+            name={userReaction ? "thumb-up" : "thumb-up-outline"}
             size={22}
-            color={colors.textSecondary}
+            color={userReaction ? colors.accent : colors.textSecondary}
           />
         </Pressable>
         <TouchableOpacity

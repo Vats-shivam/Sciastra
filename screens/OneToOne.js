@@ -12,10 +12,20 @@ import {
   SafeAreaView,
   StatusBar,
   Image,
-  Keyboard
+  Keyboard,
+  Modal,
+  Dimensions
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import * as ImagePicker from 'expo-image-picker';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  useAnimatedGestureHandler,
+  withSpring,
+  runOnJS,
+} from 'react-native-reanimated';
+import { PinchGestureHandler, PanGestureHandler, State } from 'react-native-gesture-handler';
 import Container from '../components/Container';
 import colors from '../config/colors';
 import chatApi from '../api/ChatApi';
@@ -31,9 +41,18 @@ const OneToOneChatScreen = ({ route, navigation }) => {
   const [loading, setLoading] = useState(true);
   const [isTyping, setIsTyping] = useState(false);
   const [typingUsers, setTypingUsers] = useState([]);
+  const [fullScreenImage, setFullScreenImage] = useState(null);
   const flatListRef = useRef(null);
   const typingTimeoutRef = useRef(null);
   const currentUserId = isMock ? 'currentUser123' : authApi.getCurrentUserId();
+
+  // Zoom and pan animation values
+  const scale = useSharedValue(1);
+  const translateX = useSharedValue(0);
+  const translateY = useSharedValue(0);
+  const baseScale = useSharedValue(1);
+  const baseTranslateX = useSharedValue(0);
+  const baseTranslateY = useSharedValue(0);
   
   // Mock messages for Alice Johnson
   const mockMessages = [
@@ -127,21 +146,34 @@ const OneToOneChatScreen = ({ route, navigation }) => {
 
           if (messagesResult.success) {
             const apiMessages = messagesResult.data.messages || [];
-            const formattedMessages = apiMessages.map(msg => ({
-              id: msg.id,
-              text: msg.content,
-              sender: msg.sender?.id === currentUserId ? 'me' : 'other',
-              createdAt: msg.createdAt,
-              read: msg.read || false,
-              media: msg.media ? {
-                type: msg.media.type,
-                uri: msg.media.key ? chatApi.getMediaDisplayUrl(msg.media.key) : null,
-                key: msg.media.key,
-                mimeType: msg.media.mimeType,
-                fileName: msg.media.fileName
-              } : null,
-              originalMessage: msg
-            }));
+            const formattedMessages = apiMessages.map(msg => {
+              const formattedMsg = {
+                id: msg.id,
+                text: msg.content,
+                sender: msg.sender?.id === currentUserId ? 'me' : 'other',
+                createdAt: msg.createdAt,
+                read: msg.read || false,
+                media: msg.media ? {
+                  type: msg.media.type,
+                  uri: msg.media.key ? chatApi.getMediaDisplayUrl(msg.media.key) : null,
+                  key: msg.media.key,
+                  mimeType: msg.media.mimeType,
+                  fileName: msg.media.fileName
+                } : null,
+                originalMessage: msg
+              };
+
+              if (msg.media) {
+                console.log('📜 Historical message with media:', {
+                  messageId: msg.id,
+                  mediaKey: msg.media?.key,
+                  constructedUri: msg.media?.key ? chatApi.getMediaDisplayUrl(msg.media.key) : null,
+                  formattedMedia: formattedMsg.media
+                });
+              }
+
+              return formattedMsg;
+            });
             console.log('OneToOneChat: Formatted messages:', formattedMessages);
             setMessages(formattedMessages);
           }
@@ -209,6 +241,13 @@ const OneToOneChatScreen = ({ route, navigation }) => {
       } : null,
       originalMessage: messageData
     };
+
+    console.log('🎯 Processing message with media:', {
+      hasMedia: !!messageData.media,
+      mediaKey: messageData.media?.key,
+      constructedUri: messageData.media?.key ? chatApi.getMediaDisplayUrl(messageData.media.key) : null,
+      formattedMedia: newMessage.media
+    });
 
     console.log('🎯 Formatted new message:', newMessage);
 
@@ -494,6 +533,76 @@ const OneToOneChatScreen = ({ route, navigation }) => {
     );
   };
 
+  // Full screen image viewer functions
+  const openFullScreenImage = (mediaItem) => {
+    const userToken = authApi.getAccessToken();
+    const imageSource = mediaItem.key && userToken
+      ? chatApi.getImageSource(mediaItem.key, userToken)
+      : { uri: mediaItem.uri || mediaItem.displayUrl };
+
+    setFullScreenImage({
+      ...mediaItem,
+      source: imageSource
+    });
+  };
+
+  const closeFullScreenImage = () => {
+    // Reset zoom and pan values
+    scale.value = withSpring(1);
+    translateX.value = withSpring(0);
+    translateY.value = withSpring(0);
+    baseScale.value = 1;
+    baseTranslateX.value = 0;
+    baseTranslateY.value = 0;
+
+    setFullScreenImage(null);
+  };
+
+  // Gesture handlers for zoom and pan
+  const pinchHandler = useAnimatedGestureHandler({
+    onStart: () => {
+      baseScale.value = scale.value;
+    },
+    onActive: (event) => {
+      scale.value = Math.max(0.5, Math.min(baseScale.value * event.scale, 5));
+    },
+    onEnd: () => {
+      if (scale.value < 1) {
+        scale.value = withSpring(1);
+        translateX.value = withSpring(0);
+        translateY.value = withSpring(0);
+      }
+    },
+  });
+
+  const panHandler = useAnimatedGestureHandler({
+    onStart: () => {
+      baseTranslateX.value = translateX.value;
+      baseTranslateY.value = translateY.value;
+    },
+    onActive: (event) => {
+      translateX.value = baseTranslateX.value + event.translationX;
+      translateY.value = baseTranslateY.value + event.translationY;
+    },
+    onEnd: () => {
+      // Add boundary constraints if needed
+      if (scale.value <= 1) {
+        translateX.value = withSpring(0);
+        translateY.value = withSpring(0);
+      }
+    },
+  });
+
+  const animatedStyle = useAnimatedStyle(() => {
+    return {
+      transform: [
+        { scale: scale.value },
+        { translateX: translateX.value },
+        { translateY: translateY.value },
+      ],
+    };
+  });
+
   // Cleaned up duplicate code block
 
   if (loading) {
@@ -525,16 +634,37 @@ const OneToOneChatScreen = ({ route, navigation }) => {
           <View style={styles.mediaContainer}>
             {item.media.type === 'image' && (
               <TouchableOpacity
-                onPress={() => {
-                  // Could implement full-screen image viewer here
-                  console.log('View image:', item.media.uri || item.media.displayUrl);
-                }}
+                onPress={() => openFullScreenImage(item.media)}
               >
-                <Image
-                  source={{ uri: item.media.uri || item.media.displayUrl }}
-                  style={styles.messageImage}
-                  resizeMode="cover"
-                />
+                {(() => {
+                  const userToken = authApi.getAccessToken();
+                  const imageSource = item.media.key && userToken
+                    ? chatApi.getImageSource(item.media.key, userToken)
+                    : { uri: item.media.uri || item.media.displayUrl };
+
+                  console.log('🖼️ Rendering image:', {
+                    messageId: item.id,
+                    mediaKey: item.media.key,
+                    userToken: userToken ? 'present' : 'missing',
+                    imageSource: imageSource,
+                    mediaType: item.media.type
+                  });
+
+                  return (
+                    <Image
+                      source={imageSource}
+                      style={styles.messageImage}
+                      resizeMode="cover"
+                      onError={(error) => {
+                        console.log('🚨 Image load error:', error.nativeEvent.error);
+                        console.log('🚨 Failed image source:', imageSource);
+                      }}
+                      onLoad={() => {
+                        console.log('✅ Image loaded successfully:', imageSource.uri);
+                      }}
+                    />
+                  );
+                })()}
                 {item.media.isUploading && (
                   <View style={styles.uploadingOverlay}>
                     <Icon name="loading" size={24} color="white" />
@@ -546,16 +676,22 @@ const OneToOneChatScreen = ({ route, navigation }) => {
             {item.media.type === 'video' && (
               <TouchableOpacity
                 style={styles.videoContainer}
-                onPress={() => {
-                  // Could implement video player here
-                  console.log('Play video:', item.media.uri || item.media.displayUrl);
-                }}
+                onPress={() => openFullScreenImage(item.media)}
               >
-                <Image
-                  source={{ uri: item.media.uri || item.media.displayUrl }}
-                  style={styles.messageImage}
-                  resizeMode="cover"
-                />
+                {(() => {
+                  const userToken = authApi.getAccessToken();
+                  const videoSource = item.media.key && userToken
+                    ? chatApi.getImageSource(item.media.key, userToken)
+                    : { uri: item.media.uri || item.media.displayUrl };
+
+                  return (
+                    <Image
+                      source={videoSource}
+                      style={styles.messageImage}
+                      resizeMode="cover"
+                    />
+                  );
+                })()}
                 <View style={styles.videoPlayButton}>
                   <Icon name="play" size={32} color="white" />
                 </View>
@@ -571,7 +707,7 @@ const OneToOneChatScreen = ({ route, navigation }) => {
         )}
 
         {/* Text content */}
-        {item.text && item.text.trim() && (
+        {!item.media && item.text && item.text.trim() && (
           <Text style={[
             styles.messageText,
             item.sender === 'me' ? styles.sentText : styles.receivedText,
@@ -677,6 +813,60 @@ const OneToOneChatScreen = ({ route, navigation }) => {
           <Icon name="send" size={24} color={colors.textInverse} />
         </TouchableOpacity>
       </View>
+
+      {/* Full Screen Image Modal */}
+      <Modal
+        visible={!!fullScreenImage}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={closeFullScreenImage}
+      >
+        <View style={styles.fullScreenModalContainer}>
+          <TouchableOpacity
+            style={styles.fullScreenBackdrop}
+            activeOpacity={1}
+            onPress={closeFullScreenImage}
+          >
+            <StatusBar barStyle="light-content" backgroundColor="rgba(0,0,0,0.9)" />
+
+            {/* Close button */}
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={closeFullScreenImage}
+            >
+              <Icon name="close" size={30} color="white" />
+            </TouchableOpacity>
+
+            {/* Full screen image */}
+            {fullScreenImage && (
+              <View style={styles.fullScreenImageContainer}>
+                <PanGestureHandler onGestureEvent={panHandler}>
+                  <Animated.View style={styles.gestureContainer}>
+                    <PinchGestureHandler onGestureEvent={pinchHandler}>
+                      <Animated.View style={[styles.imageWrapper, animatedStyle]}>
+                        <Animated.Image
+                          source={fullScreenImage.source}
+                          style={styles.fullScreenImage}
+                          resizeMode="contain"
+                          onError={(error) => {
+                            console.log('🚨 Full screen image load error:', error.nativeEvent.error);
+                          }}
+                          onLoad={() => {
+                            console.log('✅ Full screen image loaded successfully');
+                          }}
+                        />
+                      </Animated.View>
+                    </PinchGestureHandler>
+                  </Animated.View>
+                </PanGestureHandler>
+
+                {/* Image info */}
+                
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -887,6 +1077,69 @@ const styles = StyleSheet.create({
   },
   mediaMessageText: {
     marginTop: 4,
+  },
+  // Full screen modal styles
+  fullScreenModalContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.95)',
+  },
+  fullScreenBackdrop: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  closeButton: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 50 : 30,
+    right: 20,
+    zIndex: 1000,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    borderRadius: 20,
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fullScreenImageContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  gestureContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  imageWrapper: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fullScreenImage: {
+    width: Dimensions.get('window').width - 40,
+    height: Dimensions.get('window').height - 200,
+    maxWidth: '100%',
+    maxHeight: '80%',
+  },
+  imageInfoContainer: {
+    position: 'absolute',
+    bottom: 50,
+    left: 20,
+    right: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    borderRadius: 10,
+    padding: 15,
+    alignItems: 'center',
+  },
+  imageInfoText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 5,
+  },
+  imageInfoSubtext: {
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontSize: 14,
   },
 });
 

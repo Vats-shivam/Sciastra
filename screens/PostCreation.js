@@ -28,6 +28,7 @@ const PostCreationScreen = ({ navigation }) => {
   const [images, setImages] = useState([]); // Changed to array for multiple images
   const [visibility, setVisibility] = useState('public');
   const [loading, setLoading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState('');
   const [textInputFocused, setTextInputFocused] = useState(false);
 
   const pickImages = async () => {
@@ -55,6 +56,9 @@ const PostCreationScreen = ({ navigation }) => {
         uri: asset.uri,
         width: asset.width,
         height: asset.height,
+        fileSize: asset.fileSize,
+        fileName: asset.fileName || `image_${Date.now()}_${index}.jpg`,
+        mimeType: asset.mimeType || 'image/jpeg',
       }));
       setImages([...images, ...newImages]);
     }
@@ -82,11 +86,15 @@ const PostCreationScreen = ({ navigation }) => {
     });
 
     if (!result.canceled) {
+      const asset = result.assets[0];
       const newImage = {
         id: `${Date.now()}`,
-        uri: result.assets[0].uri,
-        width: result.assets[0].width,
-        height: result.assets[0].height,
+        uri: asset.uri,
+        width: asset.width,
+        height: asset.height,
+        fileSize: asset.fileSize,
+        fileName: asset.fileName || `image_${Date.now()}.jpg`,
+        mimeType: asset.mimeType || 'image/jpeg',
       };
       setImages([...images, newImage]);
     }
@@ -97,48 +105,51 @@ const PostCreationScreen = ({ navigation }) => {
       Alert.alert('Empty Post', 'Please write something or add an image to share.');
       return;
     }
-    
+
     setLoading(true);
     try {
-      // Validate post data
+      // Prepare post data
       const postData = {
         content: text.trim(),
-        topics: [], // Could be extracted from hashtags in text
-        mediaUrls: [],
+        topicNames: extractHashtags(text), // Extract hashtags from text
+        privacy: visibility.toUpperCase(),
       };
 
-      const validation = postApi.validatePostData(postData);
-      if (!validation.isValid) {
-        Alert.alert('Invalid Post', validation.errors.join('\n'));
-        setLoading(false);
-        return;
+      // Prepare media files for upload
+      const selectedFiles = images.map((image, index) => ({
+        uri: image.uri,
+        fileName: image.fileName || `image_${Date.now()}_${index}.jpg`,
+        contentType: image.mimeType || 'image/jpeg',
+        size: image.fileSize || 1024000, // Default size if not available
+        width: image.width,
+        height: image.height,
+        caption: '', // Could add caption support later
+      }));
+
+      console.log('📸 Creating post with data:', {
+        content: postData.content,
+        mediaCount: selectedFiles.length,
+        privacy: postData.privacy
+      });
+
+      // Update progress for media uploads
+      if (selectedFiles.length > 0) {
+        setUploadProgress(`Uploading ${selectedFiles.length} image${selectedFiles.length > 1 ? 's' : ''}...`);
       }
 
-      // Upload images if any
-      if (images.length > 0) {
-        for (const image of images) {
-          try {
-            const uploadResult = await postApi.uploadMedia(image.uri, image.type || 'image/jpeg');
-            if (uploadResult.success) {
-              postData.mediaUrls.push(uploadResult.data.mediaUrl);
-            } else {
-              console.warn('Failed to upload image:', uploadResult.message);
-            }
-          } catch (uploadError) {
-            console.warn('Image upload error:', uploadError);
-          }
-        }
-      }
+      // Create post with media using the new API
+      const result = await postApi.createPostWithMedia(postData, selectedFiles);
 
-      // Create the post
-      const result = await postApi.createPost(postData);
-      
+      setUploadProgress('Creating post...');
+
       if (result.success) {
+        setUploadProgress('Post published successfully!');
+
         // Clean up memory
         setText('');
         setImages([]);
         setVisibility('public');
-        
+
         Alert.alert('Success!', 'Your post has been published successfully.', [
           {
             text: 'OK',
@@ -146,14 +157,33 @@ const PostCreationScreen = ({ navigation }) => {
           },
         ]);
       } else {
-        Alert.alert('Error', result.message || 'Failed to publish your post. Please try again.');
+        const errorMessage = result.message || 'Failed to publish your post';
+        console.error('Post creation failed:', errorMessage);
+        Alert.alert('Upload Failed', errorMessage + '. Please check your connection and try again.');
       }
     } catch (error) {
       console.error('Post creation error:', error);
-      Alert.alert('Error', 'Failed to publish your post. Please try again.');
+
+      let errorMessage = 'Failed to publish your post';
+      if (error.message.includes('network') || error.message.includes('Network')) {
+        errorMessage = 'Network connection failed. Please check your internet connection and try again.';
+      } else if (error.message.includes('upload')) {
+        errorMessage = 'Media upload failed. Please try with different images or check your connection.';
+      } else if (error.message.includes('timeout')) {
+        errorMessage = 'Upload timeout. Please try again with smaller images.';
+      }
+
+      Alert.alert('Error', errorMessage);
     } finally {
       setLoading(false);
+      setUploadProgress('');
     }
+  };
+
+  // Helper function to extract hashtags from text
+  const extractHashtags = (text) => {
+    const hashtags = text.match(/#\w+/g);
+    return hashtags ? hashtags.map(tag => tag.substring(1)) : [];
   };
 
 
@@ -182,6 +212,13 @@ const PostCreationScreen = ({ navigation }) => {
             <Text style={styles.postButtonText}>Post</Text>
           )}
         </TouchableOpacity>
+
+        {/* Upload Progress */}
+        {uploadProgress && (
+          <View style={styles.progressContainer}>
+            <Text style={styles.progressText}>{uploadProgress}</Text>
+          </View>
+        )}
       </View>
 
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
@@ -304,6 +341,21 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: '600',
     fontSize: 16,
+  },
+  progressContainer: {
+    marginTop: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: 'rgba(138, 43, 226, 0.1)',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(138, 43, 226, 0.3)',
+  },
+  progressText: {
+    color: '#8a2be2',
+    fontSize: 12,
+    textAlign: 'center',
+    fontWeight: '500',
   },
   content: {
     flex: 1,

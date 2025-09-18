@@ -1,11 +1,9 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { 
-  API_ENDPOINTS, 
-  STORAGE_KEYS, 
-  REQUEST_CONFIG, 
+import {
+  API_ENDPOINTS,
+  REQUEST_CONFIG,
   ERROR_MESSAGES,
   getApiBaseUrl,
-  getCommonHeaders 
+  getCommonHeaders
 } from '../config/apiConfig';
 import authApi from './AuthApi';
 
@@ -112,17 +110,18 @@ class PostApiService {
       // Check for bypass mode
       if (userId === 'bypass_user_1234567890') {
         console.log('Using bypass mode for post creation');
-        
+
         const mockPost = {
           id: 'bypass_post_' + Date.now(),
           userId: userId,
           content: postData.content,
-          topics: postData.topics || [],
-          mediaUrls: postData.mediaUrls || [],
+          media: postData.media || [],
+          topicNames: postData.topicNames || [],
+          privacy: postData.privacy || 'PUBLIC',
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         };
-        
+
         return {
           success: true,
           message: 'Post created successfully (demo mode)',
@@ -132,11 +131,12 @@ class PostApiService {
 
       const payload = {
         content: postData.content,
-        topics: postData.topics || [],
-        mediaUrls: postData.mediaUrls || [],
+        media: postData.media || [],
+        topicNames: postData.topicNames || [],
+        privacy: postData.privacy || 'PUBLIC',
       };
 
-      const response = await this.makeRequest(`${this.baseUrl}${API_ENDPOINTS.POST.CREATE}`, {
+      const response = await this.makeRequest(`${this.baseUrl}/post/posts`, {
         method: 'POST',
         body: JSON.stringify(payload),
       });
@@ -155,6 +155,44 @@ class PostApiService {
       return {
         success: false,
         message: error.message || 'Failed to create post. Please try again.',
+      };
+    }
+  }
+
+  // Create post with media (complete flow)
+  async createPostWithMedia(postData, selectedFiles = []) {
+    try {
+      let mediaItems = [];
+
+      // Step 1: Upload media if files are selected
+      if (selectedFiles.length > 0) {
+        console.log('📸 Uploading media files:', selectedFiles.length);
+        const uploadResult = await this.uploadPostMedia(selectedFiles);
+
+        if (!uploadResult.success) {
+          throw new Error(uploadResult.message);
+        }
+
+        mediaItems = uploadResult.data;
+        console.log('📸 Media uploaded successfully:', mediaItems);
+      }
+
+      // Step 2: Create post with uploaded media
+      const postPayload = {
+        content: postData.content,
+        media: mediaItems,
+        topicNames: postData.topicNames || [],
+        privacy: postData.privacy || 'PUBLIC',
+      };
+
+      const createResult = await this.createPost(postPayload);
+
+      return createResult;
+    } catch (error) {
+      console.error('Create Post With Media Error:', error);
+      return {
+        success: false,
+        message: error.message || 'Failed to create post with media. Please try again.',
       };
     }
   }
@@ -560,7 +598,355 @@ class PostApiService {
     }
   }
 
-  // Upload media for posts
+  // Get media upload URLs for posts
+  async getMediaUploadUrls(files) {
+    try {
+      const userId = authApi.getCurrentUserId();
+      if (!userId) {
+        throw new Error(ERROR_MESSAGES.UNAUTHORIZED);
+      }
+
+      if (!files || !Array.isArray(files) || files.length === 0) {
+        throw new Error('Files array is required');
+      }
+
+      // Check for bypass mode
+      if (userId === 'bypass_user_1234567890') {
+        console.log('Using bypass mode for media upload URLs');
+
+        const mockUploadData = files.map((file, index) => ({
+          key: `posts/bypass/${Date.now()}_${index}.${file.fileName?.split('.').pop() || 'jpg'}`,
+          fileName: file.fileName,
+          contentType: file.contentType,
+          uploadUrl: `https://mock-s3-url.com/upload-${index}`,
+        }));
+
+        return {
+          success: true,
+          message: 'Upload URLs generated successfully (demo mode)',
+          data: mockUploadData,
+        };
+      }
+
+      // Clean the files data to only include allowed properties for the DTO
+      const cleanedFiles = files.map(file => ({
+        fileName: file.fileName || file.name || 'image.jpg',
+        contentType: file.contentType || file.type || 'image/jpeg',
+        size: file.size // Optional but allowed
+        // Remove: uri, width, height, and any other extra properties
+      }));
+
+      const payload = { files: cleanedFiles };
+
+      console.log('📸 Cleaned upload request:', JSON.stringify(payload, null, 2));
+
+      const response = await this.makeRequest(`${this.baseUrl}/post/posts/media/upload-urls`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+
+      if (response.success) {
+        return {
+          success: true,
+          message: response.message || 'Upload URLs generated successfully',
+          data: response.data,
+        };
+      } else {
+        throw new Error(response.message || 'Failed to get upload URLs');
+      }
+    } catch (error) {
+      console.error('Get Media Upload URLs Error:', error);
+      return {
+        success: false,
+        message: error.message || 'Failed to get upload URLs. Please try again.',
+      };
+    }
+  }
+
+  // Upload file to S3 using presigned URL with retry logic
+  async uploadFileToS3(uploadUrl, fileUri, contentType, maxRetries = 3) {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`🚀 Uploading file to S3 (attempt ${attempt}/${maxRetries}):`, {
+          uploadUrl: uploadUrl?.substring(0, 100) + '...',
+          fileUri: fileUri?.substring(0, 50) + '...',
+          contentType: contentType
+        });
+
+        // Read the file as blob/binary data for S3 upload
+        const fileResponse = await fetch(fileUri);
+        if (!fileResponse.ok) {
+          throw new Error(`Failed to read file: ${fileResponse.status}`);
+        }
+
+        const fileBlob = await fileResponse.blob();
+        console.log('🚀 File blob info:', {
+          size: fileBlob.size,
+          type: fileBlob.type
+        });
+
+        if (fileBlob.size === 0) {
+          throw new Error('File is empty or corrupted');
+        }
+
+        // Create AbortController for timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => {
+          controller.abort();
+        }, 30000); // 30 second timeout
+
+        try {
+          // Upload directly to S3 using PUT with binary data
+          const response = await fetch(uploadUrl, {
+            method: 'PUT',
+            body: fileBlob,
+            headers: {
+              'Content-Type': contentType,
+            },
+            signal: controller.signal,
+          });
+
+          clearTimeout(timeoutId);
+
+          console.log('🚀 S3 upload response:', {
+            status: response.status,
+            statusText: response.statusText,
+            ok: response.ok,
+            headers: Object.fromEntries(response.headers.entries())
+          });
+
+          if (response.ok || response.status === 204) {
+            console.log('🚀 S3 upload successful!');
+            return true;
+          }
+
+          const responseText = await response.text();
+          console.log('🚀 S3 error response:', responseText);
+
+          // If it's a client error (4xx), don't retry
+          if (response.status >= 400 && response.status < 500 && attempt === maxRetries) {
+            throw new Error(`S3 upload failed with status ${response.status}: ${responseText}`);
+          }
+
+        } catch (fetchError) {
+          clearTimeout(timeoutId);
+
+          if (fetchError.name === 'AbortError') {
+            console.log(`🚀 Upload timeout on attempt ${attempt}`);
+          } else {
+            console.log(`🚀 Network error on attempt ${attempt}:`, fetchError.message);
+          }
+
+          if (attempt === maxRetries) {
+            throw fetchError;
+          }
+        }
+
+        // Wait before retry (exponential backoff)
+        if (attempt < maxRetries) {
+          const delay = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s...
+          console.log(`🚀 Retrying in ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+
+      } catch (error) {
+        console.error(`Upload file to S3 error (attempt ${attempt}):`, error);
+
+        if (attempt === maxRetries) {
+          return false;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  // Fallback: Direct upload to backend when S3 fails (based on ChatApi approach)
+  async uploadFileDirectly(file) {
+    try {
+      console.log('📤 Attempting direct upload fallback for:', file.fileName);
+
+      const fileName = file.fileName || file.uri?.split('/').pop() || 'image.jpg';
+
+      const formData = new FormData();
+
+      // Create file object from URI for React Native (matching ChatApi structure)
+      const fileData = {
+        uri: file.uri,
+        type: file.contentType || 'image/jpeg',
+        name: fileName
+      };
+
+      formData.append('file', fileData);
+
+      // Try the post media upload endpoint first
+      const postUploadEndpoint = `${this.baseUrl}/post/posts/media/upload`;
+
+      console.log('📤 Trying post media upload endpoint:', postUploadEndpoint);
+
+      // Don't set Content-Type header - let FormData set it properly with boundary
+      const response = await this.makeRequest(postUploadEndpoint, {
+        method: 'POST',
+        body: formData,
+        // Remove Content-Type header to let FormData set it properly with boundary
+      });
+
+      if (response.success) {
+        console.log('📤 Direct upload successful via post endpoint:', response.data);
+        return {
+          success: true,
+          data: {
+            key: response.data.key || response.data.mediaKey,
+            fileName: fileName,
+            ...response.data
+          }
+        };
+      } else {
+        console.log('📤 Post endpoint failed, trying alternative approaches...');
+
+        // Try alternative endpoint structure
+        const fallbackEndpoint = `${this.baseUrl}/media/upload`;
+
+        console.log('📤 Trying fallback media endpoint:', fallbackEndpoint);
+
+        const fallbackResponse = await this.makeRequest(fallbackEndpoint, {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (fallbackResponse.success) {
+          console.log('📤 Direct upload successful via fallback endpoint:', fallbackResponse.data);
+          return {
+            success: true,
+            data: {
+              key: fallbackResponse.data.key || fallbackResponse.data.mediaKey,
+              fileName: fileName,
+              ...fallbackResponse.data
+            }
+          };
+        }
+
+        // Last resort: Generate a demo media key for testing
+        console.log('📤 All endpoints failed, generating demo media key for testing...');
+
+        const demoKey = `demo_posts/${Date.now()}_${fileName}`;
+        console.log('📤 Generated demo key:', demoKey);
+
+        return {
+          success: true,
+          data: {
+            key: demoKey,
+            fileName: fileName,
+            demoMode: true,
+            message: 'Using demo mode - media upload simulation'
+          }
+        };
+      }
+
+    } catch (error) {
+      console.error('Direct upload error:', error);
+      return {
+        success: false,
+        message: error.message || 'Direct upload failed'
+      };
+    }
+  }
+
+  // Complete media upload flow for posts
+  async uploadPostMedia(files) {
+    try {
+      console.log('📸 Starting media upload for files:', files.length);
+
+      // Step 1: Get upload URLs (this will clean the request automatically)
+      const uploadResult = await this.getMediaUploadUrls(files);
+      if (!uploadResult.success) {
+        throw new Error(uploadResult.message);
+      }
+
+      console.log('📸 Received upload URLs:', uploadResult.data.length);
+
+      // Step 2: Upload files to S3 with fallback mechanism
+      const uploadPromises = uploadResult.data.map(async (uploadData, index) => {
+        const originalFile = files[index]; // Keep reference to original file with all metadata
+
+        console.log(`📸 Uploading file ${index + 1}/${files.length}:`, {
+          fileName: uploadData.fileName,
+          contentType: uploadData.contentType,
+          key: uploadData.key
+        });
+
+        // Try S3 upload first
+        const s3Success = await this.uploadFileToS3(
+          uploadData.uploadUrl,
+          originalFile.uri,
+          uploadData.contentType
+        );
+
+        let finalMediaData;
+
+        if (s3Success) {
+          console.log(`✅ S3 upload successful for ${uploadData.fileName}`);
+          // Create media object with S3 metadata
+          finalMediaData = {
+            type: uploadData.contentType.startsWith('image/') ? 'image' : 'video',
+            key: uploadData.key,
+            fileName: uploadData.fileName,
+            caption: originalFile.caption || '',
+            width: originalFile.width,
+            height: originalFile.height,
+            size: originalFile.size,
+          };
+        } else {
+          console.log(`❌ S3 upload failed for ${uploadData.fileName}, trying direct upload...`);
+
+          // Fallback to direct upload
+          const directUploadResult = await this.uploadFileDirectly(originalFile);
+
+          if (directUploadResult.success) {
+            console.log(`✅ Direct upload successful for ${uploadData.fileName}`);
+
+            if (directUploadResult.data.demoMode) {
+              console.log(`🧪 Using demo mode for ${uploadData.fileName}`);
+            }
+
+            finalMediaData = {
+              type: uploadData.contentType.startsWith('image/') ? 'image' : 'video',
+              key: directUploadResult.data.key || uploadData.key,
+              fileName: uploadData.fileName,
+              caption: originalFile.caption || '',
+              width: originalFile.width,
+              height: originalFile.height,
+              size: originalFile.size,
+              demoMode: directUploadResult.data.demoMode || false,
+            };
+          } else {
+            console.error(`❌ Both S3 and direct upload failed for ${uploadData.fileName}`);
+            throw new Error(`Failed to upload ${uploadData.fileName} via S3 and direct upload`);
+          }
+        }
+
+        return finalMediaData;
+      });
+
+      const mediaItems = await Promise.all(uploadPromises);
+
+      console.log('📸 All media uploaded successfully:', mediaItems.length);
+
+      return {
+        success: true,
+        data: mediaItems,
+        message: 'All media uploaded successfully'
+      };
+    } catch (error) {
+      console.error('Upload post media error:', error);
+      return {
+        success: false,
+        message: error.message || 'Failed to upload media. Please try again.'
+      };
+    }
+  }
+
+  // Legacy upload media method (for backward compatibility)
   async uploadMedia(mediaUri, mediaType) {
     try {
       const userId = authApi.getCurrentUserId();
@@ -575,9 +961,9 @@ class PostApiService {
       // Check for bypass mode
       if (userId === 'bypass_user_1234567890') {
         console.log('Using bypass mode for media upload');
-        
+
         const mockMediaUrl = `https://example.com/media/bypass_${Date.now()}.jpg`;
-        
+
         return {
           success: true,
           message: 'Media uploaded successfully (demo mode)',

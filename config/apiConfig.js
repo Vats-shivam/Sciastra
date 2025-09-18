@@ -1,7 +1,7 @@
 // API Configuration according to MOBILE_INTEGRATION_PROMPT.md
 const getBaseUrl = (port) => {
   // If using ngrok with API Gateway (single endpoint for all services)
-  const NGROK_URL = "https://b0b96041a20e.ngrok-free.app";
+  const NGROK_URL = "https://0cf884bbe786.ngrok-free.app";
   
   // Check if ngrok is being used as API Gateway (single endpoint)
   if (NGROK_URL) {
