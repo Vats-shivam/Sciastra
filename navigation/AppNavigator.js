@@ -15,6 +15,7 @@ import EventDetailScreen from '../screens/EventDetail';
 import EventRegister from '../screens/EventRegister';
 import EventPayment from '../screens/EventPayment';
 import RegisteredEvents from '../screens/RegisteredEvents';
+
 import EditProfileScreen from '../screens/EditProfile';
 import NotificationsScreen from '../screens/Notification';
 

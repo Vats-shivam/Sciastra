@@ -1,17 +1,17 @@
 // API Configuration according to MOBILE_INTEGRATION_PROMPT.md
 const getBaseUrl = (port) => {
   // If using ngrok with API Gateway (single endpoint for all services)
-  const NGROK_URL = "http://13.203.50.228";
-  
+  const NGROK_URL = "https://d47fb32fdadc.ngrok-free.app";
+
   // Check if ngrok is being used as API Gateway (single endpoint)
   if (NGROK_URL) {
     // Return ngrok URL for API Gateway setup
     return NGROK_URL;
   }
-  
+
   // For direct service access (individual ports)
   return `http://localhost:${port}`;
-  
+
   // Alternative configurations:
   // For Android Emulator: return `http://10.0.2.2:${port}`;
   // For physical device: return `http://YOUR_COMPUTER_IP:${port}`;
@@ -28,7 +28,7 @@ export const API_ENDPOINTS = {
     LOGOUT: '/auth/auth/logout',
     HEALTH: '/auth/auth',
   },
-  
+
   // Profile Service - Port 3001 (nginx routes /profile/ -> profile-service:3001/)
   PROFILE: {
     BASE_URL: getBaseUrl(3001),
@@ -38,7 +38,7 @@ export const API_ENDPOINTS = {
     UPLOAD_URL: '/profile/profile/upload-url',
     HEALTH: '/profile/profile/health',
   },
-  
+
   // Connection Service - Port 3002 (nginx routes /connection/ -> connection-service:3002/)
   CONNECTION: {
     BASE_URL: getBaseUrl(3002),
@@ -52,7 +52,7 @@ export const API_ENDPOINTS = {
     GET_STATUS: '/connection/connections/status',
     HEALTH: '/connection/connections/health',
   },
-  
+
   // Post Service - Port 3003 (nginx routes /post/ -> post-service:3003/)
   POST: {
     BASE_URL: getBaseUrl(3003),
@@ -67,7 +67,7 @@ export const API_ENDPOINTS = {
     UPLOAD_MEDIA: '/post/posts/upload',
     HEALTH: '/post/posts/health',
   },
-  
+
   // Chat Service - Port 3004 (nginx routes /chat/ -> chat-service:3004/)
   CHAT: {
     BASE_URL: getBaseUrl(3004),
@@ -84,17 +84,28 @@ export const API_ENDPOINTS = {
     // WebSocket endpoints
     SOCKET_URL: getBaseUrl(3004),
   },
-  
+
   // Events Service - Port 3006 (nginx routes /events/ -> events-service:3006/)
   EVENTS: {
     BASE_URL: getBaseUrl(3006),
+    // Event Discovery
     GET_ALL: '/events/events',
+    GET_FEATURED: '/events/events/featured',
+    GET_UPCOMING: '/events/events/upcoming',
+    GET_BY_CATEGORY: '/events/events/category',
     GET_BY_ID: '/events/events',
     SEARCH: '/events/events/search',
-    REGISTER: '/events/events',
-    CANCEL_REGISTRATION: '/events/events',
-    GET_REGISTERED: '/events/events/registered',
-    GET_REGISTRATION_STATUS: '/events/events',
+    GET_STATS: '/events/events/stats',
+    // Registration
+    REGISTER: '/events/registrations/events',
+    GET_REGISTERED: '/events/registrations',
+    GET_REGISTRATION_BY_ID: '/events/registrations',
+    CANCEL_REGISTRATION: '/events/registrations',
+    GET_REGISTRATION_STATS: '/events/registrations/stats',
+    // Payment
+    GET_PAYMENT_STATUS: '/events/payments/registration',
+    GET_PAYMENT_HISTORY: '/events/payments/history',
+    RETRY_PAYMENT: '/events/payments/registration',
     HEALTH: '/events/events/health',
   },
 };
@@ -122,7 +133,7 @@ export const getApiBaseUrl = (service) => {
   // if (isProduction) {
   //   return `https://api.sciastra.com/${service}`;
   // }
-  
+
   switch (service) {
     case 'auth':
       return API_ENDPOINTS.AUTH.BASE_URL;
@@ -147,11 +158,11 @@ export const getCommonHeaders = (includeAuth = true, accessToken = null) => {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
   };
-  
+
   if (includeAuth && accessToken) {
     headers.Authorization = `Bearer ${accessToken}`;
   }
-  
+
   return headers;
 };
 

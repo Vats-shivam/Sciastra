@@ -1,29 +1,12 @@
-import React from "react";
-import { View, Text, StyleSheet, ScrollView } from "react-native";
+import React, { useState, useEffect } from "react";
+import { View, Text, StyleSheet, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity } from "react-native";
 import Container from "../components/Container";
 import colors from "../config/colors";
 import Header from "../components/Header";
-
-const mockRegisteredEvents = [
-  {
-    id: "1",
-    title: "Sciastra Tech Conference 2024",
-    date: "2024-08-15T10:00:00Z",
-    location: "IIT Delhi, New Delhi",
-    price: 499,
-    paymentId: "PAY123456",
-    status: "Paid",
-  },
-  {
-    id: "2",
-    title: "AI & ML Bootcamp",
-    date: "2024-10-05T11:00:00Z",
-    location: "Online",
-    price: 299,
-    paymentId: "PAY654321",
-    status: "Paid",
-  },
-];
+import eventsApi from "../api/EventsApi";
+import { useNotification } from "../contexts/NotificationContext";
+import Icon from "react-native-vector-icons/MaterialCommunityIcons";
+import { useFocusEffect } from "@react-navigation/native";
 
 const formatDate = (dateString) => {
   if (!dateString) return "";
@@ -38,41 +21,159 @@ const formatDate = (dateString) => {
   });
 };
 
-const RegisteredEvents = () => {
+const getStatusColor = (status) => {
+  switch (status) {
+    case 'REGISTERED': return colors.success;
+    case 'CANCELLED': return colors.error;
+    case 'PENDING': return colors.warning;
+    default: return colors.textSecondary;
+  }
+};
+
+const getStatusText = (status) => {
+  switch (status) {
+    case 'REGISTERED': return 'Registered';
+    case 'CANCELLED': return 'Cancelled';
+    case 'PENDING': return 'Pending';
+    default: return status;
+  }
+};
+
+const RegisteredEvents = ({ navigation }) => {
+  const [registeredEvents, setRegisteredEvents] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const { showError } = useNotification();
+
+  useEffect(() => {
+    loadRegisteredEvents();
+  }, []);
+
+  // Refresh when screen comes into focus (after registration)
+  useFocusEffect(
+    React.useCallback(() => {
+      loadRegisteredEvents();
+    }, [])
+  );
+
+  const loadRegisteredEvents = async () => {
+    try {
+      setLoading(true);
+      const result = await eventsApi.getRegisteredEvents(1, 20);
+      if (result.success) {
+        setRegisteredEvents(result.data.registrations || []);
+      } else {
+        showError(result.message || 'Failed to load registered events');
+      }
+    } catch (error) {
+      console.error('Error loading registered events:', error);
+      showError('Something went wrong while loading your registered events');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await loadRegisteredEvents();
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const handleEventPress = (registration) => {
+    if (registration.event) {
+      navigation.navigate("EventDetail", { event: registration.event });
+    }
+  };
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.background }}>
+        <Header title="REGISTERED EVENTS" />
+        <Container style={{ backgroundColor: colors.background }}>
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={styles.loadingText}>Loading your registered events...</Text>
+          </View>
+        </Container>
+      </View>
+    );
+  }
+
   return (
-    <Container style={{ backgroundColor: colors.background }}>
-      <Text style={styles.header}>Registered Events</Text>
-      <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
-        {mockRegisteredEvents.length === 0 ? (
-          <Text style={styles.emptyText}>You have not registered for any events yet.</Text>
-        ) : (
-          mockRegisteredEvents.map((event) => (
-            <View key={event.id} style={styles.card}>
-              <Text style={styles.title}>{event.title}</Text>
-              <Text style={styles.info}>Date: {formatDate(event.date)}</Text>
-              <Text style={styles.info}>Location: {event.location}</Text>
-              <Text style={styles.info}>Payment ID: {event.paymentId}</Text>
-              <View style={styles.statusContainer}>
-                <Text style={styles.info}>Status: </Text>
-                <Text style={styles.statusPaid}>{event.status}</Text>
-              </View>
-              <Text style={styles.price}>Paid: ₹ {event.price}</Text>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <Header title="REGISTERED EVENTS" />
+      <Container style={{ backgroundColor: colors.background }}>
+        <ScrollView 
+          contentContainerStyle={{ paddingBottom: 32 }}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              colors={[colors.primary]}
+              tintColor={colors.primary}
+            />
+          }
+        >
+          {registeredEvents.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Icon name="calendar-remove" size={64} color={colors.textMuted} />
+              <Text style={styles.emptyText}>You have not registered for any events yet.</Text>
+              <TouchableOpacity 
+                style={styles.exploreButton}
+                onPress={() => navigation.navigate("EventTab")}
+              >
+                <Text style={styles.exploreButtonText}>Explore Events</Text>
+              </TouchableOpacity>
             </View>
-          ))
-        )}
-      </ScrollView>
-    </Container>
+          ) : (
+            registeredEvents.map((registration) => (
+              <TouchableOpacity 
+                key={registration.id} 
+                style={styles.card}
+                onPress={() => handleEventPress(registration)}
+              >
+                <Text style={styles.title}>{registration.event?.title || 'Event Title'}</Text>
+                <Text style={styles.info}>Date: {formatDate(registration.event?.start_time)}</Text>
+                <Text style={styles.info}>Location: {registration.event?.location || 'TBD'}</Text>
+                <Text style={styles.info}>Registered: {formatDate(registration.registered_at)}</Text>
+                <View style={styles.statusContainer}>
+                  <Text style={styles.info}>Status: </Text>
+                  <Text style={[styles.statusText, { color: getStatusColor(registration.status) }]}>
+                    {getStatusText(registration.status)}
+                  </Text>
+                </View>
+                {registration.event?.cheapest_ticket_price > 0 && (
+                  <Text style={styles.price}>
+                    {registration.payment_status === 'COMPLETED' ? 'Paid' : 'Payment Pending'}: ₹ {registration.event.cheapest_ticket_price}
+                  </Text>
+                )}
+                {registration.event?.cheapest_ticket_price === 0 && (
+                  <Text style={styles.freeEvent}>Free Event</Text>
+                )}
+              </TouchableOpacity>
+            ))
+          )}
+        </ScrollView>
+      </Container>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  header: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: colors.primary,
-    marginTop: 24,
-    marginBottom: 18,
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 40,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: colors.textSecondary,
     textAlign: "center",
+    marginTop: 12,
   },
   card: {
     backgroundColor: colors.card,
@@ -96,8 +197,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     marginBottom: 2,
   },
-  statusPaid: {
-    color: colors.success,
+  statusText: {
     fontWeight: "700",
   },
   price: {
@@ -106,11 +206,36 @@ const styles = StyleSheet.create({
     color: colors.success,
     marginTop: 6,
   },
+  freeEvent: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: colors.secondary,
+    marginTop: 6,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 40,
+    marginTop: 60,
+  },
   emptyText: {
     color: colors.textSecondary,
     fontSize: 16,
     textAlign: "center",
-    marginTop: 40,
+    marginTop: 16,
+    marginBottom: 24,
+  },
+  exploreButton: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  exploreButtonText: {
+    color: colors.white,
+    fontWeight: "600",
+    fontSize: 16,
   },
   statusContainer: {
     flexDirection: 'row',

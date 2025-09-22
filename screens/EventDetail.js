@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, Image, StyleSheet, ScrollView, TouchableOpacity, FlatList, ActivityIndicator } from "react-native";
+import { View, Text, Image, StyleSheet, ScrollView, TouchableOpacity, Modal, ActivityIndicator, Alert, Linking } from "react-native";
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Container from "../components/Container";
 import Button from "../components/Button";
 import Card from "../components/Card";
@@ -8,52 +9,67 @@ import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import Header from "../components/Header";
 import eventsApi from "../api/EventsApi";
 import { useNotification } from "../contexts/NotificationContext";
+import authApi from "../api/AuthApi";
 
-const mockEvent = {
-  banner_url: require("../assets/splash-icon.png"),
-  title: "Designing Ideas - Lorem ipsum dolor",
-  status: "Registration open",
-  start_time: "2024-09-24T18:00:00Z",
-  end_time: "2024-09-25T18:00:00Z",
-  location: "ABC Venue Auditorium, Bengaluru",
-  distance: "9km away",
-  details:
-    "Lorem ipsum dolor lorem ipsum dolor lorem ipsum dolor. Lorem ipsum dolor lorem ipsum dolor lorem ipsum dolor lorem ipsum dolor lorem ipsum dolor lorem ipsum dolor.",
-  cheapest_ticket_price: 600,
-  event_category: "PAID",
-  tags: ["Design", "Nearby", "Workshop", "Other Tags", "Other"],
-  organizer: { name: "Harshavardhana R.", avatar: null },
-  attendees: 99,
-};
-
-const formatDate = (dateString) => {
-  if (!dateString) return "";
-  const date = new Date(dateString);
-  return date.toLocaleString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    weekday: "short",
-  });
-};
-
-const formatTime = (dateString) => {
-  if (!dateString) return "";
-  const date = new Date(dateString);
-  return date.toLocaleString("en-IN", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: true,
-  });
-};
-
-const guestLineup = [
-  { id: "g1", name: "Riya Kulkarni", subtitle: "Designation" },
-  { id: "g2", name: "Nayanika Dey", subtitle: "Designation" },
-  { id: "g3", name: "Debasish Rath", subtitle: "Designation" },
-  { id: "g4", name: "Mayank", subtitle: "Designation" },
+const INSTRUCTIONS = [
+  "Registration is mandatory for all participants.",
+  "The event will be conducted online via Zoom/Google Meet. The link will be shared 1 hour before the event.",
+  "Please ensure you have a stable internet connection and the latest version of the video conferencing app installed.",
+  "Participants are requested to join 10 minutes before the scheduled time.",
+  "For any technical issues, please contact our support team at support@sciastra.com"
 ];
 
-const galleryImages = [1, 2, 3, 4, 5, 6, 7].map((i) => ({ id: `img${i}` }));
+const getDisplayDate = (event) => {
+  try {
+    // Check for all possible date properties in order of preference
+    const startTime = event?.startDateTime || event?.start_time || event?.startDate;
+    if (!startTime) return 'Date not specified';
+    
+    const startDate = new Date(startTime);
+    if (isNaN(startDate.getTime())) return 'Invalid date';
+    
+    // Format date parts
+    const day = startDate.getDate().toString().padStart(2, '0');
+    const month = startDate.toLocaleString('default', { month: 'short' });
+    const year = startDate.getFullYear();
+    
+    return `${day} ${month} ${year}`;
+  } catch (error) {
+    console.error('Error formatting date:', error);
+    return '';
+  }
+};
+
+const isEventStarted = (event) => {
+  const startTime = event?.startDateTime || event?.start_time;
+  if (!startTime) return false;
+  return new Date(startTime) <= new Date();
+};
+
+const getEventStatus = (event) => {
+  if (!event) return { status: 'Unknown', color: colors.gray };
+  
+  const eventStarted = isEventStarted(event);
+  
+  if (event.status === 'CANCELLED') {
+    return { status: 'Cancelled', color: colors.danger };
+  }
+  
+  if (event.status === 'COMPLETED') {
+    return { status: 'Completed', color: colors.gray };
+  }
+  
+  if (eventStarted) {
+    return { status: 'Event in Progress', color: colors.warning };
+  }
+  
+  return { status: 'Registration Open', color: colors.success };
+};
+
+const galleryImages = [1, 2, 3].map((i) => ({
+  id: `img${i}`,
+  uri: 'https://via.placeholder.com/300x200?text=Event+Image'
+}));
 
 const EventDetailScreen = ({ route, navigation }) => {
   const { eventId } = route?.params || {};
@@ -61,16 +77,34 @@ const EventDetailScreen = ({ route, navigation }) => {
 
   const [event, setEvent] = useState(initialEvent || null);
   const [loading, setLoading] = useState(!initialEvent);
-  const { showError } = useNotification();
+  const [checkingRegistration, setCheckingRegistration] = useState(false);
+  const [registrationStatus, setRegistrationStatus] = useState(null);
+  const [showEventStartedModal, setShowEventStartedModal] = useState(false);
+  const [registering, setRegistering] = useState(false);
+  const { showError, showSuccess } = useNotification();
 
-  const isEventOver = false;
-  const isPriceAvailable = event?.cheapest_ticket_price != null;
+  const eventStarted = event ? isEventStarted(event) : false;
+  const { status: eventStatus, color: statusColor } = event ? getEventStatus(event) : { status: '', color: colors.gray };
+  const isRegistrationOpen = event?.status === 'PUBLISHED' && !eventStarted;
+  const isOnlineEvent = event?.venueType === 'ONLINE';
 
   useEffect(() => {
     if (eventId && !initialEvent) {
       loadEventDetails();
+    } else if (event) {
+      checkRegistrationStatus();
+      // Show modal if event has started
+      if (isEventStarted(event)) {
+        setShowEventStartedModal(true);
+      }
     }
-  }, [eventId]);
+  }, [eventId, event]);
+
+  useEffect(() => {
+    if (event) {
+      checkRegistrationStatus();
+    }
+  }, [event]);
 
   const loadEventDetails = async () => {
     try {
@@ -90,348 +124,550 @@ const EventDetailScreen = ({ route, navigation }) => {
     }
   };
 
+  const checkRegistrationStatus = async () => {
+    if (!event?.id) return;
+    
+    try {
+      setCheckingRegistration(true);
+      const result = await eventsApi.getRegistrationStatus(event.id);
+      if (result.success) {
+        setRegistrationStatus(result.data);
+      }
+    } catch (error) {
+      console.error('Error checking registration status:', error);
+    } finally {
+      setCheckingRegistration(false);
+    }
+  };
+
   const handleRegister = () => {
-    navigation.navigate("EventRegister", { event });
+    if (registrationStatus?.is_registered) {
+      showSuccess('You are already registered for this event!');
+      return;
+    }
+
+    // Show confirmation popup
+    Alert.alert(
+      "Register for Event",
+      `Would you like to register for "${event.title}"?${event.cheapest_ticket_price === 0 ? ' This is a free event.' : ` Registration fee: ₹${event.cheapest_ticket_price}`}`,
+      [
+        {
+          text: "Cancel",
+          style: "cancel"
+        },
+        {
+          text: "Register",
+          onPress: () => registerForEvent(),
+          style: "default"
+        }
+      ]
+    );
+  };
+
+  const registerForEvent = async () => {
+    try {
+      setRegistering(true);
+      
+      // Check if event has already started
+      if (eventStarted) {
+        setShowEventStartedModal(true);
+        return;
+      }
+      
+      // Check if user is logged in
+      const currentUser = authApi.getCurrentUserId();
+      if (!currentUser) {
+        showError('Please login to register for events');
+        navigation.navigate('Login');
+        return;
+      }
+      
+      // Get current user ID and create basic registration data
+      const userId = authApi.getCurrentUserId();
+      const userEmail = await AsyncStorage.getItem('userEmail') || '';
+      const userName = await AsyncStorage.getItem('userName') || 'User';
+      
+      // Format registration data according to API spec with fallback values
+      const registrationData = {
+        "Full Name": userName,
+        "Email": userEmail,
+        "Company": '', // These fields can be updated in a registration form if needed
+        "Experience Level": 'Not specified',
+        "Dietary Restrictions": 'None'
+      };
+      
+      // Register for the event with the formatted data
+      if (!event?.id) {
+        throw new Error('Event information is not available');
+      }
+      
+      const response = await eventsApi.registerForEvent(event.id, registrationData);
+      
+      if (response.success) {
+        // Update local state to reflect registration
+        setRegistrationStatus({
+          is_registered: true,
+          registration_date: new Date().toISOString(),
+        });
+        
+        showSuccess('Successfully registered for the event!');
+      } else {
+        showError(response.message || 'Failed to register for the event');
+      }
+    } catch (error) {
+      console.error('Registration error:', error);
+      showError('An error occurred while registering for the event');
+    } finally {
+      setRegistering(false);
+    }
+  };
+
+  const getButtonText = () => {
+    if (registering) return 'Processing...';
+    if (registrationStatus?.is_registered) return 'Registered';
+    if (event?.status === 'COMPLETED') return 'Event Completed';
+    if (eventStarted) return 'Event In Progress';
+    if (!isRegistrationOpen) return 'Registration Closed';
+    return 'Register Now';
+  };
+
+  const isButtonDisabled = () => {
+    return registering ||
+           checkingRegistration || 
+           registrationStatus?.is_registered || 
+           event?.status === 'COMPLETED' ||
+           eventStarted ||
+           !isRegistrationOpen;
   };
 
   if (loading) {
     return (
-      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
-        <Header title="EVENT DETAIL" />
-        <View style={styles.loadingContent}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={styles.loadingText}>Loading event details...</Text>
-        </View>
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={styles.loadingText}>Loading event details...</Text>
       </View>
     );
   }
 
   if (!event) {
     return (
-      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
-        <Header title="EVENT DETAIL" />
-        <View style={styles.loadingContent}>
-          <Icon name="alert-circle-outline" size={48} color={colors.textSecondary} />
-          <Text style={styles.errorText}>Event not found</Text>
-          <TouchableOpacity
-            style={styles.retryButton}
-            onPress={() => navigation.goBack()}
-          >
-            <Text style={styles.retryButtonText}>Go Back</Text>
-          </TouchableOpacity>
-        </View>
+      <View style={styles.errorContainer}>
+        <Icon name="alert-circle-outline" size={48} color={colors.danger} />
+        <Text style={styles.errorText}>Event not found</Text>
+        <Button
+          title="Go Back"
+          onPress={() => navigation.goBack()}
+          style={{ marginTop: 20 }}
+        />
       </View>
     );
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
-      {/* Header */}
-      <Header title="EVENT DETAIL" />
+    <View style={styles.container}>
+      <Header title="EVENT DETAIL" onBackPress={() => navigation.goBack()} />
       
-      <Container style={{ backgroundColor: colors.background, paddingHorizontal: 0 }}>
-        <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Header actions over banner */}
-        <View style={styles.bannerWrapper}>
-          <Image
-            source={event.banner_url ? (typeof event.banner_url === 'string' ? { uri: event.banner_url } : event.banner_url) : require("../assets/splash-icon.png")}
-            style={styles.banner}
-            resizeMode="cover"
-          />
-          <View style={styles.headerActions}>
-            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.circleBtn}>
-              <Icon name="arrow-left" size={20} color={colors.textPrimary} />
-            </TouchableOpacity>
-            <View style={{ flexDirection: "row" }}>
-              <TouchableOpacity style={styles.circleBtn}>
-                <Icon name="share-variant" size={18} color={colors.textPrimary} />
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.circleBtn}>
-                <Icon name="dots-vertical" size={20} color={colors.textPrimary} />
-              </TouchableOpacity>
-            </View>
-          </View>
-          {/* pager dots placeholder */}
-          <View style={styles.pagerDots}>
-            <View style={[styles.dot, styles.dotActive]} />
-            <View style={styles.dot} />
-            <View style={styles.dot} />
-          </View>
-        </View>
-
-        {/* Title and meta */}
+      <ScrollView 
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Event Banner */}
+        <Image
+          source={event.banner_url ? { uri: event.banner_url } : require("../assets/splash-icon.png")}
+          style={styles.banner}
+          resizeMode="cover"
+        />
+        
+        {/* Event Details */}
         <View style={styles.content}>
-          <View style={styles.statusRow}>
-            <Icon name="check-decagram" size={16} color={colors.secondary} />
-            <Text style={styles.statusText}>{event.status || "Upcoming"}</Text>
+          <View style={styles.statusContainer}>
+            <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
+              <Text style={styles.statusText}>{eventStatus}</Text>
+            </View>
+            {isOnlineEvent && (
+              <View style={styles.onlineBadge}>
+                <Text style={styles.onlineText}>ONLINE</Text>
+              </View>
+            )}
           </View>
+          
           <Text style={styles.title}>{event.title}</Text>
-          <Text style={styles.subtitle}>Design Workshop</Text>
-
-          {/* Time & Location card */}
-          <View style={styles.timeLocCard}>
-            <View style={styles.timeRow}>
-              <Icon name="calendar" size={18} color={colors.textPrimary} />
-              <Text style={styles.timeText}>{formatDate(event.start_time)} - {formatDate(event.end_time)}</Text>
-              <View style={styles.separatorDot} />
-              <Icon name="clock-time-four-outline" size={18} color={colors.textPrimary} />
-              <Text style={styles.timeText}>{formatTime(event.start_time)} onwards</Text>
-            </View>
-            <View style={styles.locRow}>
-              <Icon name="map-marker" size={18} color={colors.textPrimary} />
-              <Text style={styles.locText}>{event.location}</Text>
-              <View style={{ flex: 1 }} />
-              <TouchableOpacity style={styles.directionBtn}>
-                <Text style={styles.directionText}>Direction</Text>
-                <Icon name="arrow-right" size={16} color={colors.black} />
-              </TouchableOpacity>
-            </View>
-            <View style={styles.distRow}>
-              <Text style={styles.distText}>{event.distance}</Text>
-            </View>
-          </View>
-
-          {/* Organizer / attendees */}
-          <View style={styles.organizerRow}>
-            <View style={styles.organizerLeft}>
-              <Image source={require("../assets/icon.png")} style={styles.organizerAvatar} />
+          
+          {/* Event Date and Time */}
+          <View style={styles.dateTimeContainer}>
+            <View style={styles.dateTimeRow}>
+              <View style={styles.dateIcon}>
+                <Icon name="calendar-month" size={18} color={colors.primary} />
+              </View>
               <View>
-                <Text style={styles.orgBy}>ORGANISED BY</Text>
-                <Text style={styles.orgName}>{event.organizer?.name || "Sciastra"}</Text>
+                <Text style={styles.dateText}>{getDisplayDate(event)}</Text>
+                <Text style={styles.timeText}>
+                  {event.startDateTime || event.start_time || event.startDate
+                    ? new Date(event.startDateTime || event.start_time || event.startDate).toLocaleTimeString('en-IN', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        hour12: true
+                      })
+                    : 'Time not specified'}
+                </Text>
               </View>
             </View>
-            <View style={styles.attendees}>
-              <Icon name="account-group" size={16} color={colors.textPrimary} />
-              <Text style={styles.attendeesText}>{event.attendees} attendees</Text>
+            <View style={styles.locationContainer}>
+              <Icon 
+                name={isOnlineEvent ? 'monitor' : 'map-marker'} 
+                size={16} 
+                color="#9CA6AB" 
+                style={styles.locationIcon}
+              />
+              <Text style={styles.locationText}>
+                {isOnlineEvent ? 'Online Event' : (event.location || 'Location not specified')}
+              </Text>
             </View>
           </View>
 
-          {/* Tags */}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingVertical: 6 }}>
-            {(event.tags || []).map((t) => (
-              <View key={t} style={styles.tagChip}><Text style={styles.tagText}>{t}</Text></View>
-            ))}
-          </ScrollView>
-
-          {/* Tabs row (static) */}
-          <View style={styles.tabsRow}>
-            {['About', 'Guests Lineup', 'Gallery', 'Instructions', 'Venue'].map((tab, idx) => (
-              <View key={tab} style={styles.tabItem}>
-                <Text style={[styles.tabText, idx === 0 && styles.tabActive]}>{tab}</Text>
-                {idx === 0 && <View style={styles.tabUnderline} />}
-              </View>
-            ))}
+          {/* Event Description */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>About This Event</Text>
+            <Text style={styles.description}>
+              {event.description || 'No description available.'}
+            </Text>
           </View>
 
-          {/* About Section */}
-          <Text style={styles.sectionHead}>About this event</Text>
-          <Text style={styles.paragraph}>{event.details}</Text>
-          <TouchableOpacity>
-            <Text style={styles.readMore}>Read More</Text>
-          </TouchableOpacity>
-
-          {/* Guest Lineup */}
-          {/* <View style={styles.sectionHeaderInline}>
-            <Text style={styles.sectionHead}>Guest Lineup</Text>
-            <Text style={styles.seeAllSmall}>SEE ALL</Text>
-          </View>
-          <View style={styles.guestsGrid}>
-            {guestLineup.map((g) => (
-              <View key={g.id} style={styles.guestCard}>
-                <Image source={require("../assets/icon.png")} style={styles.guestAvatar} />
-                <Text style={styles.guestName} numberOfLines={1}>{g.name}</Text>
-                <Text style={styles.guestSub}>{g.subtitle}</Text>
-              </View>
-            ))}
-          </View> */}
-
-          {/* Gallery */}
-          <Text style={[styles.sectionHead, { marginTop: 12 }]}>Gallery</Text>
-          <View style={styles.galleryGrid}>
-            {galleryImages.map((img) => (
-              <View key={img.id} style={styles.galleryItem}>
-                <Image source={require("../assets/splash-icon.png")} style={styles.galleryImage} />
+          {/* Event Instructions */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Instructions</Text>
+            {INSTRUCTIONS.map((instruction, index) => (
+              <View key={index} style={styles.instructionItem}>
+                <Text style={styles.bulletPoint}>•</Text>
+                <Text style={styles.instructionText}>{instruction}</Text>
               </View>
             ))}
           </View>
 
-          {/* Instructions */}
-          <Text style={[styles.sectionHead, { marginTop: 12 }]}>Instructions</Text>
-          {[
-            "Lorem ipsum dolor lorem.",
-            "Lorem ipsum dolor lorem ipsum.",
-            "Lorem ipsum dolor lorem ipsum dolor.",
-            "Lorem ipsum dolor lorem.",
-          ].map((i, idx) => (
-            <View key={idx} style={styles.bulletRow}>
-              <View style={styles.bulletDot} />
-              <Text style={styles.bulletText}>{i}</Text>
+          {/* Event Contact */}
+          <View style={styles.contactSection}>
+            <Text style={styles.sectionTitle}>Contact Information</Text>
+            <View style={styles.contactItem}>
+              <Icon name="email" size={20} color={colors.primary} />
+              <Text style={styles.contactText}>support@sciastra.com</Text>
             </View>
-          ))}
-
-          {/* Venue */}
-          <Text style={[styles.sectionHead, { marginTop: 12 }]}>Venue</Text>
-          <View style={styles.venueCard}>
-            <Text style={styles.venueName}>ABC Venue Name</Text>
-            <Text style={styles.venueAddress}>#1234, Nth Cross, XYZ Main Road, Area name{"\n"}Bengaluru, Karnataka 560xxx, India{"\n"}Landmark (if any)</Text>
-            <TouchableOpacity style={styles.directionBtnWide}>
-              <Text style={styles.directionText}>Get Directions</Text>
-              <Icon name="arrow-right" size={16} color={colors.black} />
-            </TouchableOpacity>
+            <View style={styles.contactItem}>
+              <Icon name="phone" size={20} color={colors.primary} />
+              <Text style={styles.contactText}>+91 1234567890</Text>
+            </View>
           </View>
-
-          {/* More */}
-          <Text style={[styles.sectionHead, { marginTop: 12 }]}>More</Text>
-          {["Frequently Asked Questions", "Terms and Conditions", "Privacy policy"].map((label) => (
-            <View key={label} style={styles.moreItem}>
-              <Icon name="shield-outline" size={18} color={colors.textPrimary} />
-              <Text style={styles.moreText}>{label}</Text>
-              <View style={{ flex: 1 }} />
-              <Icon name="chevron-right" size={22} color={colors.textSecondary} />
-            </View>
-          ))}
         </View>
       </ScrollView>
 
-      {isPriceAvailable && !isEventOver && (
-        <View style={styles.bottomBar}>
-          <View>
-            {event.cheapest_ticket_price !== 0 && (
-              <Text style={styles.startsFrom}>Starts from</Text>
-            )}
-            <Text style={styles.price}>
-              {event.cheapest_ticket_price === 0
-                ? "Free"
-                : `₹ ${event.cheapest_ticket_price}`}
+      {/* Register Button */}
+      <View style={styles.footer}>
+        <Button
+          title={getButtonText()}
+          onPress={handleRegister}
+          disabled={isButtonDisabled()}
+          style={[
+            styles.registerButton,
+            (registrationStatus?.is_registered || event?.status === 'COMPLETED' || eventStarted) && 
+              { backgroundColor: colors.gray }
+          ]}
+        />
+      </View>
+      {!isRegistrationOpen && (
+        <View style={styles.footer}>
+          <TouchableOpacity 
+            style={[
+              styles.registerButton,
+              { 
+                backgroundColor: eventStarted ? '#6B7280' : '#8B5CF6',
+                opacity: 0.9,
+              }
+            ]}
+            disabled={true}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.registerButtonText}>
+              {eventStarted ? 'Event has already started' : 'Registration is closed'}
             </Text>
-          </View>
-          <Button
-            title={
-              event.event_category === "LISTING_ONLY"
-                ? "Know More"
-                : "Register"
-            }
-            buttonColor={colors.primary}
-            onPress={handleRegister}
-            style={{ width: 160, borderRadius: 24, shadowColor: colors.primary, shadowOpacity: 0.2, shadowRadius: 8, elevation: 4 }}
-          />
+          </TouchableOpacity>
         </View>
       )}
-        </Container>
-      </View>
+
+      {/* Event Started Modal */}
+      <Modal
+        visible={showEventStartedModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowEventStartedModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Icon name="alert-circle" size={48} color={colors.warning} />
+            <Text style={styles.modalTitle}>Event Has Started</Text>
+            <Text style={styles.modalText}>
+              This event has already started. You can still view the details but registration is no longer available.
+            </Text>
+            <TouchableOpacity 
+              style={styles.modalButton}
+              onPress={() => setShowEventStartedModal(false)}
+            >
+              <Text style={styles.modalButtonText}>Got It</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  bannerWrapper: { position: "relative", width: "100%", height: 260, backgroundColor: colors.backgroundElevated },
-  banner: { width: "100%", height: 260 },
-  headerActions: {
-    position: "absolute",
-    top: 46,
-    left: 12,
-    right: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
   },
-  circleBtn: {
-    backgroundColor: "rgba(0,0,0,0.35)",
-    borderRadius: 18,
-    padding: 8,
-    marginLeft: 10,
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: colors.background,
   },
-  pagerDots: {
-    position: "absolute",
-    bottom: 12,
-    width: "100%",
-    flexDirection: "row",
-    justifyContent: "center",
+  loadingText: {
+    marginTop: 12,
+    color: colors.textSecondary,
   },
-  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "rgba(255,255,255,0.4)", marginHorizontal: 3 },
-  dotActive: { backgroundColor: colors.white },
-
-  content: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 28 },
-  statusRow: { flexDirection: "row", alignItems: "center", marginBottom: 6 },
-  statusText: { color: colors.secondary, fontWeight: "700", marginLeft: 6, fontSize: 12 },
-  title: { fontSize: 22, fontWeight: "800", color: colors.textPrimary },
-  subtitle: { color: colors.textSecondary, marginTop: 2, marginBottom: 12 },
-
-  timeLocCard: {
-    backgroundColor: colors.card,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 12,
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    backgroundColor: colors.background,
+  },
+  errorText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    marginTop: 16,
+    textAlign: 'center',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 100,
+  },
+  banner: {
+    width: '100%',
+    height: 220,
+  },
+  content: {
+    padding: 20,
+  },
+  statusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginBottom: 12,
   },
-  timeRow: { flexDirection: "row", alignItems: "center", flexWrap: "wrap" },
-  timeText: { color: colors.textPrimary, marginLeft: 6, marginRight: 10 },
-  separatorDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: colors.textSecondary, marginHorizontal: 8 },
-  locRow: { flexDirection: "row", alignItems: "center", marginTop: 10 },
-  locText: { color: colors.textPrimary, marginLeft: 6, flexShrink: 1 },
-  distRow: { marginTop: 8 },
-  distText: { color: colors.textSecondary, fontSize: 12 },
-  directionBtn: { flexDirection: "row", alignItems: "center", backgroundColor: colors.white, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16 },
-  directionBtnWide: { flexDirection: "row", alignItems: "center", backgroundColor: colors.white, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 16, marginTop: 10, alignSelf: "flex-start" },
-  directionText: { color: colors.black, fontWeight: "700", marginRight: 6 },
-
-  organizerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 6 },
-  organizerLeft: { flexDirection: "row", alignItems: "center" },
-  organizerAvatar: { width: 34, height: 34, borderRadius: 17, marginRight: 8, backgroundColor: colors.borderLight },
-  orgBy: { color: colors.textSecondary, fontSize: 10, fontWeight: "700" },
-  orgName: { color: colors.textPrimary, fontWeight: "700" },
-  attendees: { flexDirection: "row", alignItems: "center" },
-  attendeesText: { color: colors.textSecondary, marginLeft: 6 },
-
-  tagChip: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, marginRight: 8 },
-  tagText: { color: colors.textSecondary, fontWeight: "600", fontSize: 12 },
-
-  tabsRow: { flexDirection: "row", alignItems: "flex-end", marginTop: 8, marginBottom: 8 },
-  tabItem: { marginRight: 16 },
-  tabText: { color: colors.textSecondary, fontWeight: "700" },
-  tabActive: { color: colors.textPrimary },
-  tabUnderline: { height: 3, backgroundColor: colors.primary, borderRadius: 2, marginTop: 6 },
-
-  sectionHead: { color: colors.textPrimary, fontWeight: "800", fontSize: 16, marginTop: 4, marginBottom: 6 },
-  paragraph: { color: colors.textSecondary, lineHeight: 20 },
-  readMore: { color: colors.secondary, fontWeight: "700", marginTop: 6 },
-
-  sectionHeaderInline: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 10 },
-  seeAllSmall: { color: colors.secondary, fontWeight: "700", fontSize: 12 },
-
-  guestsGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between" },
-  guestCard: { width: "31%", backgroundColor: colors.card, borderRadius: 12, padding: 8, marginBottom: 10 },
-  guestAvatar: { width: "100%", aspectRatio: 1, borderRadius: 10, backgroundColor: colors.borderLight, marginBottom: 6 },
-  guestName: { color: colors.textPrimary, fontWeight: "700" },
-  guestSub: { color: colors.textSecondary, fontSize: 12 },
-
-  galleryGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between" },
-  galleryItem: { width: "31%", aspectRatio: 1, borderRadius: 10, overflow: "hidden", marginBottom: 8, backgroundColor: colors.borderLight },
-  galleryImage: { width: "100%", height: "100%" },
-
-  bulletRow: { flexDirection: "row", alignItems: "flex-start", marginBottom: 6 },
-  bulletDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.textSecondary, marginTop: 7, marginRight: 8 },
-  bulletText: { color: colors.textSecondary, flex: 1, lineHeight: 20 },
-
-  venueCard: { backgroundColor: colors.card, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: colors.border },
-  venueName: { color: colors.textPrimary, fontWeight: "800", marginBottom: 6 },
-  venueAddress: { color: colors.textSecondary, lineHeight: 20 },
-
-  moreItem: { flexDirection: "row", alignItems: "center", backgroundColor: colors.card, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 12, borderWidth: 1, borderColor: colors.border, marginTop: 8 },
-  moreText: { color: colors.textPrimary, fontWeight: "600", marginLeft: 8 },
-
-  bottomBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 18,
-    paddingVertical: 14,
-    borderTopWidth: 1,
-    borderTopColor: "#C3EAFE29",
-    backgroundColor: colors.backgroundSecondary,
+  statusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginRight: 8,
   },
-  startsFrom: { fontSize: 13, color: colors.textPrimary },
-  price: { fontSize: 22, fontWeight: "700", color: colors.white },
+  statusText: {
+    color: colors.white,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  onlineBadge: {
+    backgroundColor: colors.secondary,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  onlineText: {
+    color: colors.white,
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    marginBottom: 16,
+  },
+  // Date and Time styles
+  dateTimeContainer: {
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  dateTimeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  dateIcon: {
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  dateText: {
+    fontSize: 16,
+    color: colors.textPrimary,
+    fontFamily: 'Inter-SemiBold',
+    marginBottom: 2,
+  },
+  timeText: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    fontFamily: 'Inter-Regular',
+  },
+  locationContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  locationIcon: {
+    marginRight: 4,
+  },
+  locationText: {
+    fontSize: 12,
+    lineHeight: 16,
+    color: '#9CA6AB',
+    fontWeight: '500',
+  },
+  section: {
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    marginBottom: 12,
+  },
+  description: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    lineHeight: 22,
+  },
+  instructionItem: {
+    flexDirection: 'row',
+    marginBottom: 8,
+  },
+  bulletPoint: {
+    marginRight: 8,
+    color: colors.primary,
+    fontSize: 16,
+  },
+  instructionText: {
+    flex: 1,
+    fontSize: 14,
+    color: colors.textSecondary,
+    lineHeight: 20,
+  },
+  contactSection: {
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 24,
+  },
+  contactItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  contactText: {
+    fontSize: 14,
+    color: colors.textPrimary,
+    marginLeft: 12,
+  },
+  footer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: colors.background,
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  registerButton: {
+    width: '100%',
+    height: 56,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#8B5CF6',
+  },
+  registerButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: colors.background,
+    borderRadius: 16,
+    padding: 24,
+    width: '100%',
+    maxWidth: 340,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    marginTop: 16,
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  modalText: {
+    fontSize: 15,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  modalButton: {
+    backgroundColor: '#8B5CF6', // Purple color
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    width: '100%',
+    alignItems: 'center',
+  },
+  modalButtonText: {
+    color: colors.white,
+    fontSize: 16,
+    fontWeight: '600',
+  },
 
   // Loading and Error States
   loadingContainer: {

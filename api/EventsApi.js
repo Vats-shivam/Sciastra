@@ -16,6 +16,9 @@ class EventsApiService {
   async makeRequest(url, options = {}) {
     const maxRetries = REQUEST_CONFIG.RETRY_ATTEMPTS;
     let attempt = 0;
+    
+    // Ensure the URL is absolute by prepending the base URL if needed
+    const fullUrl = url.startsWith('http') ? url : `${this.baseUrl}${url.startsWith('/') ? '' : '/'}${url}`;
 
     while (attempt < maxRetries) {
       try {
@@ -35,7 +38,8 @@ class EventsApiService {
         const timeoutId = setTimeout(() => controller.abort(), REQUEST_CONFIG.TIMEOUT);
         config.signal = controller.signal;
 
-        const response = await fetch(url, config);
+        console.log('Making request to:', fullUrl);
+        const response = await fetch(fullUrl, config);
         clearTimeout(timeoutId);
 
         const data = await response.json();
@@ -104,107 +108,62 @@ class EventsApiService {
   }
 
   // Get all public events
-  async getAllEvents(page = 1, limit = 10, filters = {}) {
+  async getAllEvents(page = 1, limit = 20, filters = {}) {
     try {
-      const userId = authApi.getCurrentUserId();
-      if (!userId) {
-        throw new Error(ERROR_MESSAGES.UNAUTHORIZED);
-      }
-
-      // Check for bypass mode
-      if (userId === 'bypass_user_1234567890') {
-        console.log('Using bypass mode for events');
-        
-        const mockEvents = [
-          {
-            id: 'event_1',
-            title: 'Science Workshop 2024',
-            description: 'Join us for an exciting workshop on modern scientific discoveries and innovations.',
-            category: 'Workshop',
-            date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 1 week from now
-            location: 'Virtual Event',
-            maxCapacity: 100,
-            registeredCount: 25,
-            fee: 0,
-            currency: 'INR',
-            status: 'OPEN',
-            organizer: {
-              id: 'organizer_1',
-              name: 'SciAstra Team',
-              profilePic: null,
-            },
-            coverImage: null,
-            tags: ['Science', 'Education', 'Workshop'],
-            createdAt: new Date(Date.now() - 86400000).toISOString(), // 1 day ago
-          },
-          {
-            id: 'event_2',
-            title: 'Tech Conference 2024',
-            description: 'Explore the latest trends in technology and connect with industry experts.',
-            category: 'Conference',
-            date: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(), // 2 weeks from now
-            location: 'Bangalore, India',
-            maxCapacity: 500,
-            registeredCount: 150,
-            fee: 2000,
-            currency: 'INR',
-            status: 'OPEN',
-            organizer: {
-              id: 'organizer_2',
-              name: 'Tech Community',
-              profilePic: null,
-            },
-            coverImage: null,
-            tags: ['Technology', 'Conference', 'Networking'],
-            createdAt: new Date(Date.now() - 172800000).toISOString(), // 2 days ago
-          }
-        ];
-
-        return {
-          success: true,
-          data: {
-            events: mockEvents,
-            pagination: {
-              page: page,
-              limit: limit,
-              total: mockEvents.length,
-              hasMore: false,
-            }
-          }
-        };
-      }
-
+      console.log('EventsApi: Getting all events with filters:', filters);
+      
       let url = `${this.baseUrl}${API_ENDPOINTS.EVENTS.GET_ALL}?page=${page}&limit=${limit}`;
       
-      // Add filters to URL
+      // Add filters to URL based on Postman collection
+      if (filters.status) {
+        url += `&status=${encodeURIComponent(filters.status)}`;
+      }
       if (filters.category) {
         url += `&category=${encodeURIComponent(filters.category)}`;
       }
-      if (filters.location) {
-        url += `&location=${encodeURIComponent(filters.location)}`;
+      if (filters.search) {
+        url += `&search=${encodeURIComponent(filters.search)}`;
       }
-      if (filters.startDate) {
-        url += `&startDate=${filters.startDate}`;
-      }
-      if (filters.endDate) {
-        url += `&endDate=${filters.endDate}`;
-      }
-      if (filters.freeOnly) {
-        url += `&freeOnly=true`;
-      }
+
+      console.log('EventsApi: Making request to:', url);
 
       const response = await this.makeRequest(url, {
         method: 'GET',
+        skipAuth: true, // Public endpoint
       });
 
-      if (response.success) {
-        return {
-          success: true,
-          data: response.data,
-        };
-      } else {
-        throw new Error(response.message || 'Failed to load events');
+      console.log('EventsApi: Response received:', response);
+
+      // Handle different possible response structures
+      let events = [];
+      
+      // Check for the specific response structure we're seeing
+      if (response.events && Array.isArray(response.events)) {
+        // Handle the case where events are directly under the 'events' key
+        events = response.events;
+      } else if (Array.isArray(response)) {
+        // If response is directly an array of events
+        events = response;
+      } else if (response.data && Array.isArray(response.data)) {
+        // If response has a data array
+        events = response.data;
+      } else if (response.data && response.data.events && Array.isArray(response.data.events)) {
+        // If response has a data.events array
+        events = response.data.events;
+      } else if (response.data && response.data.data && Array.isArray(response.data.data)) {
+        // If response is deeply nested
+        events = response.data.data;
       }
+
+      return {
+        success: true,
+        data: {
+          events: events,
+          total: events.length,
+          page: page,
+          limit: limit
+        }
+      };
     } catch (error) {
       console.error('Get All Events Error:', error);
       return {
@@ -214,87 +173,169 @@ class EventsApiService {
     }
   }
 
+  // Get featured events
+  async getFeaturedEvents(limit = 10) {
+    try {
+      console.log('EventsApi: Getting featured events');
+      
+      const url = `${this.baseUrl}${API_ENDPOINTS.EVENTS.GET_FEATURED}?limit=${limit}`;
+      console.log('EventsApi: Making request to:', url);
+
+      const response = await this.makeRequest(url, {
+        method: 'GET',
+        skipAuth: true, // Public endpoint
+      });
+
+      console.log('EventsApi: Featured events response:', response);
+
+      return {
+        success: true,
+        data: response.data || response,
+      };
+    } catch (error) {
+      console.error('Get Featured Events Error:', error);
+      return {
+        success: false,
+        message: error.message || 'Failed to load featured events. Please try again.',
+      };
+    }
+  }
+
+  // Get upcoming events
+  async getUpcomingEvents(page = 1, limit = 20, category = null) {
+    try {
+      console.log('EventsApi: Getting upcoming events');
+      
+      let url = `${this.baseUrl}${API_ENDPOINTS.EVENTS.GET_UPCOMING}?page=${page}&limit=${limit}`;
+      
+      if (category) {
+        url += `&category=${encodeURIComponent(category)}`;
+      }
+
+      console.log('EventsApi: Making request to:', url);
+
+      const response = await this.makeRequest(url, {
+        method: 'GET',
+        skipAuth: true, // Public endpoint
+      });
+
+      console.log('EventsApi: Upcoming events response:', response);
+
+      return {
+        success: true,
+        data: response.data || response,
+      };
+    } catch (error) {
+      console.error('Get Upcoming Events Error:', error);
+      return {
+        success: false,
+        message: error.message || 'Failed to load upcoming events. Please try again.',
+      };
+    }
+  }
+
+  // Get events by category
+  async getEventsByCategory(category, page = 1, limit = 20) {
+    try {
+      if (!category) {
+        throw new Error('Category is required');
+      }
+
+      console.log('EventsApi: Getting events by category:', category);
+
+      const url = `${this.baseUrl}${API_ENDPOINTS.EVENTS.GET_BY_CATEGORY}/${category}?page=${page}&limit=${limit}`;
+      console.log('EventsApi: Making request to:', url);
+
+      const response = await this.makeRequest(url, {
+        method: 'GET',
+        skipAuth: true, // Public endpoint
+      });
+
+      console.log('EventsApi: Category events response:', response);
+
+      // Handle different possible response structures
+      let events = [];
+      if (Array.isArray(response)) {
+        events = response;
+      } else if (response.data && Array.isArray(response.data)) {
+        events = response.data;
+      } else if (response.data && response.data.events && Array.isArray(response.data.events)) {
+        events = response.data.events;
+      } else if (response.events && Array.isArray(response.events)) {
+        events = response.events;
+      } else if (response.data && response.data.data && Array.isArray(response.data.data)) {
+        events = response.data.data;
+      }
+
+      return {
+        success: true,
+        data: {
+          events: events,
+          total: events.length,
+          page: page,
+          limit: limit,
+          category: category
+        }
+      };
+    } catch (error) {
+      console.error('Get Events By Category Error:', error);
+      return {
+        success: false,
+        message: error.message || 'Failed to load events by category. Please try again.',
+      };
+    }
+  }
+
+  // Get available categories
+  async getAvailableCategories() {
+    try {
+      console.log('EventsApi: Getting available categories');
+      
+      // Return static categories based on the API documentation
+      // In production, this could come from a separate endpoint
+      const categories = [
+        { id: 'FEATURED', name: 'Featured' },
+        { id: 'SPOTLIGHT', name: 'Spotlight' },
+        { id: 'TRENDING', name: 'Trending' },
+      ];
+
+      return {
+        success: true,
+        data: {
+          categories: categories,
+        }
+      };
+    } catch (error) {
+      console.error('Get Available Categories Error:', error);
+      return {
+        success: false,
+        message: error.message || 'Failed to load categories. Please try again.',
+      };
+    }
+  }
+
   // Get event by ID
   async getEventById(eventId) {
     try {
-      const userId = authApi.getCurrentUserId();
-      if (!userId) {
-        throw new Error(ERROR_MESSAGES.UNAUTHORIZED);
-      }
-
       if (!eventId) {
         throw new Error('Event ID is required');
       }
 
-      // Check for bypass mode
-      if (userId === 'bypass_user_1234567890') {
-        console.log('Using bypass mode for event details');
-        
-        const mockEvent = {
-          id: eventId,
-          title: 'Detailed Science Workshop 2024',
-          description: 'This is a comprehensive workshop covering various aspects of modern scientific research and discoveries. Participants will learn about cutting-edge technologies and methodologies used in scientific research.',
-          category: 'Workshop',
-          date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-          location: 'Virtual Event',
-          maxCapacity: 100,
-          registeredCount: 25,
-          fee: 0,
-          currency: 'INR',
-          status: 'OPEN',
-          organizer: {
-            id: 'organizer_1',
-            name: 'SciAstra Team',
-            profilePic: null,
-            email: 'events@sciastra.com',
-            phone: '+91-9876543210'
-          },
-          coverImage: null,
-          tags: ['Science', 'Education', 'Workshop'],
-          agenda: [
-            {
-              time: '10:00 AM',
-              topic: 'Introduction to Modern Science',
-              speaker: 'Dr. Jane Smith'
-            },
-            {
-              time: '11:30 AM',
-              topic: 'Research Methodologies',
-              speaker: 'Prof. John Doe'
-            }
-          ],
-          requirements: [
-            'Basic understanding of scientific concepts',
-            'Laptop/Computer for virtual participation',
-            'Stable internet connection'
-          ],
-          benefits: [
-            'Certificate of completion',
-            'Access to exclusive resources',
-            'Networking opportunities'
-          ],
-          createdAt: new Date(Date.now() - 86400000).toISOString(),
-          updatedAt: new Date(Date.now() - 86400000).toISOString(),
-        };
+      console.log('EventsApi: Getting event by ID:', eventId);
 
-        return {
-          success: true,
-          data: mockEvent,
-        };
-      }
-
-      const response = await this.makeRequest(`${this.baseUrl}${API_ENDPOINTS.EVENTS.GET_BY_ID}/${eventId}`, {
+      // Use the full endpoint path
+      const endpoint = `${API_ENDPOINTS.EVENTS.GET_BY_ID}/${eventId}`;
+      const response = await this.makeRequest(endpoint, {
         method: 'GET',
+        skipAuth: true, // Public endpoint
       });
 
-      if (response.success) {
-        return {
-          success: true,
-          data: response.data,
-        };
-      } else {
-        throw new Error(response.message || 'Event not found');
-      }
+      console.log('EventsApi: Event details response:', response);
+
+      return {
+        success: true,
+        data: response.data || response,
+      };
     } catch (error) {
       console.error('Get Event By ID Error:', error);
       return {
@@ -316,46 +357,26 @@ class EventsApiService {
         throw new Error('Event ID is required');
       }
 
-      // Check for bypass mode
-      if (userId === 'bypass_user_1234567890') {
-        console.log('Using bypass mode for event registration');
-        
-        const mockRegistration = {
-          id: `registration_${eventId}_${Date.now()}`,
-          eventId: eventId,
-          userId: userId,
-          registrationData: registrationData,
-          status: 'CONFIRMED',
-          paymentStatus: registrationData.paymentRequired ? 'PENDING' : 'NOT_REQUIRED',
-          registeredAt: new Date().toISOString(),
-        };
-
-        return {
-          success: true,
-          message: 'Successfully registered for the event (demo mode)',
-          data: mockRegistration,
-        };
-      }
+      console.log('EventsApi: Registering for event:', eventId);
 
       const payload = {
-        eventId: eventId,
-        ...registrationData,
+        registrationData: registrationData,
       };
 
-      const response = await this.makeRequest(`${this.baseUrl}${API_ENDPOINTS.EVENTS.REGISTER}/${eventId}/register`, {
+      // Use the full endpoint path
+      const endpoint = `${API_ENDPOINTS.EVENTS.REGISTER}/${eventId}`;
+      const response = await this.makeRequest(endpoint, {
         method: 'POST',
         body: JSON.stringify(payload),
       });
 
-      if (response.success) {
-        return {
-          success: true,
-          message: response.message || 'Successfully registered for the event',
-          data: response.data,
-        };
-      } else {
-        throw new Error(response.message || 'Failed to register for event');
-      }
+      console.log('EventsApi: Registration response:', response);
+
+      return {
+        success: true,
+        message: response.message || 'Successfully registered for the event',
+        data: response.data || response,
+      };
     } catch (error) {
       console.error('Register For Event Error:', error);
       return {
@@ -366,44 +387,34 @@ class EventsApiService {
   }
 
   // Cancel event registration
-  async cancelRegistration(eventId, cancellationReason = '') {
+  async cancelRegistration(registrationId, cancellationReason = '') {
     try {
       const userId = authApi.getCurrentUserId();
       if (!userId) {
         throw new Error(ERROR_MESSAGES.UNAUTHORIZED);
       }
 
-      if (!eventId) {
-        throw new Error('Event ID is required');
+      if (!registrationId) {
+        throw new Error('Registration ID is required');
       }
 
-      // Check for bypass mode
-      if (userId === 'bypass_user_1234567890') {
-        console.log('Using bypass mode for event registration cancellation');
-        
-        return {
-          success: true,
-          message: 'Event registration cancelled successfully (demo mode)',
-        };
-      }
+      console.log('EventsApi: Cancelling registration:', registrationId);
 
       const payload = {
         cancellationReason: cancellationReason,
       };
 
-      const response = await this.makeRequest(`${this.baseUrl}${API_ENDPOINTS.EVENTS.CANCEL_REGISTRATION}/${eventId}/cancel`, {
-        method: 'POST',
+      const response = await this.makeRequest(`${this.baseUrl}${API_ENDPOINTS.EVENTS.CANCEL_REGISTRATION}/${registrationId}/cancel`, {
+        method: 'PUT',
         body: JSON.stringify(payload),
       });
 
-      if (response.success) {
-        return {
-          success: true,
-          message: response.message || 'Event registration cancelled successfully',
-        };
-      } else {
-        throw new Error(response.message || 'Failed to cancel registration');
-      }
+      console.log('EventsApi: Cancellation response:', response);
+
+      return {
+        success: true,
+        message: response.message || 'Event registration cancelled successfully',
+      };
     } catch (error) {
       console.error('Cancel Registration Error:', error);
       return {
@@ -414,53 +425,14 @@ class EventsApiService {
   }
 
   // Get user's registered events
-  async getRegisteredEvents(page = 1, limit = 10, status = 'all') {
+  async getRegisteredEvents(page = 1, limit = 20, status = 'all') {
     try {
       const userId = authApi.getCurrentUserId();
       if (!userId) {
         throw new Error(ERROR_MESSAGES.UNAUTHORIZED);
       }
 
-      // Check for bypass mode
-      if (userId === 'bypass_user_1234567890') {
-        console.log('Using bypass mode for registered events');
-        
-        const mockRegisteredEvents = [
-          {
-            registration: {
-              id: 'reg_1',
-              status: 'CONFIRMED',
-              paymentStatus: 'NOT_REQUIRED',
-              registeredAt: new Date(Date.now() - 86400000).toISOString(),
-            },
-            event: {
-              id: 'event_1',
-              title: 'Science Workshop 2024',
-              description: 'Join us for an exciting workshop on modern scientific discoveries.',
-              category: 'Workshop',
-              date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-              location: 'Virtual Event',
-              fee: 0,
-              currency: 'INR',
-              status: 'OPEN',
-              coverImage: null,
-            }
-          }
-        ];
-
-        return {
-          success: true,
-          data: {
-            registrations: mockRegisteredEvents,
-            pagination: {
-              page: page,
-              limit: limit,
-              total: mockRegisteredEvents.length,
-              hasMore: false,
-            }
-          }
-        };
-      }
+      console.log('EventsApi: Getting registered events');
 
       let url = `${this.baseUrl}${API_ENDPOINTS.EVENTS.GET_REGISTERED}?page=${page}&limit=${limit}`;
       if (status !== 'all') {
@@ -471,14 +443,12 @@ class EventsApiService {
         method: 'GET',
       });
 
-      if (response.success) {
-        return {
-          success: true,
-          data: response.data,
-        };
-      } else {
-        throw new Error(response.message || 'Failed to load registered events');
-      }
+      console.log('EventsApi: Registered events response:', response);
+
+      return {
+        success: true,
+        data: response.data || response,
+      };
     } catch (error) {
       console.error('Get Registered Events Error:', error);
       return {
@@ -500,37 +470,47 @@ class EventsApiService {
         throw new Error('Event ID is required');
       }
 
-      // Check for bypass mode
-      if (userId === 'bypass_user_1234567890') {
-        console.log('Using bypass mode for registration status');
+      console.log('EventsApi: Getting registration status for event:', eventId);
+
+      // Check if user is registered by looking at their registered events
+      const registeredEventsResult = await this.getRegisteredEvents(1, 100);
+      if (registeredEventsResult.success) {
+        const registrations = registeredEventsResult.data.registrations || registeredEventsResult.data || [];
+        const registration = registrations.find(
+          reg => reg.event_id === eventId || reg.eventId === eventId
+        );
         
-        const mockStatus = {
-          isRegistered: false,
-          registrationId: null,
-          status: null,
-          paymentStatus: null,
-          canRegister: true,
-          canCancel: false,
-        };
-
-        return {
-          success: true,
-          data: mockStatus,
-        };
+        if (registration) {
+          return {
+            success: true,
+            data: {
+              is_registered: true,
+              registration_id: registration.id,
+              status: registration.status,
+              payment_status: registration.payment_status || registration.paymentStatus,
+              can_register: false,
+              can_cancel: registration.status === 'REGISTERED',
+            },
+          };
+        } else {
+          return {
+            success: true,
+            data: {
+              is_registered: false,
+              registration_id: null,
+              status: null,
+              payment_status: null,
+              can_register: true,
+              can_cancel: false,
+            },
+          };
+        }
       }
 
-      const response = await this.makeRequest(`${this.baseUrl}${API_ENDPOINTS.EVENTS.GET_REGISTRATION_STATUS}/${eventId}/status`, {
-        method: 'GET',
-      });
-
-      if (response.success) {
-        return {
-          success: true,
-          data: response.data,
-        };
-      } else {
-        throw new Error(response.message || 'Failed to get registration status');
-      }
+      return {
+        success: false,
+        message: 'Failed to check registration status',
+      };
     } catch (error) {
       console.error('Get Registration Status Error:', error);
       return {
@@ -543,11 +523,6 @@ class EventsApiService {
   // Search events
   async searchEvents(query, filters = {}, page = 1, limit = 10) {
     try {
-      const userId = authApi.getCurrentUserId();
-      if (!userId) {
-        throw new Error(ERROR_MESSAGES.UNAUTHORIZED);
-      }
-
       if (!query || query.trim().length < 2) {
         return {
           success: false,
@@ -555,41 +530,9 @@ class EventsApiService {
         };
       }
 
-      // Check for bypass mode
-      if (userId === 'bypass_user_1234567890') {
-        console.log('Using bypass mode for event search');
-        
-        const mockSearchResults = [
-          {
-            id: 'search_event_1',
-            title: `Event matching "${query}"`,
-            description: 'This is a search result for your query.',
-            category: 'Workshop',
-            date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-            location: 'Search Location',
-            fee: 0,
-            currency: 'INR',
-            status: 'OPEN',
-            coverImage: null,
-            tags: ['Search', 'Demo'],
-          }
-        ];
+      console.log('EventsApi: Searching events with query:', query);
 
-        return {
-          success: true,
-          data: {
-            events: mockSearchResults,
-            pagination: {
-              page: page,
-              limit: limit,
-              total: mockSearchResults.length,
-              hasMore: false,
-            }
-          }
-        };
-      }
-
-      let url = `${this.baseUrl}${API_ENDPOINTS.EVENTS.SEARCH}?query=${encodeURIComponent(query)}&page=${page}&limit=${limit}`;
+      let url = `${this.baseUrl}${API_ENDPOINTS.EVENTS.SEARCH}?q=${encodeURIComponent(query)}&page=${page}&limit=${limit}`;
       
       // Add filters
       if (filters.category) {
@@ -610,16 +553,15 @@ class EventsApiService {
 
       const response = await this.makeRequest(url, {
         method: 'GET',
+        skipAuth: true, // Public endpoint
       });
 
-      if (response.success) {
-        return {
-          success: true,
-          data: response.data,
-        };
-      } else {
-        throw new Error(response.message || 'Search failed');
-      }
+      console.log('EventsApi: Search response:', response);
+
+      return {
+        success: true,
+        data: response.data || response,
+      };
     } catch (error) {
       console.error('Search Events Error:', error);
       return {
@@ -684,16 +626,244 @@ class EventsApiService {
   // Check if event registration is still open
   isRegistrationOpen(event) {
     const now = new Date();
-    const eventDate = new Date(event.date);
-    const registrationDeadline = event.registrationDeadline ? 
-      new Date(event.registrationDeadline) : 
+    const eventDate = new Date(event.start_time || event.date);
+    const registrationDeadline = event.registration_deadline ? 
+      new Date(event.registration_deadline) : 
       new Date(eventDate.getTime() - 24 * 60 * 60 * 1000); // 1 day before event
 
     return (
-      event.status === 'OPEN' &&
+      event.status === 'PUBLISHED' &&
       now < registrationDeadline &&
-      event.registeredCount < event.maxCapacity
+      (event.registered_count || 0) < (event.max_capacity || Infinity)
     );
+  }
+
+  // Create default sample events for demo
+  async createDefaultSampleEvents() {
+    const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+    
+    const now = new Date();
+    const sampleEvents = [
+      {
+        id: 'demo_1',
+        title: '🚀 AI & Machine Learning Summit 2024',
+        description: 'The ultimate AI conference featuring OpenAI researchers, Google AI team, and top ML engineers. Learn cutting-edge techniques in deep learning, computer vision, and NLP. Network with 500+ AI professionals and get hands-on with the latest AI tools. Includes workshops on ChatGPT, Stable Diffusion, and TensorFlow.',
+        category: 'FEATURED',
+        location: 'Bangalore International Exhibition Centre',
+        start_time: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        end_time: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000 + 8 * 60 * 60 * 1000).toISOString(),
+        registration_deadline: new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000).toISOString(),
+        max_capacity: 500,
+        cheapest_ticket_price: 2500,
+        status: 'PUBLISHED',
+        registered_count: 347,
+        requirements: ['Laptop with Python installed', 'Valid ID', 'Basic ML knowledge'],
+        contact_info: {
+          email: 'register@aisummit2024.com',
+          phone: '+91 9876543210',
+        },
+        tags: ['AI', 'machine learning', 'deep learning', 'tech', 'networking'],
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        organizer: {
+          name: 'AI Summit India',
+          email: 'organizer@aisummit.in',
+        },
+        image_url: 'https://picsum.photos/400/200?random=1',
+      },
+      {
+        id: 'demo_2',
+        title: '💻 FREE Full Stack Web Development Bootcamp',
+        description: 'Complete 3-day intensive bootcamp covering React, Node.js, MongoDB, and deployment. Build 3 real projects including a social media app, e-commerce site, and portfolio. Get mentorship from senior developers at Google, Microsoft, and startups. 100% FREE with certificates!',
+        category: 'WORKSHOP',
+        location: 'Online (Live on YouTube + Discord)',
+        start_time: new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+        end_time: new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000 + 6 * 60 * 60 * 1000).toISOString(),
+        registration_deadline: new Date(now.getTime() + 2 * 24 * 60 * 60 * 1000).toISOString(),
+        max_capacity: 1000,
+        cheapest_ticket_price: 0,
+        status: 'PUBLISHED',
+        registered_count: 756,
+        requirements: ['Computer with internet', 'Basic HTML/CSS knowledge', 'GitHub account'],
+        contact_info: {
+          email: 'bootcamp@webdev.com',
+          phone: '+91 8765432109',
+        },
+        tags: ['web development', 'free', 'bootcamp', 'react', 'nodejs', 'fullstack'],
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        organizer: {
+          name: 'WebDev Masters',
+          email: 'academy@webdev.com',
+        },
+        image_url: 'https://picsum.photos/400/200?random=2',
+      },
+      {
+        id: 'demo_3',
+        title: '🎯 Startup Pitch Night & Investor Meetup',
+        description: 'Present your startup idea to 50+ VCs and angel investors! Top 3 pitches win ₹10L funding + 6 months incubation. Network with successful entrepreneurs, get feedback from industry experts, and find potential co-founders. Previous winners raised ₹50Cr+ total funding.',
+        category: 'NETWORKING',
+        location: 'Mumbai - Bombay Stock Exchange Building',
+        start_time: new Date(now.getTime() + 10 * 24 * 60 * 60 * 1000).toISOString(),
+        end_time: new Date(now.getTime() + 10 * 24 * 60 * 60 * 1000 + 4 * 60 * 60 * 1000).toISOString(),
+        registration_deadline: new Date(now.getTime() + 8 * 24 * 60 * 60 * 1000).toISOString(),
+        max_capacity: 200,
+        cheapest_ticket_price: 1000,
+        status: 'PUBLISHED',
+        registered_count: 156,
+        requirements: ['Startup pitch deck (max 10 slides)', 'Business plan', 'Valid ID'],
+        contact_info: {
+          email: 'pitch@startupmumbai.in',
+          phone: '+91 7654321098',
+        },
+        tags: ['startup', 'networking', 'funding', 'investors', 'pitch', 'entrepreneurship'],
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        organizer: {
+          name: 'Mumbai Startup Hub',
+          email: 'events@startupmumbai.in',
+        },
+        image_url: 'https://picsum.photos/400/200?random=3',
+      },
+      {
+        id: 'demo_4',
+        title: '🏆 HackIndia 2024 - 48 Hour Hackathon',
+        description: 'Biggest hackathon in India with ₹25L+ prizes! Build solutions for real-world problems in AI, blockchain, fintech, and sustainability. Mentorship from tech leaders at Flipkart, Zomato, and Paytm. Free food, accommodation, and swag for all participants. Win internships and job offers!',
+        category: 'COMPETITION',
+        location: 'IIT Bombay Campus, Mumbai',
+        start_time: new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+        end_time: new Date(now.getTime() + 16 * 24 * 60 * 60 * 1000).toISOString(),
+        registration_deadline: new Date(now.getTime() + 12 * 24 * 60 * 60 * 1000).toISOString(),
+        max_capacity: 800,
+        cheapest_ticket_price: 0,
+        status: 'PUBLISHED',
+        registered_count: 634,
+        requirements: ['Laptop', 'Programming skills', 'Team of 2-4 members', 'Student ID'],
+        contact_info: {
+          email: 'register@hackindia.com',
+          phone: '+91 6543210987',
+        },
+        tags: ['hackathon', 'coding', 'competition', 'prizes', 'AI', 'blockchain'],
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        organizer: {
+          name: 'HackIndia Foundation',
+          email: 'team@hackindia.com',
+        },
+        image_url: 'https://picsum.photos/400/200?random=4',
+      },
+      {
+        id: 'demo_5',
+        title: '🎨 Design Thinking Workshop with Google Designers',
+        description: 'Learn design thinking methodology from Google UX designers. Hands-on workshop covering user research, prototyping, and testing. Work on real design challenges and get portfolio feedback. Limited to 50 participants for personalized attention. Includes design tools and resources worth ₹5000.',
+        category: 'WORKSHOP',
+        location: 'Google Office, Hyderabad',
+        start_time: new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000).toISOString(),
+        end_time: new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000 + 6 * 60 * 60 * 1000).toISOString(),
+        registration_deadline: new Date(now.getTime() + 4 * 24 * 60 * 60 * 1000).toISOString(),
+        max_capacity: 50,
+        cheapest_ticket_price: 3500,
+        status: 'PUBLISHED',
+        registered_count: 42,
+        requirements: ['Laptop with Figma installed', 'Design portfolio (optional)', 'Creative mindset'],
+        contact_info: {
+          email: 'design@googleworkshop.com',
+          phone: '+91 5432109876',
+        },
+        tags: ['design thinking', 'UX', 'UI', 'google', 'workshop', 'portfolio'],
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        organizer: {
+          name: 'Google Design Team',
+          email: 'design@google.com',
+        },
+        image_url: 'https://picsum.photos/400/200?random=5',
+      },
+      {
+        id: 'demo_6',
+        title: '🚀 Crypto & Blockchain Masterclass',
+        description: 'Deep dive into cryptocurrency trading, DeFi protocols, and blockchain development. Learn from crypto millionaires and blockchain architects. Build your own token and NFT collection. Exclusive access to private trading signals and investment opportunities. Network with crypto enthusiasts and investors.',
+        category: 'SEMINAR',
+        location: 'Taj Hotel, New Delhi',
+        start_time: new Date(now.getTime() + 12 * 24 * 60 * 60 * 1000).toISOString(),
+        end_time: new Date(now.getTime() + 12 * 24 * 60 * 60 * 1000 + 8 * 60 * 60 * 1000).toISOString(),
+        registration_deadline: new Date(now.getTime() + 10 * 24 * 60 * 60 * 1000).toISOString(),
+        max_capacity: 150,
+        cheapest_ticket_price: 5000,
+        status: 'PUBLISHED',
+        registered_count: 98,
+        requirements: ['Crypto wallet (MetaMask)', 'Basic understanding of blockchain', 'Investment capital (optional)'],
+        contact_info: {
+          email: 'crypto@masterclass.in',
+          phone: '+91 4321098765',
+        },
+        tags: ['cryptocurrency', 'blockchain', 'DeFi', 'NFT', 'trading', 'investment'],
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        organizer: {
+          name: 'Crypto Masters India',
+          email: 'team@cryptomasters.in',
+        },
+        image_url: 'https://picsum.photos/400/200?random=6',
+      },
+      {
+        id: 'demo_7',
+        title: '🏃‍♂️ FREE Mumbai Marathon Training Camp',
+        description: 'Get ready for Mumbai Marathon 2024! Professional coaching, nutrition guidance, injury prevention, and mental preparation. Join 200+ runners of all levels. Includes running gear, energy drinks, and post-workout meals. Build stamina, make friends, and achieve your fitness goals!',
+        category: 'TRENDING',
+        location: 'Oval Maidan, Mumbai',
+        start_time: new Date(now.getTime() + 2 * 24 * 60 * 60 * 1000).toISOString(),
+        end_time: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30-day program
+        registration_deadline: new Date(now.getTime() + 1 * 24 * 60 * 60 * 1000).toISOString(),
+        max_capacity: 200,
+        cheapest_ticket_price: 0,
+        status: 'PUBLISHED',
+        registered_count: 167,
+        requirements: ['Running shoes', 'Water bottle', 'Medical clearance', 'Commitment to attend'],
+        contact_info: {
+          email: 'marathon@runmumbai.com',
+          phone: '+91 2109876543',
+        },
+        tags: ['marathon', 'running', 'fitness', 'free', 'health', 'training'],
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        organizer: {
+          name: 'Mumbai Runners Club',
+          email: 'club@runmumbai.com',
+        },
+        image_url: 'https://picsum.photos/400/200?random=7',
+      },
+      {
+        id: 'demo_8',
+        title: '🎵 Music Production & DJ Workshop',
+        description: 'Learn music production from Grammy-nominated producers and top DJs. Hands-on sessions with professional equipment, software training (Ableton, FL Studio), and live performance techniques. Create your first track and perform at the closing party. All skill levels welcome!',
+        category: 'SPOTLIGHT',
+        location: 'Sound Studio, Pune',
+        start_time: new Date(now.getTime() + 6 * 24 * 60 * 60 * 1000).toISOString(),
+        end_time: new Date(now.getTime() + 8 * 24 * 60 * 60 * 1000).toISOString(),
+        registration_deadline: new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000).toISOString(),
+        max_capacity: 30,
+        cheapest_ticket_price: 4000,
+        status: 'PUBLISHED',
+        registered_count: 23,
+        requirements: ['Laptop', 'Headphones', 'Music passion', 'No prior experience needed'],
+        contact_info: {
+          email: 'music@soundstudio.in',
+          phone: '+91 3210987654',
+        },
+        tags: ['music production', 'DJ', 'workshop', 'ableton', 'creative', 'performance'],
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        organizer: {
+          name: 'Sound Studio Academy',
+          email: 'academy@soundstudio.in',
+        },
+        image_url: 'https://picsum.photos/400/200?random=8',
+      },
+    ];
+
+    await AsyncStorage.setItem('sample_events', JSON.stringify(sampleEvents));
+    return sampleEvents;
   }
 }
 

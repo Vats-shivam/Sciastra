@@ -1,0 +1,3525 @@
+{
+	"info": {
+		"_postman_id": "2fa4cb2a-1280-4bfd-a01c-de78e43e1fbd",
+		"name": "Sciastra Complete Backend API - All 7 Services",
+		"description": "Complete API collection for all Sciastra microservices: Auth, Profile, Connection, Post, Chat, Admin, and Events services with comprehensive endpoint coverage",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "36032636"
+	},
+	"item": [
+		{
+			"name": "🔐 Auth Service",
+			"item": [
+				{
+					"name": "Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{auth_url}}/",
+							"host": [
+								"{{auth_url}}"
+							],
+							"path": [
+								""
+							]
+						},
+						"description": "Auth service health check endpoint"
+					},
+					"response": []
+				},
+				{
+					"name": "Send OTP",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    console.log('OTP sent successfully');",
+									"    pm.test('OTP sent successfully', function () {",
+									"        pm.response.to.have.status(201);",
+									"    });",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"phoneNumber\": \"{{test_phone_number}}\"\n}"
+						},
+						"url": {
+							"raw": "{{auth_url}}/auth/send-otp",
+							"host": [
+								"{{auth_url}}"
+							],
+							"path": [
+								"auth",
+								"send-otp"
+							]
+						},
+						"description": "Send OTP to phone number for authentication. Rate limited to 5 requests per hour per phone number."
+					},
+					"response": []
+				},
+				{
+					"name": "Verify OTP & Get Token",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    const response = pm.response.json();",
+									"    if (response.success && response.data) {",
+									"        pm.collectionVariables.set('access_token', response.data.accessToken);",
+									"        pm.collectionVariables.set('refresh_token', response.data.refreshToken);",
+									"        pm.collectionVariables.set('user_id', response.data.userId);",
+									"        console.log('Tokens saved to collection variables');",
+									"        pm.test('OTP verified and tokens received', function () {",
+									"            pm.response.to.have.status(201);",
+									"            pm.expect(response.data.accessToken).to.be.a('string');",
+									"        });",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"phoneNumber\": \"{{test_phone_number}}\",\n  \"otp\": \"123456\"\n}"
+						},
+						"url": {
+							"raw": "{{auth_url}}/auth/verify-otp",
+							"host": [
+								"{{auth_url}}"
+							],
+							"path": [
+								"auth",
+								"verify-otp"
+							]
+						},
+						"description": "Verify OTP and receive access & refresh tokens. Tokens are automatically saved to collection variables."
+					},
+					"response": []
+				},
+				{
+					"name": "Refresh Token",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    const response = pm.response.json();",
+									"    if (response.success && response.data && response.data.accessToken) {",
+									"        pm.collectionVariables.set('access_token', response.data.accessToken);",
+									"        console.log('Access token refreshed and saved');",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"refreshToken\": \"{{refresh_token}}\"\n}"
+						},
+						"url": {
+							"raw": "{{auth_url}}/auth/refresh-token",
+							"host": [
+								"{{auth_url}}"
+							],
+							"path": [
+								"auth",
+								"refresh-token"
+							]
+						},
+						"description": "Refresh access token using refresh token. New access token is automatically saved."
+					},
+					"response": []
+				},
+				{
+					"name": "Logout",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"refreshToken\": \"{{refresh_token}}\"\n}"
+						},
+						"url": {
+							"raw": "{{auth_url}}/auth/logout",
+							"host": [
+								"{{auth_url}}"
+							],
+							"path": [
+								"auth",
+								"logout"
+							]
+						},
+						"description": "Logout user and invalidate refresh token."
+					},
+					"response": []
+				}
+			],
+			"description": "Authentication service endpoints for OTP-based authentication"
+		},
+		{
+			"name": "👤 Profile Service",
+			"item": [
+				{
+					"name": "Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{profile_url}}/",
+							"host": [
+								"{{profile_url}}"
+							],
+							"path": [
+								""
+							]
+						},
+						"description": "Profile service health check endpoint"
+					},
+					"response": []
+				},
+				{
+					"name": "Create/Update Profile",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"John Doe\",\n  \"profession\": \"Software Engineer\",\n  \"email\": \"john@example.com\",\n  \"profilePic\": \"profile-pic.jpg\",\n  \"experiences\": [\n    {\n      \"company\": \"Tech Corp\",\n      \"role\": \"Senior Software Engineer\",\n      \"startDate\": \"2022-01-15T00:00:00.000Z\",\n      \"endDate\": \"2024-06-30T00:00:00.000Z\",\n      \"description\": \"Led backend development team, architected microservices infrastructure\",\n      \"isCurrentRole\": false\n    },\n    {\n      \"company\": \"StartupXYZ\",\n      \"role\": \"Full Stack Developer\",\n      \"startDate\": \"2024-07-01T00:00:00.000Z\",\n      \"description\": \"Building next-gen social platform with React and Node.js\",\n      \"isCurrentRole\": true\n    }\n  ],\n  \"topics\": [\"JavaScript\", \"Python\", \"Machine Learning\"]\n}"
+						},
+						"url": {
+							"raw": "{{profile_url}}/profile",
+							"host": [
+								"{{profile_url}}"
+							],
+							"path": [
+								"profile"
+							]
+						},
+						"description": "Create or update user profile. Requires authentication."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Profile by User ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{profile_url}}/profile/{{user_id}}",
+							"host": [
+								"{{profile_url}}"
+							],
+							"path": [
+								"profile",
+								"{{user_id}}"
+							]
+						},
+						"description": "Get specific user profile by user ID. Requires authentication."
+					},
+					"response": []
+				},
+				{
+					"name": "Update Profile",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Jane Doe Updated\",\n  \"profession\": \"Senior Software Engineer\",\n  \"email\": \"jane.updated@example.com\",\n  \"topics\": [\"JavaScript\", \"Python\", \"Machine Learning\", \"DevOps\"]\n}"
+						},
+						"url": {
+							"raw": "{{profile_url}}/profile",
+							"host": [
+								"{{profile_url}}"
+							],
+							"path": [
+								"profile"
+							]
+						},
+						"description": "Update authenticated user's profile. Requires authentication."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Upload URL",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"fileName\": \"profile-picture.jpg\",\n  \"fileType\": \"image/jpeg\"\n}"
+						},
+						"url": {
+							"raw": "{{profile_url}}/profile/upload-url",
+							"host": [
+								"{{profile_url}}"
+							],
+							"path": [
+								"profile",
+								"upload-url"
+							]
+						},
+						"description": "Generate pre-signed URL for file upload to S3/MinIO. Requires authentication."
+					},
+					"response": []
+				}
+			],
+			"description": "Profile service endpoints for user profile management"
+		},
+		{
+			"name": "🤝 Connection Service",
+			"item": [
+				{
+					"name": "Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{connection_url}}/",
+							"host": [
+								"{{connection_url}}"
+							],
+							"path": [
+								""
+							]
+						},
+						"description": "Connection service health check endpoint"
+					},
+					"response": []
+				},
+				{
+					"name": "Send Connection Request",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"receiverId\": \"target_user_id_here\"\n}"
+						},
+						"url": {
+							"raw": "{{connection_url}}/connections/request",
+							"host": [
+								"{{connection_url}}"
+							],
+							"path": [
+								"connections",
+								"request"
+							]
+						},
+						"description": "Send a connection request to another user. Requires authentication."
+					},
+					"response": []
+				},
+				{
+					"name": "Accept Connection Request",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{connection_url}}/connections/accept/:connectionId",
+							"host": [
+								"{{connection_url}}"
+							],
+							"path": [
+								"connections",
+								"accept",
+								":connectionId"
+							],
+							"variable": [
+								{
+									"key": "connectionId",
+									"value": "connection-uuid-here"
+								}
+							]
+						},
+						"description": "Accept a pending connection request. Replace :connectionId with actual connection ID."
+					},
+					"response": []
+				},
+				{
+					"name": "Reject Connection Request",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{connection_url}}/connections/reject/:connectionId",
+							"host": [
+								"{{connection_url}}"
+							],
+							"path": [
+								"connections",
+								"reject",
+								":connectionId"
+							],
+							"variable": [
+								{
+									"key": "connectionId",
+									"value": "connection-uuid-here"
+								}
+							]
+						},
+						"description": "Reject a pending connection request. Replace :connectionId with actual connection ID."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Sent Requests",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{connection_url}}/connections/sent?page=1&limit=10",
+							"host": [
+								"{{connection_url}}"
+							],
+							"path": [
+								"connections",
+								"sent"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "10"
+								}
+							]
+						},
+						"description": "Get connection requests sent by the current user."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Received Requests",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{connection_url}}/connections/received?page=1&limit=10",
+							"host": [
+								"{{connection_url}}"
+							],
+							"path": [
+								"connections",
+								"received"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "10"
+								}
+							]
+						},
+						"description": "Get connection requests received by the current user."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Connections (Friends)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{connection_url}}/connections/friends?page=1&limit=10",
+							"host": [
+								"{{connection_url}}"
+							],
+							"path": [
+								"connections",
+								"friends"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "10"
+								}
+							]
+						},
+						"description": "Get all accepted connections (friends) of the current user."
+					},
+					"response": []
+				},
+				{
+					"name": "Remove Connection",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{connection_url}}/connections/:targetUserId",
+							"host": [
+								"{{connection_url}}"
+							],
+							"path": [
+								"connections",
+								":targetUserId"
+							],
+							"variable": [
+								{
+									"key": "targetUserId",
+									"value": "user-uuid-here"
+								}
+							]
+						},
+						"description": "Remove an existing connection with another user."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Connection Status",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{connection_url}}/connections/status/:targetUserId",
+							"host": [
+								"{{connection_url}}"
+							],
+							"path": [
+								"connections",
+								"status",
+								":targetUserId"
+							],
+							"variable": [
+								{
+									"key": "targetUserId",
+									"value": "user-uuid-here"
+								}
+							]
+						},
+						"description": "Get connection status with a specific user (PENDING, ACCEPTED, REJECTED, or null)."
+					},
+					"response": []
+				}
+			],
+			"description": "Connection service endpoints for managing user connections and friend requests"
+		},
+		{
+			"name": "📝 Post Service",
+			"item": [
+				{
+					"name": "Posts",
+					"item": [
+						{
+							"name": "Get Media Upload URLs",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"files\": [\n    {\n      \"fileName\": \"image1.jpg\",\n      \"fileType\": \"image/jpeg\",\n      \"fileSize\": 2048000\n    },\n    {\n      \"fileName\": \"image2.png\",\n      \"fileType\": \"image/png\",\n      \"fileSize\": 1024000\n    }\n  ]\n}"
+								},
+								"url": {
+									"raw": "{{post_url}}/posts/media/upload-urls",
+									"host": [
+										"{{post_url}}"
+									],
+									"path": [
+										"posts",
+										"media",
+										"upload-urls"
+									]
+								},
+								"description": "Generate pre-signed URLs for media upload before creating a post."
+							},
+							"response": []
+						},
+						{
+							"name": "Create Post",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"content\": \"Just launched my new project! Check out these screenshots 🚀\",\n  \"media\": [\n    {\n      \"type\": \"image\",\n      \"url\": \"https://example.com/image1.jpg\",\n      \"caption\": \"Homepage design\",\n      \"width\": \"1920\",\n      \"height\": \"1080\",\n      \"size\": \"2048000\"\n    }\n  ],\n  \"topicNames\": [\"Web Development\", \"React\", \"TypeScript\"]\n}"
+								},
+								"url": {
+									"raw": "{{post_url}}/posts",
+									"host": [
+										"{{post_url}}"
+									],
+									"path": [
+										"posts"
+									]
+								},
+								"description": "Create a new post with content, media (max 5), and topics (max 10)."
+							},
+							"response": []
+						},
+						{
+							"name": "Create Repost",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"originalPostId\": \"post-uuid-here\",\n  \"comment\": \"Great insights! Adding my thoughts on this topic...\"\n}"
+								},
+								"url": {
+									"raw": "{{post_url}}/posts/repost",
+									"host": [
+										"{{post_url}}"
+									],
+									"path": [
+										"posts",
+										"repost"
+									]
+								},
+								"description": "Repost an existing post with optional comment."
+							},
+							"response": []
+						},
+						{
+							"name": "Get Post",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{post_url}}/posts/:postId",
+									"host": [
+										"{{post_url}}"
+									],
+									"path": [
+										"posts",
+										":postId"
+									],
+									"variable": [
+										{
+											"key": "postId",
+											"value": "post-uuid-here"
+										}
+									]
+								},
+								"description": "Get a specific post by ID with all details."
+							},
+							"response": []
+						},
+						{
+							"name": "Get User Posts",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{post_url}}/posts/user/:userId?page=1&limit=10",
+									"host": [
+										"{{post_url}}"
+									],
+									"path": [
+										"posts",
+										"user",
+										":userId"
+									],
+									"query": [
+										{
+											"key": "page",
+											"value": "1"
+										},
+										{
+											"key": "limit",
+											"value": "10"
+										}
+									],
+									"variable": [
+										{
+											"key": "userId",
+											"value": "user-uuid-here"
+										}
+									]
+								},
+								"description": "Get posts by a specific user with pagination."
+							},
+							"response": []
+						},
+						{
+							"name": "Get Feed (Infinite Scroll)",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{post_url}}/posts/feed?limit=10&lastPostId=&topics=Technology,AI",
+									"host": [
+										"{{post_url}}"
+									],
+									"path": [
+										"posts",
+										"feed"
+									],
+									"query": [
+										{
+											"key": "limit",
+											"value": "10"
+										},
+										{
+											"key": "lastPostId",
+											"value": "",
+											"description": "Cursor for infinite scroll"
+										},
+										{
+											"key": "topics",
+											"value": "Technology,AI",
+											"description": "Comma-separated topic names"
+										}
+									]
+								},
+								"description": "Get personalized feed with infinite scroll pagination."
+							},
+							"response": []
+						},
+						{
+							"name": "Get Trending Posts",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{post_url}}/posts/trending?page=1&limit=10&topics=Technology,AI",
+									"host": [
+										"{{post_url}}"
+									],
+									"path": [
+										"posts",
+										"trending"
+									],
+									"query": [
+										{
+											"key": "page",
+											"value": "1"
+										},
+										{
+											"key": "limit",
+											"value": "10"
+										},
+										{
+											"key": "topics",
+											"value": "Technology,AI"
+										}
+									]
+								},
+								"description": "Get trending posts from the last 24 hours ordered by engagement."
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Reactions",
+					"item": [
+						{
+							"name": "Add/Update/Remove Reaction",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"postId\": \"post-uuid-here\",\n  \"type\": \"CELEBRATE\"\n}"
+								},
+								"url": {
+									"raw": "{{post_url}}/posts/reactions",
+									"host": [
+										"{{post_url}}"
+									],
+									"path": [
+										"posts",
+										"reactions"
+									]
+								},
+								"description": "Add, update, or remove reaction on a post. Types: LIKE, LOVE, CELEBRATE, SUPPORT, LAUGH, INSIGHTFUL"
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Comments",
+					"item": [
+						{
+							"name": "Create Comment",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"postId\": \"post-uuid-here\",\n  \"content\": \"Great post! Thanks for sharing.\",\n  \"parentId\": null\n}"
+								},
+								"url": {
+									"raw": "{{post_url}}/posts/comments",
+									"host": [
+										"{{post_url}}"
+									],
+									"path": [
+										"posts",
+										"comments"
+									]
+								},
+								"description": "Create a comment on a post. Use parentId for replies."
+							},
+							"response": []
+						},
+						{
+							"name": "Get Post Comments",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{post_url}}/posts/:postId/comments?page=1&limit=10&parentId=",
+									"host": [
+										"{{post_url}}"
+									],
+									"path": [
+										"posts",
+										":postId",
+										"comments"
+									],
+									"query": [
+										{
+											"key": "page",
+											"value": "1"
+										},
+										{
+											"key": "limit",
+											"value": "10"
+										},
+										{
+											"key": "parentId",
+											"value": "",
+											"description": "Get replies to specific comment"
+										}
+									],
+									"variable": [
+										{
+											"key": "postId",
+											"value": "post-uuid-here"
+										}
+									]
+								},
+								"description": "Get comments for a post with pagination and nested replies."
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Topics",
+					"item": [
+						{
+							"name": "Get All Topics",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{post_url}}/topics?page=1&limit=50",
+									"host": [
+										"{{post_url}}"
+									],
+									"path": [
+										"topics"
+									],
+									"query": [
+										{
+											"key": "page",
+											"value": "1"
+										},
+										{
+											"key": "limit",
+											"value": "50"
+										}
+									]
+								},
+								"description": "Get all available topics with pagination."
+							},
+							"response": []
+						},
+						{
+							"name": "Get Trending Topics",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{post_url}}/topics/trending?limit=10",
+									"host": [
+										"{{post_url}}"
+									],
+									"path": [
+										"topics",
+										"trending"
+									],
+									"query": [
+										{
+											"key": "limit",
+											"value": "10"
+										}
+									]
+								},
+								"description": "Get trending topics based on recent post activity."
+							},
+							"response": []
+						},
+						{
+							"name": "Get Posts by Topic",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{post_url}}/topics/:topicId/posts?page=1&limit=10",
+									"host": [
+										"{{post_url}}"
+									],
+									"path": [
+										"topics",
+										":topicId",
+										"posts"
+									],
+									"query": [
+										{
+											"key": "page",
+											"value": "1"
+										},
+										{
+											"key": "limit",
+											"value": "10"
+										}
+									],
+									"variable": [
+										{
+											"key": "topicId",
+											"value": "topic-uuid-here"
+										}
+									]
+								},
+								"description": "Get all posts for a specific topic."
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Search",
+					"item": [
+						{
+							"name": "Search Users",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{post_url}}/search/users?q=john&page=1&limit=10",
+									"host": [
+										"{{post_url}}"
+									],
+									"path": [
+										"search",
+										"users"
+									],
+									"query": [
+										{
+											"key": "q",
+											"value": "john"
+										},
+										{
+											"key": "page",
+											"value": "1"
+										},
+										{
+											"key": "limit",
+											"value": "10"
+										}
+									]
+								},
+								"description": "Search users by name, profession, email, or company."
+							},
+							"response": []
+						},
+						{
+							"name": "Search Posts",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{post_url}}/search/posts?q=javascript&page=1&limit=10",
+									"host": [
+										"{{post_url}}"
+									],
+									"path": [
+										"search",
+										"posts"
+									],
+									"query": [
+										{
+											"key": "q",
+											"value": "javascript"
+										},
+										{
+											"key": "page",
+											"value": "1"
+										},
+										{
+											"key": "limit",
+											"value": "10"
+										}
+									]
+								},
+								"description": "Search posts by content, topic names, or author names."
+							},
+							"response": []
+						},
+						{
+							"name": "Search Topics",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{post_url}}/search/topics?q=tech&page=1&limit=10",
+									"host": [
+										"{{post_url}}"
+									],
+									"path": [
+										"search",
+										"topics"
+									],
+									"query": [
+										{
+											"key": "q",
+											"value": "tech"
+										},
+										{
+											"key": "page",
+											"value": "1"
+										},
+										{
+											"key": "limit",
+											"value": "10"
+										}
+									]
+								},
+								"description": "Search topics by name."
+							},
+							"response": []
+						}
+					]
+				}
+			],
+			"description": "Post service endpoints for creating posts, reactions, comments, and social interactions"
+		},
+		{
+			"name": "💬 Chat Service",
+			"item": [
+				{
+					"name": "Chat Rooms",
+					"item": [
+						{
+							"name": "Create Chat Room",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"name\": \"Project Discussion\",\n  \"description\": \"Discussion about the new project\",\n  \"type\": \"GROUP\",\n  \"memberIds\": [\"user-uuid-1\", \"user-uuid-2\"]\n}"
+								},
+								"url": {
+									"raw": "{{chat_url}}/chat/rooms",
+									"host": [
+										"{{chat_url}}"
+									],
+									"path": [
+										"chat",
+										"rooms"
+									]
+								},
+								"description": "Create a new chat room (GROUP or DIRECT)."
+							},
+							"response": []
+						},
+						{
+							"name": "Get User Chat Rooms",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{chat_url}}/chat/rooms?page=1&limit=20",
+									"host": [
+										"{{chat_url}}"
+									],
+									"path": [
+										"chat",
+										"rooms"
+									],
+									"query": [
+										{
+											"key": "page",
+											"value": "1"
+										},
+										{
+											"key": "limit",
+											"value": "20"
+										}
+									]
+								},
+								"description": "Get all chat rooms for the current user."
+							},
+							"response": []
+						},
+						{
+							"name": "Find Direct Message Room",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{chat_url}}/chat/rooms/find/:otherUserId",
+									"host": [
+										"{{chat_url}}"
+									],
+									"path": [
+										"chat",
+										"rooms",
+										"find",
+										":otherUserId"
+									],
+									"variable": [
+										{
+											"key": "otherUserId",
+											"value": "user-uuid-here"
+										}
+									]
+								},
+								"description": "Find or create a direct message room with another user."
+							},
+							"response": []
+						},
+						{
+							"name": "Get Chat Room",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{chat_url}}/chat/rooms/:roomId",
+									"host": [
+										"{{chat_url}}"
+									],
+									"path": [
+										"chat",
+										"rooms",
+										":roomId"
+									],
+									"variable": [
+										{
+											"key": "roomId",
+											"value": "room-uuid-here"
+										}
+									]
+								},
+								"description": "Get details of a specific chat room."
+							},
+							"response": []
+						},
+						{
+							"name": "Update Chat Room",
+							"request": {
+								"method": "PUT",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"name\": \"Updated Project Discussion\",\n  \"description\": \"Updated description for the project discussion\"\n}"
+								},
+								"url": {
+									"raw": "{{chat_url}}/chat/rooms/:roomId",
+									"host": [
+										"{{chat_url}}"
+									],
+									"path": [
+										"chat",
+										"rooms",
+										":roomId"
+									],
+									"variable": [
+										{
+											"key": "roomId",
+											"value": "room-uuid-here"
+										}
+									]
+								},
+								"description": "Update chat room details (name, description)."
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Room Members",
+					"item": [
+						{
+							"name": "Add Chat Room Members",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"memberIds\": [\"user-uuid-1\", \"user-uuid-2\"]\n}"
+								},
+								"url": {
+									"raw": "{{chat_url}}/chat/rooms/:roomId/members",
+									"host": [
+										"{{chat_url}}"
+									],
+									"path": [
+										"chat",
+										"rooms",
+										":roomId",
+										"members"
+									],
+									"variable": [
+										{
+											"key": "roomId",
+											"value": "room-uuid-here"
+										}
+									]
+								},
+								"description": "Add members to a chat room."
+							},
+							"response": []
+						},
+						{
+							"name": "Remove Chat Room Member",
+							"request": {
+								"method": "DELETE",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{chat_url}}/chat/rooms/:roomId/members/:memberId",
+									"host": [
+										"{{chat_url}}"
+									],
+									"path": [
+										"chat",
+										"rooms",
+										":roomId",
+										"members",
+										":memberId"
+									],
+									"variable": [
+										{
+											"key": "roomId",
+											"value": "room-uuid-here"
+										},
+										{
+											"key": "memberId",
+											"value": "member-uuid-here"
+										}
+									]
+								},
+								"description": "Remove a member from a chat room."
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Messages",
+					"item": [
+						{
+							"name": "Send Message",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"content\": \"Hello everyone! How's the project going?\",\n  \"type\": \"TEXT\",\n  \"mediaUrl\": null\n}"
+								},
+								"url": {
+									"raw": "{{chat_url}}/chat/rooms/:roomId/messages",
+									"host": [
+										"{{chat_url}}"
+									],
+									"path": [
+										"chat",
+										"rooms",
+										":roomId",
+										"messages"
+									],
+									"variable": [
+										{
+											"key": "roomId",
+											"value": "room-uuid-here"
+										}
+									]
+								},
+								"description": "Send a message to a chat room. Types: TEXT, IMAGE, FILE, AUDIO, VIDEO"
+							},
+							"response": []
+						},
+						{
+							"name": "Get Chat Messages",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{chat_url}}/chat/rooms/:roomId/messages?page=1&limit=50&before=",
+									"host": [
+										"{{chat_url}}"
+									],
+									"path": [
+										"chat",
+										"rooms",
+										":roomId",
+										"messages"
+									],
+									"query": [
+										{
+											"key": "page",
+											"value": "1"
+										},
+										{
+											"key": "limit",
+											"value": "50"
+										},
+										{
+											"key": "before",
+											"value": "",
+											"description": "Get messages before this timestamp"
+										}
+									],
+									"variable": [
+										{
+											"key": "roomId",
+											"value": "room-uuid-here"
+										}
+									]
+								},
+								"description": "Get messages from a chat room with pagination."
+							},
+							"response": []
+						},
+						{
+							"name": "Mark Message as Read",
+							"request": {
+								"method": "PUT",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{chat_url}}/chat/messages/:messageId/read",
+									"host": [
+										"{{chat_url}}"
+									],
+									"path": [
+										"chat",
+										"messages",
+										":messageId",
+										"read"
+									],
+									"variable": [
+										{
+											"key": "messageId",
+											"value": "message-uuid-here"
+										}
+									]
+								},
+								"description": "Mark a message as read by the current user."
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Media",
+					"item": [
+						{
+							"name": "Get Media Upload URL",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"fileName\": \"image.jpg\",\n  \"fileType\": \"image/jpeg\",\n  \"fileSize\": 2048000\n}"
+								},
+								"url": {
+									"raw": "{{chat_url}}/chat/media/upload-url",
+									"host": [
+										"{{chat_url}}"
+									],
+									"path": [
+										"chat",
+										"media",
+										"upload-url"
+									]
+								},
+								"description": "Get pre-signed URL for media upload."
+							},
+							"response": []
+						},
+						{
+							"name": "Get Media Download URL",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{chat_url}}/chat/media/download?key=media-key-here",
+									"host": [
+										"{{chat_url}}"
+									],
+									"path": [
+										"chat",
+										"media",
+										"download"
+									],
+									"query": [
+										{
+											"key": "key",
+											"value": "media-key-here"
+										}
+									]
+								},
+								"description": "Get pre-signed URL for media download."
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{chat_url}}/",
+							"host": [
+								"{{chat_url}}"
+							],
+							"path": [
+								""
+							]
+						},
+						"description": "Chat service health check endpoint"
+					},
+					"response": []
+				}
+			],
+			"description": "Chat service endpoints for real-time messaging, chat rooms, and media sharing"
+		},
+		{
+			"name": "👨‍💼 Admin Service",
+			"item": [
+				{
+					"name": "Authentication",
+					"item": [
+						{
+							"name": "Admin Login",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"if (pm.response.code === 200) {",
+											"    const response = pm.response.json();",
+											"    if (response.accessToken) {",
+											"        pm.collectionVariables.set('admin_token', response.accessToken);",
+											"        console.log('Admin token saved to collection variables');",
+											"    }",
+											"}"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"email\": \"admin@example.com\",\n  \"password\": \"password123\"\n}"
+								},
+								"url": {
+									"raw": "{{admin_url}}/admin/auth/login",
+									"host": [
+										"{{admin_url}}"
+									],
+									"path": [
+										"admin",
+										"auth",
+										"login"
+									]
+								},
+								"description": "Admin login to get access token for admin operations."
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Admin Management",
+					"item": [
+						{
+							"name": "Get Admin Profile",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{admin_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{admin_url}}/admin/profile",
+									"host": [
+										"{{admin_url}}"
+									],
+									"path": [
+										"admin",
+										"profile"
+									]
+								},
+								"description": "Get current admin profile information."
+							},
+							"response": []
+						},
+						{
+							"name": "Update Admin Profile",
+							"request": {
+								"method": "PUT",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{admin_token}}"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"name\": \"Updated Admin Name\",\n  \"email\": \"updated.admin@example.com\"\n}"
+								},
+								"url": {
+									"raw": "{{admin_url}}/admin/profile",
+									"host": [
+										"{{admin_url}}"
+									],
+									"path": [
+										"admin",
+										"profile"
+									]
+								},
+								"description": "Update admin profile information."
+							},
+							"response": []
+						},
+						{
+							"name": "Get All Admins",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{admin_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{admin_url}}/admin/all",
+									"host": [
+										"{{admin_url}}"
+									],
+									"path": [
+										"admin",
+										"all"
+									]
+								},
+								"description": "Get list of all admin users."
+							},
+							"response": []
+						},
+						{
+							"name": "Get Admin Stats",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{admin_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{admin_url}}/admin/stats",
+									"host": [
+										"{{admin_url}}"
+									],
+									"path": [
+										"admin",
+										"stats"
+									]
+								},
+								"description": "Get admin statistics and metrics."
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "User Management",
+					"item": [
+						{
+							"name": "Get All Users",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{admin_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{admin_url}}/admin/users?status=ACTIVE&search=john&page=1&limit=50",
+									"host": [
+										"{{admin_url}}"
+									],
+									"path": [
+										"admin",
+										"users"
+									],
+									"query": [
+										{
+											"key": "status",
+											"value": "ACTIVE"
+										},
+										{
+											"key": "search",
+											"value": "john"
+										},
+										{
+											"key": "page",
+											"value": "1"
+										},
+										{
+											"key": "limit",
+											"value": "50"
+										}
+									]
+								},
+								"description": "Get all users with filtering and pagination."
+							},
+							"response": []
+						},
+						{
+							"name": "Get User Stats",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{admin_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{admin_url}}/admin/users/stats",
+									"host": [
+										"{{admin_url}}"
+									],
+									"path": [
+										"admin",
+										"users",
+										"stats"
+									]
+								},
+								"description": "Get user statistics and metrics."
+							},
+							"response": []
+						},
+						{
+							"name": "Get User by ID",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{admin_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{admin_url}}/admin/users/:userId",
+									"host": [
+										"{{admin_url}}"
+									],
+									"path": [
+										"admin",
+										"users",
+										":userId"
+									],
+									"variable": [
+										{
+											"key": "userId",
+											"value": "user-uuid-here"
+										}
+									]
+								},
+								"description": "Get detailed information about a specific user."
+							},
+							"response": []
+						},
+						{
+							"name": "Blacklist User",
+							"request": {
+								"method": "PUT",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{admin_token}}"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"reason\": \"Spam behavior detected\"\n}"
+								},
+								"url": {
+									"raw": "{{admin_url}}/admin/users/:userId/blacklist",
+									"host": [
+										"{{admin_url}}"
+									],
+									"path": [
+										"admin",
+										"users",
+										":userId",
+										"blacklist"
+									],
+									"variable": [
+										{
+											"key": "userId",
+											"value": "user-uuid-here"
+										}
+									]
+								},
+								"description": "Blacklist a user with reason."
+							},
+							"response": []
+						},
+						{
+							"name": "Unblacklist User",
+							"request": {
+								"method": "PUT",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{admin_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{admin_url}}/admin/users/:userId/unblacklist",
+									"host": [
+										"{{admin_url}}"
+									],
+									"path": [
+										"admin",
+										"users",
+										":userId",
+										"unblacklist"
+									],
+									"variable": [
+										{
+											"key": "userId",
+											"value": "user-uuid-here"
+										}
+									]
+								},
+								"description": "Remove user from blacklist."
+							},
+							"response": []
+						},
+						{
+							"name": "Suspend User",
+							"request": {
+								"method": "PUT",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{admin_token}}"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"reason\": \"Violation of community guidelines\",\n  \"duration\": 7\n}"
+								},
+								"url": {
+									"raw": "{{admin_url}}/admin/users/:userId/suspend",
+									"host": [
+										"{{admin_url}}"
+									],
+									"path": [
+										"admin",
+										"users",
+										":userId",
+										"suspend"
+									],
+									"variable": [
+										{
+											"key": "userId",
+											"value": "user-uuid-here"
+										}
+									]
+								},
+								"description": "Suspend a user for specified duration (days)."
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Event Management",
+					"item": [
+						{
+							"name": "Create Event - Step 1 (Basic Details)",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{admin_token}}"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"title\": \"Tech Conference 2024\",\n  \"description\": \"Annual technology conference featuring the latest innovations in AI, blockchain, and web development\",\n  \"startDateTime\": \"2024-12-15T10:00:00Z\",\n  \"endDateTime\": \"2024-12-15T18:00:00Z\",\n  \"venueType\": \"PHYSICAL\",\n  \"location\": \"Convention Center\",\n  \"venueAddress\": \"123 Tech Street, Tech City, TC 12345\"\n}"
+								},
+								"url": {
+									"raw": "{{admin_url}}/admin/events/step1",
+									"host": [
+										"{{admin_url}}"
+									],
+									"path": [
+										"admin",
+										"events",
+										"step1"
+									]
+								},
+								"description": "Create event step 1 - Basic event details (title, description, dates, venue)"
+							},
+							"response": []
+						},
+						{
+							"name": "Update Event - Step 2 (Configuration)",
+							"request": {
+								"method": "PUT",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{admin_token}}"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"featuredImage\": \"https://example.com/event-banner.jpg\",\n  \"maxAttendees\": 500,\n  \"price\": 999.99,\n  \"isFree\": false,\n  \"category\": \"FEATURED\",\n  \"registrationFields\": [\n    {\n      \"fieldName\": \"Full Name\",\n      \"fieldType\": \"TEXT\",\n      \"isRequired\": true,\n      \"placeholder\": \"Enter your full name\",\n      \"order\": 1\n    },\n    {\n      \"fieldName\": \"Email\",\n      \"fieldType\": \"EMAIL\",\n      \"isRequired\": true,\n      \"placeholder\": \"Enter your email address\",\n      \"order\": 2\n    },\n    {\n      \"fieldName\": \"Company\",\n      \"fieldType\": \"TEXT\",\n      \"isRequired\": false,\n      \"placeholder\": \"Enter your company name\",\n      \"order\": 3\n    },\n    {\n      \"fieldName\": \"Experience Level\",\n      \"fieldType\": \"SELECT\",\n      \"isRequired\": true,\n      \"options\": [\"Beginner\", \"Intermediate\", \"Advanced\"],\n      \"order\": 4\n    }\n  ]\n}"
+								},
+								"url": {
+									"raw": "{{admin_url}}/admin/events/:eventId/step2",
+									"host": [
+										"{{admin_url}}"
+									],
+									"path": [
+										"admin",
+										"events",
+										":eventId",
+										"step2"
+									],
+									"variable": [
+										{
+											"key": "eventId",
+											"value": "event-uuid-here"
+										}
+									]
+								},
+								"description": "Update event step 2 - Configuration (pricing, capacity, registration fields)"
+							},
+							"response": []
+						},
+						{
+							"name": "Update Event - Step 3 (Speakers & Agenda)",
+							"request": {
+								"method": "PUT",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{admin_token}}"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"speakers\": [\n    {\n      \"name\": \"Dr. Jane Smith\",\n      \"title\": \"AI Research Director\",\n      \"company\": \"TechCorp\",\n      \"bio\": \"Leading AI researcher with 15+ years of experience\",\n      \"profileImage\": \"https://example.com/jane-smith.jpg\",\n      \"socialLinks\": {\n        \"linkedin\": \"https://linkedin.com/in/janesmith\",\n        \"twitter\": \"https://twitter.com/janesmith\"\n      }\n    }\n  ],\n  \"agenda\": [\n    {\n      \"title\": \"Opening Keynote: The Future of AI\",\n      \"description\": \"Exploring the latest trends and future directions in artificial intelligence\",\n      \"startTime\": \"2024-12-15T10:00:00Z\",\n      \"endTime\": \"2024-12-15T11:00:00Z\",\n      \"speakerName\": \"Dr. Jane Smith\",\n      \"sessionType\": \"KEYNOTE\"\n    },\n    {\n      \"title\": \"Panel Discussion: Ethics in AI\",\n      \"description\": \"Industry experts discuss the ethical implications of AI development\",\n      \"startTime\": \"2024-12-15T11:30:00Z\",\n      \"endTime\": \"2024-12-15T12:30:00Z\",\n      \"sessionType\": \"PANEL\"\n    }\n  ]\n}"
+								},
+								"url": {
+									"raw": "{{admin_url}}/admin/events/:eventId/step3",
+									"host": [
+										"{{admin_url}}"
+									],
+									"path": [
+										"admin",
+										"events",
+										":eventId",
+										"step3"
+									],
+									"variable": [
+										{
+											"key": "eventId",
+											"value": "event-uuid-here"
+										}
+									]
+								},
+								"description": "Update event step 3 - Add speakers and agenda items"
+							},
+							"response": []
+						},
+						{
+							"name": "Finalize Event (Publish)",
+							"request": {
+								"method": "PUT",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{admin_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{admin_url}}/admin/events/:eventId/finalize",
+									"host": [
+										"{{admin_url}}"
+									],
+									"path": [
+										"admin",
+										"events",
+										":eventId",
+										"finalize"
+									],
+									"variable": [
+										{
+											"key": "eventId",
+											"value": "event-uuid-here"
+										}
+									]
+								},
+								"description": "Finalize and publish the event (Step 4 - makes event public)"
+							},
+							"response": []
+						},
+						{
+							"name": "Get All Events (Admin View)",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{admin_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{admin_url}}/admin/events?status=PUBLISHED&category=FEATURED&page=1&limit=20",
+									"host": [
+										"{{admin_url}}"
+									],
+									"path": [
+										"admin",
+										"events"
+									],
+									"query": [
+										{
+											"key": "status",
+											"value": "PUBLISHED"
+										},
+										{
+											"key": "category",
+											"value": "FEATURED"
+										},
+										{
+											"key": "page",
+											"value": "1"
+										},
+										{
+											"key": "limit",
+											"value": "20"
+										}
+									]
+								},
+								"description": "Get all events with admin privileges and filtering options"
+							},
+							"response": []
+						},
+						{
+							"name": "Get All Events (Complete List)",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{admin_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{admin_url}}/admin/events/all?status=DRAFT&search=tech&page=1&limit=50",
+									"host": [
+										"{{admin_url}}"
+									],
+									"path": [
+										"admin",
+										"events",
+										"all"
+									],
+									"query": [
+										{
+											"key": "status",
+											"value": "DRAFT"
+										},
+										{
+											"key": "search",
+											"value": "tech"
+										},
+										{
+											"key": "page",
+											"value": "1"
+										},
+										{
+											"key": "limit",
+											"value": "50"
+										}
+									]
+								},
+								"description": "Get complete list of all events including drafts with search and filtering"
+							},
+							"response": []
+						},
+						{
+							"name": "Get Event by ID (Admin)",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{admin_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{admin_url}}/admin/events/:eventId",
+									"host": [
+										"{{admin_url}}"
+									],
+									"path": [
+										"admin",
+										"events",
+										":eventId"
+									],
+									"variable": [
+										{
+											"key": "eventId",
+											"value": "event-uuid-here"
+										}
+									]
+								},
+								"description": "Get detailed event information with admin privileges"
+							},
+							"response": []
+						},
+						{
+							"name": "Update Event Status",
+							"request": {
+								"method": "PUT",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{admin_token}}"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"status\": \"PUBLISHED\",\n  \"reason\": \"Event approved and ready for public registration\"\n}"
+								},
+								"url": {
+									"raw": "{{admin_url}}/admin/events/:eventId/status",
+									"host": [
+										"{{admin_url}}"
+									],
+									"path": [
+										"admin",
+										"events",
+										":eventId",
+										"status"
+									],
+									"variable": [
+										{
+											"key": "eventId",
+											"value": "event-uuid-here"
+										}
+									]
+								},
+								"description": "Update event status (DRAFT, PUBLISHED, CANCELLED, COMPLETED)"
+							},
+							"response": []
+						},
+						{
+							"name": "Delete Event",
+							"request": {
+								"method": "DELETE",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{admin_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{admin_url}}/admin/events/:eventId",
+									"host": [
+										"{{admin_url}}"
+									],
+									"path": [
+										"admin",
+										"events",
+										":eventId"
+									],
+									"variable": [
+										{
+											"key": "eventId",
+											"value": "event-uuid-here"
+										}
+									]
+								},
+								"description": "Permanently delete an event (use with caution)"
+							},
+							"response": []
+						},
+						{
+							"name": "Get Event Registrations",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{admin_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{admin_url}}/admin/events/:eventId/registrations?status=REGISTERED&page=1&limit=50",
+									"host": [
+										"{{admin_url}}"
+									],
+									"path": [
+										"admin",
+										"events",
+										":eventId",
+										"registrations"
+									],
+									"query": [
+										{
+											"key": "status",
+											"value": "REGISTERED"
+										},
+										{
+											"key": "page",
+											"value": "1"
+										},
+										{
+											"key": "limit",
+											"value": "50"
+										}
+									],
+									"variable": [
+										{
+											"key": "eventId",
+											"value": "event-uuid-here"
+										}
+									]
+								},
+								"description": "Get all registrations for a specific event with filtering"
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Content Management",
+					"item": [
+						{
+							"name": "Get All Posts",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{admin_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{admin_url}}/admin/content/posts?status=ACTIVE&page=1&limit=50",
+									"host": [
+										"{{admin_url}}"
+									],
+									"path": [
+										"admin",
+										"content",
+										"posts"
+									],
+									"query": [
+										{
+											"key": "status",
+											"value": "ACTIVE"
+										},
+										{
+											"key": "page",
+											"value": "1"
+										},
+										{
+											"key": "limit",
+											"value": "50"
+										}
+									]
+								},
+								"description": "Get all posts with filtering and pagination."
+							},
+							"response": []
+						},
+						{
+							"name": "Get Post Details",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{admin_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{admin_url}}/admin/content/posts/:postId",
+									"host": [
+										"{{admin_url}}"
+									],
+									"path": [
+										"admin",
+										"content",
+										"posts",
+										":postId"
+									],
+									"variable": [
+										{
+											"key": "postId",
+											"value": "post-uuid-here"
+										}
+									]
+								},
+								"description": "Get detailed information about a specific post."
+							},
+							"response": []
+						},
+						{
+							"name": "Moderate Post",
+							"request": {
+								"method": "PUT",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{admin_token}}"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"action\": \"HIDE\",\n  \"reason\": \"Inappropriate content\"\n}"
+								},
+								"url": {
+									"raw": "{{admin_url}}/admin/content/posts/:postId/moderate",
+									"host": [
+										"{{admin_url}}"
+									],
+									"path": [
+										"admin",
+										"content",
+										"posts",
+										":postId",
+										"moderate"
+									],
+									"variable": [
+										{
+											"key": "postId",
+											"value": "post-uuid-here"
+										}
+									]
+								},
+								"description": "Moderate a post (HIDE, SHOW, DELETE)."
+							},
+							"response": []
+						},
+						{
+							"name": "Delete Post",
+							"request": {
+								"method": "DELETE",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{admin_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{admin_url}}/admin/content/posts/:postId",
+									"host": [
+										"{{admin_url}}"
+									],
+									"path": [
+										"admin",
+										"content",
+										"posts",
+										":postId"
+									],
+									"variable": [
+										{
+											"key": "postId",
+											"value": "post-uuid-here"
+										}
+									]
+								},
+								"description": "Permanently delete a post."
+							},
+							"response": []
+						},
+						{
+							"name": "Get Content Stats",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{admin_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{admin_url}}/admin/content/stats",
+									"host": [
+										"{{admin_url}}"
+									],
+									"path": [
+										"admin",
+										"content",
+										"stats"
+									]
+								},
+								"description": "Get content statistics and metrics."
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Analytics",
+					"item": [
+						{
+							"name": "Dashboard Stats",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{admin_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{admin_url}}/admin/analytics/dashboard",
+									"host": [
+										"{{admin_url}}"
+									],
+									"path": [
+										"admin",
+										"analytics",
+										"dashboard"
+									]
+								},
+								"description": "Get dashboard statistics overview."
+							},
+							"response": []
+						},
+						{
+							"name": "User Growth Analytics",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{admin_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{admin_url}}/admin/analytics/users/growth?months=6",
+									"host": [
+										"{{admin_url}}"
+									],
+									"path": [
+										"admin",
+										"analytics",
+										"users",
+										"growth"
+									],
+									"query": [
+										{
+											"key": "months",
+											"value": "6"
+										}
+									]
+								},
+								"description": "Get user growth analytics for specified months."
+							},
+							"response": []
+						},
+						{
+							"name": "Event Analytics",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{admin_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{admin_url}}/admin/analytics/events",
+									"host": [
+										"{{admin_url}}"
+									],
+									"path": [
+										"admin",
+										"analytics",
+										"events"
+									]
+								},
+								"description": "Get event analytics and metrics."
+							},
+							"response": []
+						},
+						{
+							"name": "Revenue Analytics",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{admin_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{admin_url}}/admin/analytics/revenue",
+									"host": [
+										"{{admin_url}}"
+									],
+									"path": [
+										"admin",
+										"analytics",
+										"revenue"
+									]
+								},
+								"description": "Get revenue analytics and financial metrics."
+							},
+							"response": []
+						},
+						{
+							"name": "Platform Engagement Metrics",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{admin_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{admin_url}}/admin/analytics/engagement",
+									"host": [
+										"{{admin_url}}"
+									],
+									"path": [
+										"admin",
+										"analytics",
+										"engagement"
+									]
+								},
+								"description": "Get platform engagement metrics and user activity."
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Logging",
+					"item": [
+						{
+							"name": "Get Admin Logs",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{admin_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{admin_url}}/admin/logs?adminId=&action=&page=1&limit=50",
+									"host": [
+										"{{admin_url}}"
+									],
+									"path": [
+										"admin",
+										"logs"
+									],
+									"query": [
+										{
+											"key": "adminId",
+											"value": ""
+										},
+										{
+											"key": "action",
+											"value": ""
+										},
+										{
+											"key": "page",
+											"value": "1"
+										},
+										{
+											"key": "limit",
+											"value": "50"
+										}
+									]
+								},
+								"description": "Get admin activity logs with filtering."
+							},
+							"response": []
+						},
+						{
+							"name": "Get My Activity",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{admin_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{admin_url}}/admin/logs/my-activity?days=30",
+									"host": [
+										"{{admin_url}}"
+									],
+									"path": [
+										"admin",
+										"logs",
+										"my-activity"
+									],
+									"query": [
+										{
+											"key": "days",
+											"value": "30"
+										}
+									]
+								},
+								"description": "Get current admin's activity logs."
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{admin_url}}/",
+							"host": [
+								"{{admin_url}}"
+							],
+							"path": [
+								""
+							]
+						},
+						"description": "Admin service health check endpoint"
+					},
+					"response": []
+				}
+			],
+			"description": "Admin service endpoints for platform administration, user management, and analytics"
+		},
+		{
+			"name": "🎉 Events Service",
+			"item": [
+				{
+					"name": "Events Discovery",
+					"item": [
+						{
+							"name": "Get Public Events",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{events_url}}/events?status=PUBLISHED&category=FEATURED&search=tech&page=1&limit=20",
+									"host": [
+										"{{events_url}}"
+									],
+									"path": [
+										"events"
+									],
+									"query": [
+										{
+											"key": "status",
+											"value": "PUBLISHED"
+										},
+										{
+											"key": "category",
+											"value": "FEATURED"
+										},
+										{
+											"key": "search",
+											"value": "tech"
+										},
+										{
+											"key": "page",
+											"value": "1"
+										},
+										{
+											"key": "limit",
+											"value": "20"
+										}
+									]
+								},
+								"description": "Get public events with filtering and search capabilities."
+							},
+							"response": []
+						},
+						{
+							"name": "Get Featured Events",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{events_url}}/events/featured?limit=10",
+									"host": [
+										"{{events_url}}"
+									],
+									"path": [
+										"events",
+										"featured"
+									],
+									"query": [
+										{
+											"key": "limit",
+											"value": "10"
+										}
+									]
+								},
+								"description": "Get featured events for homepage display."
+							},
+							"response": []
+						},
+						{
+							"name": "Get Upcoming Events",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{events_url}}/events/upcoming?page=1&limit=20&category=FEATURED",
+									"host": [
+										"{{events_url}}"
+									],
+									"path": [
+										"events",
+										"upcoming"
+									],
+									"query": [
+										{
+											"key": "page",
+											"value": "1"
+										},
+										{
+											"key": "limit",
+											"value": "20"
+										},
+										{
+											"key": "category",
+											"value": "FEATURED"
+										}
+									]
+								},
+								"description": "Get upcoming events with pagination and category filtering."
+							},
+							"response": []
+						},
+						{
+							"name": "Search Events",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{events_url}}/events/search?q=conference&venueType=PHYSICAL&category=FEATURED&minPrice=0&maxPrice=1000&startDate=2024-01-01&endDate=2024-12-31&page=1&limit=20",
+									"host": [
+										"{{events_url}}"
+									],
+									"path": [
+										"events",
+										"search"
+									],
+									"query": [
+										{
+											"key": "q",
+											"value": "conference"
+										},
+										{
+											"key": "venueType",
+											"value": "PHYSICAL"
+										},
+										{
+											"key": "category",
+											"value": "FEATURED"
+										},
+										{
+											"key": "minPrice",
+											"value": "0"
+										},
+										{
+											"key": "maxPrice",
+											"value": "1000"
+										},
+										{
+											"key": "startDate",
+											"value": "2024-01-01"
+										},
+										{
+											"key": "endDate",
+											"value": "2024-12-31"
+										},
+										{
+											"key": "page",
+											"value": "1"
+										},
+										{
+											"key": "limit",
+											"value": "20"
+										}
+									]
+								},
+								"description": "Advanced event search with multiple filters."
+							},
+							"response": []
+						},
+						{
+							"name": "Get Events by Category",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{events_url}}/events/category/:category?page=1&limit=20",
+									"host": [
+										"{{events_url}}"
+									],
+									"path": [
+										"events",
+										"category",
+										":category"
+									],
+									"query": [
+										{
+											"key": "page",
+											"value": "1"
+										},
+										{
+											"key": "limit",
+											"value": "20"
+										}
+									],
+									"variable": [
+										{
+											"key": "category",
+											"value": "FEATURED"
+										}
+									]
+								},
+								"description": "Get events by specific category (FEATURED, SPOTLIGHT, TRENDING)."
+							},
+							"response": []
+						},
+						{
+							"name": "Get Event Stats",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{events_url}}/events/stats",
+									"host": [
+										"{{events_url}}"
+									],
+									"path": [
+										"events",
+										"stats"
+									]
+								},
+								"description": "Get general event statistics."
+							},
+							"response": []
+						},
+						{
+							"name": "Get Event by ID",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{events_url}}/events/:eventId?includeRegistrationFields=true",
+									"host": [
+										"{{events_url}}"
+									],
+									"path": [
+										"events",
+										":eventId"
+									],
+									"query": [
+										{
+											"key": "includeRegistrationFields",
+											"value": "true"
+										}
+									],
+									"variable": [
+										{
+											"key": "eventId",
+											"value": "event-uuid-here"
+										}
+									]
+								},
+								"description": "Get detailed event information by ID."
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Event Registration",
+					"item": [
+						{
+							"name": "Register for Event",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"registrationData\": {\n    \"Full Name\": \"John Doe\",\n    \"Email\": \"john@example.com\",\n    \"Company\": \"Tech Corp\",\n    \"Experience Level\": \"Intermediate\",\n    \"Dietary Restrictions\": \"Vegetarian\"\n  }\n}"
+								},
+								"url": {
+									"raw": "{{events_url}}/registrations/events/:eventId",
+									"host": [
+										"{{events_url}}"
+									],
+									"path": [
+										"registrations",
+										"events",
+										":eventId"
+									],
+									"variable": [
+										{
+											"key": "eventId",
+											"value": "event-uuid-here"
+										}
+									]
+								},
+								"description": "Register for an event with custom form data."
+							},
+							"response": []
+						},
+						{
+							"name": "Get User Registrations",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{events_url}}/registrations?status=REGISTERED&page=1&limit=20",
+									"host": [
+										"{{events_url}}"
+									],
+									"path": [
+										"registrations"
+									],
+									"query": [
+										{
+											"key": "status",
+											"value": "REGISTERED"
+										},
+										{
+											"key": "page",
+											"value": "1"
+										},
+										{
+											"key": "limit",
+											"value": "20"
+										}
+									]
+								},
+								"description": "Get current user's event registrations."
+							},
+							"response": []
+						},
+						{
+							"name": "Get Registration Stats",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{events_url}}/registrations/stats",
+									"host": [
+										"{{events_url}}"
+									],
+									"path": [
+										"registrations",
+										"stats"
+									]
+								},
+								"description": "Get user's registration statistics."
+							},
+							"response": []
+						},
+						{
+							"name": "Get Registration by ID",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{events_url}}/registrations/:registrationId",
+									"host": [
+										"{{events_url}}"
+									],
+									"path": [
+										"registrations",
+										":registrationId"
+									],
+									"variable": [
+										{
+											"key": "registrationId",
+											"value": "registration-uuid-here"
+										}
+									]
+								},
+								"description": "Get specific registration details."
+							},
+							"response": []
+						},
+						{
+							"name": "Cancel Registration",
+							"request": {
+								"method": "PUT",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{events_url}}/registrations/:registrationId/cancel",
+									"host": [
+										"{{events_url}}"
+									],
+									"path": [
+										"registrations",
+										":registrationId",
+										"cancel"
+									],
+									"variable": [
+										{
+											"key": "registrationId",
+											"value": "registration-uuid-here"
+										}
+									]
+								},
+								"description": "Cancel an event registration (within 24 hours of event)."
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Payment",
+					"item": [
+						{
+							"name": "Payment Webhook",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"event\": \"payment.success\",\n  \"data\": {\n    \"registrationId\": \"registration-uuid-here\",\n    \"amount\": 999.99,\n    \"currency\": \"USD\",\n    \"paymentId\": \"payment-gateway-id\"\n  }\n}"
+								},
+								"url": {
+									"raw": "{{events_url}}/payments/webhook",
+									"host": [
+										"{{events_url}}"
+									],
+									"path": [
+										"payments",
+										"webhook"
+									]
+								},
+								"description": "Payment gateway webhook for processing payment confirmations."
+							},
+							"response": []
+						},
+						{
+							"name": "Get Payment Status",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{events_url}}/payments/registration/:registrationId/status",
+									"host": [
+										"{{events_url}}"
+									],
+									"path": [
+										"payments",
+										"registration",
+										":registrationId",
+										"status"
+									],
+									"variable": [
+										{
+											"key": "registrationId",
+											"value": "registration-uuid-here"
+										}
+									]
+								},
+								"description": "Get payment status for a specific registration."
+							},
+							"response": []
+						},
+						{
+							"name": "Get Payment History",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{events_url}}/payments/history?page=1&limit=20&status=COMPLETED",
+									"host": [
+										"{{events_url}}"
+									],
+									"path": [
+										"payments",
+										"history"
+									],
+									"query": [
+										{
+											"key": "page",
+											"value": "1"
+										},
+										{
+											"key": "limit",
+											"value": "20"
+										},
+										{
+											"key": "status",
+											"value": "COMPLETED"
+										}
+									]
+								},
+								"description": "Get user's payment history."
+							},
+							"response": []
+						},
+						{
+							"name": "Retry Payment",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{events_url}}/payments/registration/:registrationId/retry",
+									"host": [
+										"{{events_url}}"
+									],
+									"path": [
+										"payments",
+										"registration",
+										":registrationId",
+										"retry"
+									],
+									"variable": [
+										{
+											"key": "registrationId",
+											"value": "registration-uuid-here"
+										}
+									]
+								},
+								"description": "Retry failed payment for a registration."
+							},
+							"response": []
+						}
+					]
+				}
+			],
+			"description": "Events service endpoints for event discovery, registration, and payment processing"
+		}
+	],
+	"variable": [
+		{
+			"key": "gateway_url",
+			"value": "http://localhost:8080",
+			"type": "string",
+			"description": {
+				"content": "API Gateway URL",
+				"type": "text/plain"
+			}
+		},
+		{
+			"key": "auth_url",
+			"value": "http://localhost:3000",
+			"type": "string",
+			"description": {
+				"content": "Auth Service Direct URL",
+				"type": "text/plain"
+			}
+		},
+		{
+			"key": "profile_url",
+			"value": "http://localhost:3001",
+			"type": "string",
+			"description": {
+				"content": "Profile Service Direct URL",
+				"type": "text/plain"
+			}
+		},
+		{
+			"key": "connection_url",
+			"value": "http://localhost:3002",
+			"type": "string",
+			"description": {
+				"content": "Connection Service Direct URL",
+				"type": "text/plain"
+			}
+		},
+		{
+			"key": "post_url",
+			"value": "http://localhost:3003",
+			"type": "string",
+			"description": {
+				"content": "Post Service Direct URL",
+				"type": "text/plain"
+			}
+		},
+		{
+			"key": "chat_url",
+			"value": "http://localhost:3004",
+			"type": "string",
+			"description": {
+				"content": "Chat Service Direct URL",
+				"type": "text/plain"
+			}
+		},
+		{
+			"key": "admin_url",
+			"value": "http://localhost:3005",
+			"type": "string",
+			"description": {
+				"content": "Admin Service Direct URL",
+				"type": "text/plain"
+			}
+		},
+		{
+			"key": "events_url",
+			"value": "http://localhost:3006",
+			"type": "string",
+			"description": {
+				"content": "Events Service Direct URL",
+				"type": "text/plain"
+			}
+		},
+		{
+			"key": "access_token",
+			"value": "",
+			"type": "string",
+			"description": {
+				"content": "User JWT Access Token",
+				"type": "text/plain"
+			}
+		},
+		{
+			"key": "refresh_token",
+			"value": "",
+			"type": "string",
+			"description": {
+				"content": "User JWT Refresh Token",
+				"type": "text/plain"
+			}
+		},
+		{
+			"key": "admin_token",
+			"value": "",
+			"type": "string",
+			"description": {
+				"content": "Admin JWT Access Token",
+				"type": "text/plain"
+			}
+		},
+		{
+			"key": "user_id",
+			"value": "",
+			"type": "string",
+			"description": {
+				"content": "Current User ID",
+				"type": "text/plain"
+			}
+		},
+		{
+			"key": "test_phone_number",
+			"value": "+1234567890",
+			"type": "string",
+			"description": {
+				"content": "Test phone number for OTP",
+				"type": "text/plain"
+			}
+		}
+	]
+}

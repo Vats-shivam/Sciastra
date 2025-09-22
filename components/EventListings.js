@@ -5,7 +5,7 @@ import colors from "../config/colors";
 import { useNavigation } from "@react-navigation/native";
 import eventsApi from "../api/EventsApi";
 
-const EventListings = ({ onEventPress }) => {
+const EventListings = ({ onEventPress, category = null, limit = 20 }) => {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -13,14 +13,21 @@ const EventListings = ({ onEventPress }) => {
 
   useEffect(() => {
     loadEvents();
-  }, []);
+  }, [category]);
 
   const loadEvents = async () => {
     try {
       setLoading(true);
-      const result = await eventsApi.getAllEvents();
+      let result;
+      
+      if (category) {
+        result = await eventsApi.getEventsByCategory(category, 1, limit);
+      } else {
+        result = await eventsApi.getAllEvents(1, limit);
+      }
+      
       if (result.success) {
-        setEvents(result.data || []);
+        setEvents(result.data.events || []);
       }
     } catch (error) {
       // Handle error silently or show notification
@@ -33,9 +40,16 @@ const EventListings = ({ onEventPress }) => {
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      const result = await eventsApi.getAllEvents();
+      let result;
+      
+      if (category) {
+        result = await eventsApi.getEventsByCategory(category, 1, limit);
+      } else {
+        result = await eventsApi.getAllEvents(1, limit);
+      }
+      
       if (result.success) {
-        setEvents(result.data || []);
+        setEvents(result.data.events || []);
       }
     } catch (error) {
       // Handle error silently

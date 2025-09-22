@@ -6,23 +6,54 @@ import colors from "../config/colors";
 const DEFAULT_EVENT_BANNER_URL = require("../assets/splash-icon.png");
 
 const getDisplayPrice = (event) => {
-  if (event.cheapest_ticket_price === 0) return "Free";
-  if (event.cheapest_ticket_price) return `₹ ${event.cheapest_ticket_price}`;
-  return "";
+  if (event.isFree) return "Free";
+  if (event.price && event.price > 0) return `₹${event.price}`;
+  return "Free";
 };
 
 const getDisplayDate = (event) => {
-  // Example: 15 Aug 2024, 10:00 AM
-  if (!event.start_time) return "";
-  const date = new Date(event.start_time);
-  return date.toLocaleString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: true,
-  });
+  try {
+    // Use startDateTime from the API response
+    const startDate = new Date(event.startDateTime);
+    const endDate = event.endDateTime ? new Date(event.endDateTime) : null;
+    
+    // Format start date
+    const formattedStartDate = startDate.toLocaleString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    });
+    
+    // If end date is available and different from start date, include it
+    if (endDate && startDate.toDateString() !== endDate.toDateString()) {
+      const formattedEndDate = endDate.toLocaleString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+      });
+      return `${formattedStartDate} - ${formattedEndDate}`;
+    }
+    
+    return formattedStartDate;
+  } catch (error) {
+    console.error('Error formatting date:', error);
+    return '';
+  }
+};
+
+const getEventCategory = (event) => {
+  // Map API categories to display categories
+  switch (event.category) {
+    case 'FEATURED': return 'Featured';
+    case 'SPOTLIGHT': return 'Spotlight';
+    case 'TRENDING': return 'Trending';
+    default: return event.category;
+  }
 };
 
 const EventCard = ({ event, onPress }) => {
@@ -30,8 +61,19 @@ const EventCard = ({ event, onPress }) => {
     onPress?.(event);
   };
 
-  const shouldShowPromotionChip = event.event_category === "PROMOTION_ONLY";
-  const shouldShowExternalChip = event.event_category === "EXTERNAL";
+  const shouldShowCategoryChip = event.category && ['FEATURED', 'SPOTLIGHT', 'TRENDING'].includes(event.category);
+  const shouldShowVenueChip = event.venue_type === 'VIRTUAL';
+
+  // Format the event data to match what the component expects
+  const formattedEvent = {
+    ...event,
+    // Map API fields to component's expected fields
+    banner_url: event.featuredImage || null,
+    start_time: event.startDateTime,
+    end_time: event.endDateTime,
+    cheapest_ticket_price: event.isFree ? 0 : event.price,
+    location: event.venueAddress || event.location || 'Online Event'
+  };
 
   return (
     <Pressable onPress={handlePress} style={{ width: "100%" }}>
@@ -39,31 +81,33 @@ const EventCard = ({ event, onPress }) => {
         {/* Image Container */}
         <View style={styles.imageContainer}>
           <Image
-            source={event.banner_url ? { uri: event.banner_url } : DEFAULT_EVENT_BANNER_URL}
+            source={formattedEvent.featuredImage ? { uri: formattedEvent.featuredImage } : DEFAULT_EVENT_BANNER_URL}
             style={styles.image}
             resizeMode="cover"
           />
-          {/* Promotion Chip - Top Right */}
-          {shouldShowPromotionChip && (
+          {/* Category Chip - Top Right */}
+          {shouldShowCategoryChip && (
             <View style={[styles.chip, { top: 8, right: 8 }]}> 
-              <Text style={styles.chipText}>Promoted</Text>
+              <Text style={styles.chipText}>{getEventCategory(formattedEvent)}</Text>
             </View>
           )}
-          {/* External Chip - Top Right (or below promotion if both exist) */}
-          {shouldShowExternalChip && (
-            <View style={[styles.chip, { top: shouldShowPromotionChip ? 32 : 8, right: 8 }]}> 
-              <Text style={styles.chipText}>External</Text>
+          {/* Venue Type Chip - Top Right (or below category if both exist) */}
+          {(shouldShowVenueChip || formattedEvent.venueType === 'ONLINE') && (
+            <View style={[styles.chip, { top: shouldShowCategoryChip ? 32 : 8, right: 8 }]}> 
+              <Text style={styles.chipText}>
+                {formattedEvent.venueType === 'ONLINE' ? 'Online' : 'In-Person'}
+              </Text>
             </View>
           )}
         </View>
         {/* Content */}
         <View style={styles.content}>
-          <Text style={styles.date}>{getDisplayDate(event)}</Text>
-          <Text style={styles.title} numberOfLines={2}>{event.title}</Text>
-          {event.location && (
-            <Text style={styles.location} numberOfLines={1}>{event.location}</Text>
-          )}
-          <Text style={styles.price}>{getDisplayPrice(event)}</Text>
+          <Text style={styles.date}>{getDisplayDate(formattedEvent)}</Text>
+          <Text style={styles.title} numberOfLines={2}>{formattedEvent.title}</Text>
+          <Text style={styles.location} numberOfLines={1}>
+            {formattedEvent.venueType === 'ONLINE' ? 'Online Event' : (formattedEvent.location || 'Location not specified')}
+          </Text>
+          <Text style={styles.price}>{getDisplayPrice(formattedEvent)}</Text>
         </View>
       </Card>
     </Pressable>

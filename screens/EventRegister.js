@@ -1,8 +1,10 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, TextInput, TouchableOpacity, Alert } from "react-native";
+import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, TextInput, TouchableOpacity, Alert, ActivityIndicator } from "react-native";
 import Container from "../components/Container";
 import colors from "../config/colors";
 import Header from "../components/Header";
+import eventsApi from "../api/EventsApi";
+import { useNotification } from "../contexts/NotificationContext";
 
 const EventRegister = ({ route, navigation }) => {
   const event = route?.params?.event;
@@ -10,14 +12,61 @@ const EventRegister = ({ route, navigation }) => {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const { showSuccess, showError } = useNotification();
 
-  const handleProceed = () => {
+  const handleProceed = async () => {
     if (!name || !email || !phone) {
       setError("Please fill all fields");
       return;
     }
+
+    // Basic validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      setError("Please enter a valid email address");
+      return;
+    }
+
+    const phoneRegex = /^[+]?[\d\s-()]{10,15}$/;
+    if (!phoneRegex.test(phone)) {
+      setError("Please enter a valid phone number");
+      return;
+    }
+
     setError("");
-    navigation.navigate("EventPayment", { event, name, email, phone });
+    setLoading(true);
+
+    try {
+      // Check if event is free or requires payment
+      const isFreeEvent = event.cheapest_ticket_price === 0;
+      
+      if (isFreeEvent) {
+        // Register directly for free events
+        const registrationData = {
+          "Full Name": name,
+          "Email": email,
+          "Phone": phone,
+        };
+
+        const result = await eventsApi.registerForEvent(event.id, registrationData);
+        
+        if (result.success) {
+          showSuccess("Successfully registered for the event!");
+          navigation.navigate("RegisteredEvents");
+        } else {
+          setError(result.message || "Registration failed. Please try again.");
+        }
+      } else {
+        // Navigate to payment for paid events
+        navigation.navigate("EventPayment", { event, name, email, phone });
+      }
+    } catch (error) {
+      console.error("Registration error:", error);
+      setError("Something went wrong. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -66,8 +115,18 @@ const EventRegister = ({ route, navigation }) => {
           />
           {error ? <Text style={styles.error}>{error}</Text> : null}
         </View>
-        <TouchableOpacity style={styles.button} onPress={handleProceed}>
-          <Text style={styles.buttonText}>Proceed to Payment</Text>
+        <TouchableOpacity 
+          style={[styles.button, loading && styles.buttonDisabled]} 
+          onPress={handleProceed}
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator size="small" color={colors.white} />
+          ) : (
+            <Text style={styles.buttonText}>
+              {event?.cheapest_ticket_price === 0 ? "Register for Free" : "Proceed to Payment"}
+            </Text>
+          )}
         </TouchableOpacity>
       </KeyboardAvoidingView>
         </Container>
@@ -134,6 +193,9 @@ const styles = StyleSheet.create({
     color: colors.textInverse,
     fontWeight: "700",
     fontSize: 17,
+  },
+  buttonDisabled: {
+    opacity: 0.6,
   },
 });
 
