@@ -1,6 +1,6 @@
 // screens/UserProfile.js
 import React, { useState, useEffect } from 'react';
-import { View, Text, Image, ScrollView, StyleSheet, TouchableOpacity, Alert, Modal, Animated } from 'react-native';
+import { View, Text, Image, ScrollView, StyleSheet, TouchableOpacity, Modal, Animated } from 'react-native';
 import Container from '../components/Container';
 import colors from '../config/colors';
 import { api } from '../api/MockApi';
@@ -11,6 +11,7 @@ import PostCard from '../components/PostCard';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Header from '../components/Header';
 import { useLoader } from "../context/LoaderContext";
+import { useNotification } from '../contexts/NotificationContext';
 
 const UserProfileScreen = ({ navigation, route }) => {
   const { userId } = route.params;
@@ -23,6 +24,7 @@ const UserProfileScreen = ({ navigation, route }) => {
   const [showConnectionModal, setShowConnectionModal] = useState(false);
   const [modalAnimation] = useState(new Animated.Value(0));
   const { showLoader, hideLoader } = useLoader();
+  const { showError, showSuccess } = useNotification();
 
   useEffect(() => {
     // If this is the current user, redirect to Profile screen
@@ -78,7 +80,7 @@ const UserProfileScreen = ({ navigation, route }) => {
       setConnectionStatus(status);
     } catch (error) {
       console.error('Error loading user data:', error);
-      Alert.alert('Error', 'Failed to load user profile');
+      showError('Failed to load user profile');
     } finally {
       setLoading(false);
     }
@@ -91,7 +93,7 @@ const UserProfileScreen = ({ navigation, route }) => {
       if (result.success) {
         // Refresh connection status to get updated information
         await refreshConnectionStatus();
-        Alert.alert('Success', 'Connection request sent!');
+        showSuccess('Connection request sent!');
       } else {
         Alert.alert('Error', result.error || 'Failed to send connection request');
       }
@@ -283,6 +285,19 @@ const UserProfileScreen = ({ navigation, route }) => {
     });
   };
 
+  const formatDateRange = (startDate, endDate, isCurrent) => {
+    const formatDate = (dateString) => {
+      if (!dateString) return '';
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short' });
+    };
+
+    const start = formatDate(startDate);
+    const end = isCurrent ? 'Present' : formatDate(endDate);
+
+    return `${start} - ${end}`;
+  };
+
   const renderAboutSection = () => (
     <ScrollView style={styles.tabContent}>
       <View style={styles.aboutSection}>
@@ -308,24 +323,50 @@ const UserProfileScreen = ({ navigation, route }) => {
           </View>
         </View>
 
+        {/* Topics Section */}
+        {user.topics && user.topics.length > 0 && (
+          <View style={styles.sectionContainer}>
+            <View style={styles.sectionHeader}>
+              <Icon name="tag-outline" size={24} color={colors.primary} />
+              <Text style={styles.sectionTitle}>Topics of Interest</Text>
+            </View>
+            <View style={styles.skillsContainer}>
+              {user.topics.map((topic, index) => (
+                <View key={index} style={styles.skillChip}>
+                  <Text style={styles.skillText}>{topic}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+
         {/* Work Experience Section */}
         <View style={styles.sectionContainer}>
           <View style={styles.sectionHeader}>
             <Icon name="briefcase-outline" size={24} color={colors.primary} />
             <Text style={styles.sectionTitle}>Work Experience</Text>
           </View>
-          {user.workExperience?.map((work) => (
-            <View key={work.id} style={styles.experienceItem}>
-              <View style={styles.experienceHeader}>
-                <Icon name="domain" size={40} color={colors.primary} />
-                <View style={styles.experienceDetails}>
-                  <Text style={styles.experienceCompany}>{work.company}</Text>
-                  <Text style={styles.experiencePosition}>{work.position}</Text>
-                  <Text style={styles.experienceDuration}>{work.duration}</Text>
+          {user.experiences && user.experiences.length > 0 ? (
+            user.experiences.map((work) => (
+              <View key={work.id} style={styles.experienceItem}>
+                <View style={styles.experienceHeader}>
+                  <Icon name="domain" size={40} color={colors.primary} />
+                  <View style={styles.experienceDetails}>
+                    <Text style={styles.experienceCompany}>{work.company}</Text>
+                    <Text style={styles.experiencePosition}>{work.role}</Text>
+                    <Text style={styles.experienceDuration}>
+                      {formatDateRange(work.startDate, work.endDate, work.isCurrentRole)}
+                    </Text>
+                    {work.description && (
+                      <Text style={styles.experienceDescription}>{work.description}</Text>
+                    )}
+                  </View>
                 </View>
               </View>
-            </View>
-          )) || <Text style={styles.noDataText}>No work experience listed</Text>}
+            ))
+          ) : (
+            <Text style={styles.noDataText}>No work experience listed</Text>
+          )}
         </View>
 
         {/* Education Section */}
@@ -334,18 +375,30 @@ const UserProfileScreen = ({ navigation, route }) => {
             <Icon name="school-outline" size={24} color={colors.primary} />
             <Text style={styles.sectionTitle}>Education</Text>
           </View>
-          {user.education?.map((edu) => (
-            <View key={edu.id} style={styles.experienceItem}>
-              <View style={styles.experienceHeader}>
-                <Icon name="school" size={40} color={colors.primary} />
-                <View style={styles.experienceDetails}>
-                  <Text style={styles.experienceCompany}>{edu.institution}</Text>
-                  <Text style={styles.experiencePosition}>{edu.degree}</Text>
-                  <Text style={styles.experienceDuration}>{edu.duration}</Text>
+          {user.education && user.education.length > 0 ? (
+            user.education.map((edu) => (
+              <View key={edu.id} style={styles.experienceItem}>
+                <View style={styles.experienceHeader}>
+                  <Icon name="school" size={40} color={colors.primary} />
+                  <View style={styles.experienceDetails}>
+                    <Text style={styles.experienceCompany}>{edu.institution}</Text>
+                    <Text style={styles.experiencePosition}>
+                      {edu.degree}
+                      {edu.fieldOfStudy && ` in ${edu.fieldOfStudy}`}
+                    </Text>
+                    <Text style={styles.experienceDuration}>
+                      {formatDateRange(edu.startDate, edu.endDate, edu.isCurrent)}
+                    </Text>
+                    {edu.grade && (
+                      <Text style={styles.experienceDescription}>Grade: {edu.grade}</Text>
+                    )}
+                  </View>
                 </View>
               </View>
-            </View>
-          )) || <Text style={styles.noDataText}>No education listed</Text>}
+            ))
+          ) : (
+            <Text style={styles.noDataText}>No education listed</Text>
+          )}
         </View>
       </View>
     </ScrollView>
@@ -816,6 +869,13 @@ const styles = StyleSheet.create({
   experienceDuration: {
     fontSize: 12,
     color: colors.textSecondary,
+    marginBottom: 4,
+  },
+  experienceDescription: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    fontStyle: 'italic',
+    marginTop: 4,
   },
   noDataText: {
     fontSize: 14,

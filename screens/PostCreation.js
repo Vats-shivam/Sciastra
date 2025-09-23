@@ -343,7 +343,7 @@ const styles = StyleSheet.create({
   },
   postButtonContainer: {
     position: 'absolute',
-    top: 95, // Adjust based on SafeAreaView + header height
+    top: 114, // Adjust based on SafeAreaView + header height
     right: 16,
     zIndex: 10,
   },

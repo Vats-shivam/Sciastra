@@ -388,7 +388,7 @@ const ConnectionsScreen = () => {
       
       <Container style={styles.container}>
         {/* Header Actions */}
-        <View style={styles.headerActions}>
+        {/* <View style={styles.headerActions}>
           <TouchableOpacity
             style={styles.manageBtn}
             onPress={() => navigation.navigate('ConnectionRequests')}
@@ -396,7 +396,7 @@ const ConnectionsScreen = () => {
             <Icon name="cog" size={20} color={colors.primary} />
             <Text style={styles.manageBtnText}>Manage Requests</Text>
           </TouchableOpacity>
-        </View>
+        </View> */}
 
         {/* Search Bar */}
         <TextInput

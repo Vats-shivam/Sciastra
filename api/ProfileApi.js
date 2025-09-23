@@ -192,9 +192,13 @@ class ProfileApiService {
           name: profileData.name,
           profession: profileData.profession,
           email: profileData.email,
+          bio: profileData.bio,
+          location: profileData.location,
           profilePic: profileData.profileImageUrl || null,
           topics: profileData.topics || [],
+          skills: profileData.skills || [],
           experiences: profileData.experiences || [],
+          education: profileData.education || [],
           contactSyncStatus: 'PENDING',
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
@@ -215,9 +219,13 @@ class ProfileApiService {
         name: profileData.name,
         profession: profileData.profession,
         email: profileData.email,
+        bio: profileData.bio,
+        location: profileData.location,
         profilePic: profileData.profileImageUrl || null,
-        experiences: profileData.experiences || [],
         topics: profileData.topics || [],
+        skills: profileData.skills || [],
+        experiences: profileData.experiences || [],
+        education: profileData.education || [],
       };
 
       const url = `${this.baseUrl}${API_ENDPOINTS.PROFILE.CREATE_UPDATE}`;
@@ -256,9 +264,13 @@ class ProfileApiService {
           name: profileData.name,
           profession: profileData.profession,
           email: profileData.email,
+          bio: profileData.bio,
+          location: profileData.location,
           profilePic: profileData.profileImageUrl || null,
           topics: profileData.topics || [],
+          skills: profileData.skills || [],
           experiences: profileData.experiences || [],
+          education: profileData.education || [],
           contactSyncStatus: 'PENDING',
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
@@ -486,6 +498,7 @@ class ProfileApiService {
   validateProfileData(profileData) {
     const errors = [];
 
+    // Name validation
     if (!profileData.name || profileData.name.trim().length < 2) {
       errors.push('Name must be at least 2 characters long');
     }
@@ -494,6 +507,7 @@ class ProfileApiService {
       errors.push('Name must be less than 50 characters');
     }
 
+    // Profession validation
     if (!profileData.profession || profileData.profession.trim().length < 2) {
       errors.push('Profession is required and must be at least 2 characters long');
     }
@@ -502,6 +516,7 @@ class ProfileApiService {
       errors.push('Profession must be less than 100 characters');
     }
 
+    // Email validation
     if (profileData.email && profileData.email.length > 100) {
       errors.push('Email must be less than 100 characters');
     }
@@ -510,12 +525,99 @@ class ProfileApiService {
       errors.push('Please enter a valid email address');
     }
 
+    // Bio validation
     if (profileData.bio && profileData.bio.length > 500) {
       errors.push('Bio must be less than 500 characters');
     }
 
+    // Location validation
     if (profileData.location && profileData.location.length > 100) {
       errors.push('Location must be less than 100 characters');
+    }
+
+    // Topics validation
+    if (profileData.topics) {
+      if (!Array.isArray(profileData.topics)) {
+        errors.push('Topics must be an array');
+      } else {
+        profileData.topics.forEach((topic, index) => {
+          if (typeof topic !== 'string' || topic.trim().length === 0) {
+            errors.push(`Topic ${index + 1} must be a non-empty string`);
+          }
+          if (topic.length > 50) {
+            errors.push(`Topic ${index + 1} must be less than 50 characters`);
+          }
+        });
+      }
+    }
+
+    // Skills validation
+    if (profileData.skills) {
+      if (!Array.isArray(profileData.skills)) {
+        errors.push('Skills must be an array');
+      } else {
+        profileData.skills.forEach((skill, index) => {
+          if (typeof skill !== 'string' || skill.trim().length === 0) {
+            errors.push(`Skill ${index + 1} must be a non-empty string`);
+          }
+          if (skill.length > 50) {
+            errors.push(`Skill ${index + 1} must be less than 50 characters`);
+          }
+        });
+      }
+    }
+
+    // Experiences validation
+    if (profileData.experiences) {
+      if (!Array.isArray(profileData.experiences)) {
+        errors.push('Experiences must be an array');
+      } else {
+        profileData.experiences.forEach((exp, index) => {
+          if (!exp.company || exp.company.trim().length === 0) {
+            errors.push(`Experience ${index + 1}: Company is required`);
+          }
+          if (!exp.role || exp.role.trim().length === 0) {
+            errors.push(`Experience ${index + 1}: Role is required`);
+          }
+          if (exp.company && exp.company.length > 100) {
+            errors.push(`Experience ${index + 1}: Company name must be less than 100 characters`);
+          }
+          if (exp.role && exp.role.length > 100) {
+            errors.push(`Experience ${index + 1}: Role must be less than 100 characters`);
+          }
+          if (exp.description && exp.description.length > 500) {
+            errors.push(`Experience ${index + 1}: Description must be less than 500 characters`);
+          }
+        });
+      }
+    }
+
+    // Education validation
+    if (profileData.education) {
+      if (!Array.isArray(profileData.education)) {
+        errors.push('Education must be an array');
+      } else {
+        profileData.education.forEach((edu, index) => {
+          if (!edu.institution || edu.institution.trim().length === 0) {
+            errors.push(`Education ${index + 1}: Institution is required`);
+          }
+          if (!edu.degree || edu.degree.trim().length === 0) {
+            errors.push(`Education ${index + 1}: Degree is required`);
+          }
+          if (edu.institution && edu.institution.length > 100) {
+            errors.push(`Education ${index + 1}: Institution name must be less than 100 characters`);
+          }
+          if (edu.degree && edu.degree.length > 100) {
+            errors.push(`Education ${index + 1}: Degree must be less than 100 characters`);
+          }
+          if (edu.fieldOfStudy && edu.fieldOfStudy.length > 100) {
+            errors.push(`Education ${index + 1}: Field of study must be less than 100 characters`);
+          }
+          if (edu.grade && edu.grade.length > 20) {
+            errors.push(`Education ${index + 1}: Grade must be less than 20 characters`);
+          }
+        });
+      }
     }
 
     return {

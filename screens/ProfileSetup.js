@@ -20,6 +20,7 @@ import colors from '../config/colors';
 import authManager from '../services/AuthManager';
 import authApi from '../api/AuthApi';
 import { useLoader } from '../context/LoaderContext';
+import { useNotification } from '../contexts/NotificationContext';
 
 const ProfileSetupScreen = ({ navigation, route }) => {
   const [photoUri, setPhotoUri] = useState(null);
@@ -28,10 +29,20 @@ const ProfileSetupScreen = ({ navigation, route }) => {
   const [location, setLocation] = useState('');
   const [profession, setProfession] = useState('');
   const [email, setEmail] = useState('');
+  const [topics, setTopics] = useState([]);
+  const [skills, setSkills] = useState([]);
+  const [experiences, setExperiences] = useState([]);
+  const [education, setEducation] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isImageUploading, setIsImageUploading] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  // Input states for adding new items
+  const [newTopic, setNewTopic] = useState('');
+  const [newSkill, setNewSkill] = useState('');
+
   const { showLoader, hideLoader } = useLoader();
+  const { showSuccess, showError } = useNotification();
 
   // Check authentication status on component mount
   useEffect(() => {
@@ -41,10 +52,14 @@ const ProfileSetupScreen = ({ navigation, route }) => {
     if (route?.params?.editMode && route?.params?.existingData) {
       const data = route.params.existingData;
       setName(data.name || '');
-      setProfession(data.designation || '');
+      setProfession(data.profession || data.designation || '');
       setEmail(data.email || '');
       setBio(data.bio || '');
       setLocation(data.location || '');
+      setTopics(data.topics || []);
+      setSkills(data.skills || []);
+      setExperiences(data.experiences || []);
+      setEducation(data.education || []);
       if (data.profilePic) {
         setPhotoUri(data.profilePic);
       }
@@ -55,31 +70,92 @@ const ProfileSetupScreen = ({ navigation, route }) => {
     try {
       const authState = authManager.getAuthState();
       if (!authState.isAuthenticated) {
-        Alert.alert(
-          'Authentication Required',
-          'Please complete authentication first.',
-          [
-            {
-              text: 'OK',
-              onPress: () => authManager.logout(), // This will trigger navigation back to login
-            },
-          ]
-        );
+        showError('Please complete authentication first.');
+        setTimeout(() => {
+          authManager.logout(); // This will trigger navigation back to login
+        }, 2000);
         return;
       }
       setIsAuthenticated(true);
     } catch (error) {
-      console.error('Auth check error:', error);
+      showError('Authentication error occurred.');
       // Let AuthManager handle the logout and navigation
       authManager.logout();
     }
+  };
+
+  const addTopic = () => {
+    if (newTopic.trim() && !topics.includes(newTopic.trim())) {
+      setTopics([...topics, newTopic.trim()]);
+      setNewTopic('');
+    }
+  };
+
+  const removeTopic = (topicToRemove) => {
+    setTopics(topics.filter(topic => topic !== topicToRemove));
+  };
+
+  const addSkill = () => {
+    if (newSkill.trim() && !skills.includes(newSkill.trim())) {
+      setSkills([...skills, newSkill.trim()]);
+      setNewSkill('');
+    }
+  };
+
+  const removeSkill = (skillToRemove) => {
+    setSkills(skills.filter(skill => skill !== skillToRemove));
+  };
+
+  const addExperience = () => {
+    const newExperience = {
+      company: '',
+      role: '',
+      startDate: '',
+      endDate: '',
+      description: '',
+      current: false,
+    };
+    setExperiences([...experiences, newExperience]);
+  };
+
+  const updateExperience = (index, field, value) => {
+    const updatedExperiences = [...experiences];
+    updatedExperiences[index][field] = value;
+    setExperiences(updatedExperiences);
+  };
+
+  const removeExperience = (index) => {
+    setExperiences(experiences.filter((_, i) => i !== index));
+  };
+
+  const addEducation = () => {
+    const newEducation = {
+      institution: '',
+      degree: '',
+      fieldOfStudy: '',
+      startDate: '',
+      endDate: '',
+      grade: '',
+      current: false,
+    };
+    setEducation([...education, newEducation]);
+  };
+
+  const updateEducation = (index, field, value) => {
+    const updatedEducation = [...education];
+    updatedEducation[index][field] = value;
+    setEducation(updatedEducation);
+  };
+
+  const removeEducation = (index) => {
+    setEducation(education.filter((_, i) => i !== index));
   };
 
   const pickImage = async () => {
     try {
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permissionResult.granted) {
-        Alert.alert('Permission Required', 'Please grant camera roll permissions to upload a profile photo.');
+        showError('Please grant camera roll permissions to upload a profile photo.');
         return;
       }
 
@@ -95,32 +171,31 @@ const ProfileSetupScreen = ({ navigation, route }) => {
         
         // Check file size (limit to 5MB)
         if (asset.fileSize && asset.fileSize > 5 * 1024 * 1024) {
-          Alert.alert('File Too Large', 'Please choose an image smaller than 5MB.');
+          showError('Please choose an image smaller than 5MB.');
           return;
         }
 
         setPhotoUri(asset.uri);
       }
     } catch (error) {
-      console.error('Image picker error:', error);
-      Alert.alert('Error', 'Failed to pick image. Please try again.');
+      showError('Failed to pick image. Please try again.');
     }
   };
 
   const handleSubmit = async () => {
     if (!isAuthenticated) {
-      Alert.alert('Authentication Error', 'Please complete OTP verification first.');
+      showError('Please complete OTP verification first.');
       return;
     }
 
     // Validate required fields
     if (!name.trim()) {
-      Alert.alert('Missing Information', 'Please enter your full name.');
+      showError('Please enter your full name.');
       return;
     }
 
     if (!profession.trim()) {
-      Alert.alert('Missing Information', 'Please enter your profession.');
+      showError('Please enter your profession.');
       return;
     }
 
@@ -131,6 +206,14 @@ const ProfileSetupScreen = ({ navigation, route }) => {
       email: email.trim() || undefined,
       bio: bio.trim() || undefined,
       location: location.trim() || undefined,
+      topics: topics.length > 0 ? topics : undefined,
+      skills: skills.length > 0 ? skills : undefined,
+      experiences: experiences.length > 0 ? experiences.filter(exp =>
+        exp.company.trim() && exp.role.trim()
+      ) : undefined,
+      education: education.length > 0 ? education.filter(edu =>
+        edu.institution.trim() && edu.degree.trim()
+      ) : undefined,
     };
 
     setIsLoading(true);
@@ -141,47 +224,27 @@ const ProfileSetupScreen = ({ navigation, route }) => {
       const result = await authManager.completeProfileSetup(profileData, photoUri);
 
       if (result.success) {
-        Alert.alert(
-          'Success!',
-          'Your profile has been created successfully.',
-          [
-            {
-              text: 'Continue',
-              onPress: () => {
-                // AuthManager will automatically handle navigation through AuthNavigator
-                // based on the auth state (onboarding needed or main app)
-              },
-            },
-          ]
-        );
+        showSuccess('Your profile has been created successfully!');
+
+        // The AuthManager should have notified listeners automatically
+        // and the AuthNavigator will handle the redirection
+        // No manual navigation needed
+
+        // Optional: Add a small delay to ensure the success message is visible
+        setTimeout(() => {
+          // Auth state should be updated by now, AuthNavigator will handle navigation
+        }, 500);
       } else {
-        Alert.alert('Error', result.message || 'Failed to save profile. Please try again.');
+        showError(result.message || 'Failed to save profile. Please try again.');
       }
     } catch (error) {
-      console.error('Profile setup error:', error);
-      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+      showError('An unexpected error occurred. Please try again.');
     } finally {
       setIsLoading(false);
       hideLoader();
     }
   };
 
-  const handleSkip = () => {
-    Alert.alert(
-      'Skip Profile Setup?',
-      'You can complete your profile later from the profile tab.',
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Skip',
-          onPress: () => navigation.navigate('MainTabs', { screen: 'Profile' }),
-        },
-      ]
-    );
-  };
 
   return (
     <LinearGradient
@@ -204,9 +267,9 @@ const ProfileSetupScreen = ({ navigation, route }) => {
               {route?.params?.editMode ? 'Edit Your Profile' : 'Complete Your Profile'}
             </Text>
             <Text style={styles.subtitle}>
-              {route?.params?.editMode 
+              {route?.params?.editMode
                 ? 'Update your information to keep your profile current'
-                : 'Help others discover you by sharing\na bit about yourself'
+                : 'Complete your profile to continue\nThis information helps others discover you'
               }
             </Text>
           </View>
@@ -307,6 +370,235 @@ const ProfileSetupScreen = ({ navigation, route }) => {
                 maxLength={100}
               />
             </View>
+
+            {/* Topics Section */}
+            <View style={styles.sectionContainer}>
+              <Text style={styles.sectionTitle}>Topics of Interest</Text>
+              <View style={styles.addItemContainer}>
+                <TextInput
+                  style={[styles.input, styles.addItemInput]}
+                  placeholder="Add topic (e.g., Machine Learning, React)"
+                  value={newTopic}
+                  onChangeText={setNewTopic}
+                  placeholderTextColor="rgba(255,255,255,0.5)"
+                  maxLength={50}
+                />
+                <TouchableOpacity
+                  style={styles.addButton}
+                  onPress={addTopic}
+                  disabled={!newTopic.trim()}
+                >
+                  <Icon name="plus" size={20} color="white" />
+                </TouchableOpacity>
+              </View>
+              <View style={styles.tagContainer}>
+                {topics.map((topic, index) => (
+                  <View key={index} style={styles.tag}>
+                    <Text style={styles.tagText}>{topic}</Text>
+                    <TouchableOpacity onPress={() => removeTopic(topic)}>
+                      <Icon name="close" size={16} color="white" />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </View>
+            </View>
+
+            {/* Skills Section */}
+            <View style={styles.sectionContainer}>
+              <Text style={styles.sectionTitle}>Skills</Text>
+              <View style={styles.addItemContainer}>
+                <TextInput
+                  style={[styles.input, styles.addItemInput]}
+                  placeholder="Add skill (e.g., Python, Communication)"
+                  value={newSkill}
+                  onChangeText={setNewSkill}
+                  placeholderTextColor="rgba(255,255,255,0.5)"
+                  maxLength={50}
+                />
+                <TouchableOpacity
+                  style={styles.addButton}
+                  onPress={addSkill}
+                  disabled={!newSkill.trim()}
+                >
+                  <Icon name="plus" size={20} color="white" />
+                </TouchableOpacity>
+              </View>
+              <View style={styles.tagContainer}>
+                {skills.map((skill, index) => (
+                  <View key={index} style={styles.tag}>
+                    <Text style={styles.tagText}>{skill}</Text>
+                    <TouchableOpacity onPress={() => removeSkill(skill)}>
+                      <Icon name="close" size={16} color="white" />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </View>
+            </View>
+
+            {/* Experience Section */}
+            <View style={styles.sectionContainer}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Work Experience</Text>
+                <TouchableOpacity style={styles.addSectionButton} onPress={addExperience}>
+                  <Icon name="plus" size={18} color="white" />
+                  <Text style={styles.addSectionButtonText}>Add</Text>
+                </TouchableOpacity>
+              </View>
+              {experiences.map((experience, index) => (
+                <View key={index} style={styles.experienceCard}>
+                  <View style={styles.cardHeader}>
+                    <Text style={styles.cardTitle}>Experience {index + 1}</Text>
+                    <TouchableOpacity onPress={() => removeExperience(index)}>
+                      <Icon name="trash-can-outline" size={20} color="#ff6b6b" />
+                    </TouchableOpacity>
+                  </View>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Company/Organization"
+                    value={experience.company}
+                    onChangeText={(text) => updateExperience(index, 'company', text)}
+                    placeholderTextColor="rgba(255,255,255,0.5)"
+                    maxLength={100}
+                  />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Role/Position"
+                    value={experience.role}
+                    onChangeText={(text) => updateExperience(index, 'role', text)}
+                    placeholderTextColor="rgba(255,255,255,0.5)"
+                    maxLength={100}
+                  />
+                  <View style={styles.dateContainer}>
+                    <TextInput
+                      style={[styles.input, styles.dateInput]}
+                      placeholder="Start Date (MM/YYYY)"
+                      value={experience.startDate}
+                      onChangeText={(text) => updateExperience(index, 'startDate', text)}
+                      placeholderTextColor="rgba(255,255,255,0.5)"
+                      maxLength={7}
+                    />
+                    <TextInput
+                      style={[styles.input, styles.dateInput]}
+                      placeholder="End Date (MM/YYYY)"
+                      value={experience.endDate}
+                      onChangeText={(text) => updateExperience(index, 'endDate', text)}
+                      placeholderTextColor="rgba(255,255,255,0.5)"
+                      maxLength={7}
+                      editable={!experience.current}
+                    />
+                  </View>
+                  <View style={styles.checkboxContainer}>
+                    <TouchableOpacity
+                      style={styles.checkbox}
+                      onPress={() => updateExperience(index, 'current', !experience.current)}
+                    >
+                      <Icon
+                        name={experience.current ? "checkbox-marked" : "checkbox-blank-outline"}
+                        size={20}
+                        color="white"
+                      />
+                    </TouchableOpacity>
+                    <Text style={styles.checkboxText}>Currently working here</Text>
+                  </View>
+                  <TextInput
+                    style={[styles.input, styles.bioInput]}
+                    placeholder="Description (optional)"
+                    value={experience.description}
+                    onChangeText={(text) => updateExperience(index, 'description', text)}
+                    placeholderTextColor="rgba(255,255,255,0.5)"
+                    multiline
+                    numberOfLines={3}
+                    textAlignVertical="top"
+                    maxLength={500}
+                  />
+                </View>
+              ))}
+            </View>
+
+            {/* Education Section */}
+            <View style={styles.sectionContainer}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Education</Text>
+                <TouchableOpacity style={styles.addSectionButton} onPress={addEducation}>
+                  <Icon name="plus" size={18} color="white" />
+                  <Text style={styles.addSectionButtonText}>Add</Text>
+                </TouchableOpacity>
+              </View>
+              {education.map((edu, index) => (
+                <View key={index} style={styles.experienceCard}>
+                  <View style={styles.cardHeader}>
+                    <Text style={styles.cardTitle}>Education {index + 1}</Text>
+                    <TouchableOpacity onPress={() => removeEducation(index)}>
+                      <Icon name="trash-can-outline" size={20} color="#ff6b6b" />
+                    </TouchableOpacity>
+                  </View>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Institution/University"
+                    value={edu.institution}
+                    onChangeText={(text) => updateEducation(index, 'institution', text)}
+                    placeholderTextColor="rgba(255,255,255,0.5)"
+                    maxLength={100}
+                  />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Degree (e.g., Bachelor of Science)"
+                    value={edu.degree}
+                    onChangeText={(text) => updateEducation(index, 'degree', text)}
+                    placeholderTextColor="rgba(255,255,255,0.5)"
+                    maxLength={100}
+                  />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Field of Study (e.g., Computer Science)"
+                    value={edu.fieldOfStudy}
+                    onChangeText={(text) => updateEducation(index, 'fieldOfStudy', text)}
+                    placeholderTextColor="rgba(255,255,255,0.5)"
+                    maxLength={100}
+                  />
+                  <View style={styles.dateContainer}>
+                    <TextInput
+                      style={[styles.input, styles.dateInput]}
+                      placeholder="Start Date (MM/YYYY)"
+                      value={edu.startDate}
+                      onChangeText={(text) => updateEducation(index, 'startDate', text)}
+                      placeholderTextColor="rgba(255,255,255,0.5)"
+                      maxLength={7}
+                    />
+                    <TextInput
+                      style={[styles.input, styles.dateInput]}
+                      placeholder="End Date (MM/YYYY)"
+                      value={edu.endDate}
+                      onChangeText={(text) => updateEducation(index, 'endDate', text)}
+                      placeholderTextColor="rgba(255,255,255,0.5)"
+                      maxLength={7}
+                      editable={!edu.current}
+                    />
+                  </View>
+                  <View style={styles.checkboxContainer}>
+                    <TouchableOpacity
+                      style={styles.checkbox}
+                      onPress={() => updateEducation(index, 'current', !edu.current)}
+                    >
+                      <Icon
+                        name={edu.current ? "checkbox-marked" : "checkbox-blank-outline"}
+                        size={20}
+                        color="white"
+                      />
+                    </TouchableOpacity>
+                    <Text style={styles.checkboxText}>Currently studying here</Text>
+                  </View>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Grade/CGPA (optional)"
+                    value={edu.grade}
+                    onChangeText={(text) => updateEducation(index, 'grade', text)}
+                    placeholderTextColor="rgba(255,255,255,0.5)"
+                    maxLength={20}
+                  />
+                </View>
+              ))}
+            </View>
           </View>
 
           {/* Actions */}
@@ -331,13 +623,9 @@ const ProfileSetupScreen = ({ navigation, route }) => {
               </LinearGradient>
             </TouchableOpacity>
 
-            <TouchableOpacity 
-              style={[styles.skipButton, isLoading && styles.disabledButton]}
-              onPress={handleSkip}
-              disabled={isLoading}
-            >
-              <Text style={[styles.skipText, isLoading && styles.disabledText]}>Skip for now</Text>
-            </TouchableOpacity>
+            <Text style={styles.mandatoryText}>
+              Profile completion is required to continue
+            </Text>
           </View>
         </ScrollView>
         </KeyboardAvoidingView>
@@ -463,7 +751,7 @@ const styles = StyleSheet.create({
     width: '100%',
     borderRadius: 12,
     overflow: 'hidden',
-    marginBottom: 16,
+    marginBottom: 20,
   },
   gradientButton: {
     paddingVertical: 16,
@@ -475,15 +763,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: 'white',
   },
-  skipButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-  },
-  skipText: {
+  mandatoryText: {
     color: 'rgba(255,255,255,0.6)',
-    fontSize: 16,
-    fontWeight: '500',
-    textDecorationLine: 'underline',
+    fontSize: 14,
+    fontStyle: 'italic',
+    textAlign: 'center',
+    paddingHorizontal: 20,
   },
   photoHint: {
     color: 'rgba(255,255,255,0.6)',
@@ -510,6 +795,117 @@ const styles = StyleSheet.create({
   },
   loadingSpinner: {
     marginRight: 8,
+  },
+  sectionContainer: {
+    marginBottom: 30,
+  },
+  sectionTitle: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 16,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  addItemContainer: {
+    flexDirection: 'row',
+    marginBottom: 12,
+  },
+  addItemInput: {
+    flex: 1,
+    marginRight: 10,
+    marginBottom: 0,
+  },
+  addButton: {
+    backgroundColor: '#8a2be2',
+    borderRadius: 8,
+    width: 44,
+    height: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  addSectionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(138, 43, 226, 0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#8a2be2',
+  },
+  addSectionButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '500',
+    marginLeft: 4,
+  },
+  tagContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 8,
+  },
+  tag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(138, 43, 226, 0.3)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    marginRight: 8,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(138, 43, 226, 0.5)',
+  },
+  tagText: {
+    color: 'white',
+    fontSize: 14,
+    marginRight: 6,
+  },
+  experienceCard: {
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  cardTitle: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  dateContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  dateInput: {
+    flex: 1,
+    marginRight: 8,
+    marginBottom: 0,
+  },
+  checkboxContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  checkbox: {
+    marginRight: 8,
+  },
+  checkboxText: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 14,
   },
 });
 

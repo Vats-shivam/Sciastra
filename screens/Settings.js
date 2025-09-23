@@ -1,40 +1,26 @@
 // screens/SettingsScreen.js
 import React, { useState } from 'react';
-import { View, Text, Switch, StyleSheet, Alert } from 'react-native';
+import { View, Text, Switch, StyleSheet } from 'react-native';
 import Container from '../components/Container';
 import Button from '../components/Button';
 import colors from '../config/colors';
 import authManager from '../services/AuthManager';
+import { useNotification } from '../contexts/NotificationContext';
 
 const SettingsScreen = ({ navigation }) => {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [privacyEnabled, setPrivacyEnabled] = useState(false);
+  const { showError, showSuccess } = useNotification();
 
   const handleLogout = async () => {
-    Alert.alert(
-      'Confirm Logout',
-      'Are you sure you want to logout?',
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Logout',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await authManager.logout();
-              // AuthNavigator will automatically handle the navigation
-              // based on the auth state change
-            } catch (error) {
-              console.error('Logout error:', error);
-              Alert.alert('Error', 'Failed to logout. Please try again.');
-            }
-          },
-        },
-      ]
-    );
+    try {
+      await authManager.logout();
+      showSuccess('Logged out successfully');
+      // AuthNavigator will automatically handle the navigation
+      // based on the auth state change
+    } catch (error) {
+      showError('Failed to logout. Please try again.');
+    }
   };
 
   return (

@@ -31,12 +31,17 @@ const REACTIONS = [
 ];
 
 const PostCard = ({ post }) => {
+  // Early return if post is undefined or null
+  if (!post) {
+    return null;
+  }
+
   const navigation = useNavigation();
   const { showError, showSuccess } = useNotification();
   const [showFullDescription, setShowFullDescription] = useState(false);
-  const [userReaction, setUserReaction] = useState(post.userReaction); // Track the current user's reaction
+  const [userReaction, setUserReaction] = useState(post.userReaction || null); // Track the current user's reaction
   const [showReactionPicker, setShowReactionPicker] = useState(false);
-  const [reactions, setReactions] = useState(post.counts.reactions); // Use reactions from the counts object
+  const [reactions, setReactions] = useState(post.counts?.reactions || {}); // Use reactions from the counts object with fallback
   const [reactionLoading, setReactionLoading] = useState(false);
   const [imageLoading, setImageLoading] = useState({});
 
@@ -192,23 +197,23 @@ const PostCard = ({ post }) => {
 
   return (
     <Pressable
-    onPress={() => navigation.navigate("PostDetail", { postId: post.id })}
+    onPress={() => navigation.navigate("PostDetail", { postId: post.id, postData: post })}
     style={styles.container}
   >
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
           onPress={() => {
-            if (post.author.id === "1") {
+            if (post.author?.id === "1") {
               navigation.navigate("ProfileTab");
             } else {
-              navigation.navigate("UserProfile", { userId: post.author.id });
+              navigation.navigate("UserProfile", { userId: post.author?.id });
             }
           }}
         >
           <Image
             source={
-              post.author.profile.profilePic
+              post.author?.profile?.profilePic
                 ? { uri: post.author.profile.profilePic }
                 : require("../assets/icon.png")
             }
@@ -218,27 +223,27 @@ const PostCard = ({ post }) => {
         <TouchableOpacity
           style={{ flex: 1, paddingLeft: 10 }}
           onPress={() => {
-            if (post.author.id === "1") {
+            if (post.author?.id === "1") {
               navigation.navigate("ProfileTab");
             } else {
-              navigation.navigate("UserProfile", { userId: post.author.id });
+              navigation.navigate("UserProfile", { userId: post.author?.id });
             }
           }}
         >
-          <Text style={styles.author}>{post.author.profile.name}</Text>
+          <Text style={styles.author}>{post.author?.profile?.name || "Unknown User"}</Text>
           <Text style={styles.subTitle}>
-            {post.author.profile.profession || "Professional"}
+            {post.author?.profile?.profession || "Professional"}
           </Text>
           <Text style={styles.timestamp}>
-            {timeAgo(post.createdAt)}
+            {post.createdAt ? timeAgo(post.createdAt) : "Unknown"}
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
           onPress={() => {
-            if (post.author.id === "1") {
+            if (post.author?.id === "1") {
               navigation.navigate("ProfileTab");
             } else {
-              navigation.navigate("UserProfile", { userId: post.author.id });
+              navigation.navigate("UserProfile", { userId: post.author?.id });
             }
           }}
         >
@@ -338,7 +343,7 @@ const PostCard = ({ post }) => {
 
       {/* Stats */}
       <View style={styles.stats}>
-        {totalReactions > 0 ? (
+        {totalReactions > 0 || userReaction ? (
           <View style={styles.reactionWrapper}>
             <View
               style={[
@@ -361,17 +366,17 @@ const PostCard = ({ post }) => {
               ))}
             </View>
             <Text style={styles.reactionCount}>
-              {totalReactions} Reacted
+              {totalReactions > 0 ? `${totalReactions} Reacted` : userReaction ? "You reacted" : ""}
             </Text>
           </View>
         ) : (
           <Text style={styles.statsText}>Be the first to react</Text>
         )}
         <TouchableOpacity
-          onPress={() => navigation.navigate("PostDetail", { postId: post.id })}
+          onPress={() => navigation.navigate("PostDetail", { postId: post.id, postData: post })}
         >
           <Text style={styles.statsText}>
-            {post.counts.comments} Comments
+            {post.counts?.comments || 0} Comments
           </Text>
         </TouchableOpacity>
       </View>
@@ -381,7 +386,11 @@ const PostCard = ({ post }) => {
         <Pressable
           onLongPress={() => !reactionLoading && setShowReactionPicker(true)}
           onPress={() => !reactionLoading && (userReaction ? handleRemoveReaction() : handleReaction("LIKE"))}
-          style={[styles.actionButton, reactionLoading && styles.actionButtonLoading]}
+          style={[
+            styles.actionButton,
+            userReaction && styles.actionButtonActive,
+            reactionLoading && styles.actionButtonLoading
+          ]}
           disabled={reactionLoading}
         >
           {reactionLoading ? (
@@ -402,14 +411,15 @@ const PostCard = ({ post }) => {
           )}
         </Pressable>
         <TouchableOpacity
-          onPress={() => navigation.navigate("PostDetail", { postId: post.id })}
+          style={styles.actionButton}
+          onPress={() => navigation.navigate("PostDetail", { postId: post.id, postData: post })}
         >
           <Icon name="comment-outline" size={22} color={colors.textSecondary} />
         </TouchableOpacity>
-        <TouchableOpacity>
+        <TouchableOpacity style={styles.actionButton}>
           <Icon name="share-outline" size={22} color={colors.textSecondary} />
         </TouchableOpacity>
-        <TouchableOpacity>
+        <TouchableOpacity style={styles.actionButton}>
           <Icon name="send-outline" size={22} color={colors.textSecondary} />
         </TouchableOpacity>
       </View>
@@ -551,14 +561,25 @@ const styles = StyleSheet.create({
   actions: {
     flexDirection: "row",
     justifyContent: "space-around",
-    paddingTop: 6,
+    alignItems: "center",
+    paddingTop: 8,
+    paddingBottom: 4,
     borderTopWidth: 1,
     borderTopColor: colors.border,
   },
   actionButton: {
-    position: 'relative',
-    padding: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     borderRadius: 8,
+    minWidth: 60,
+  },
+  actionButtonActive: {
+    backgroundColor: colors.lightGray,
+    minWidth: 80,
+    paddingHorizontal: 16,
   },
   actionButtonLoading: {
     opacity: 0.6,
@@ -643,14 +664,8 @@ const styles = StyleSheet.create({
 
   // Action button with reaction emoji
   reactionEmoji: {
-    position: 'absolute',
-    bottom: 4,
-    right: 4,
-    fontSize: 12,
-    backgroundColor: colors.background,
-    borderRadius: 8,
-    paddingHorizontal: 2,
-    paddingVertical: 1,
+    fontSize: 16,
+    marginLeft: 6,
   },
 
   // Overlay to close reaction picker

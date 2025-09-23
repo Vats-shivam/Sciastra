@@ -132,7 +132,8 @@ class AuthManager {
         this.authState.user = result.data;
         this.setLoading(false);
         this.notifyListeners();
-        console.log('AuthManager: Profile setup completed');
+        console.log('AuthManager: Profile setup completed, updated user:', this.authState.user);
+        console.log('AuthManager: needsProfileSetup after completion:', this.needsProfileSetup());
         return result;
       } else {
         this.setLoading(false);

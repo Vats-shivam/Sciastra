@@ -5,7 +5,6 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Alert,
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
@@ -15,16 +14,18 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path } from 'react-native-svg';
 import colors from '../config/colors';
 import authApi from '../api/AuthApi';
+import { useNotification } from '../contexts/NotificationContext';
 
 const LoginScreen = ({ navigation }) => {
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
+  const { showError, showSuccess } = useNotification();
 
   const handleLogin = async () => {
     // Validate phone number using AuthApi
     const phoneValidation = authApi.validatePhoneNumber(phone);
     if (!phoneValidation.isValid) {
-      Alert.alert('Invalid Phone Number', 'Please enter a valid 10-digit mobile number.');
+      showError('Please enter a valid 10-digit mobile number.');
       return;
     }
 
@@ -36,15 +37,14 @@ const LoginScreen = ({ navigation }) => {
       setLoading(false);
       
       if (response.success) {
-        console.log('OTP sent successfully to phone:', phoneValidation.formatted);
+        showSuccess('OTP sent successfully to your phone!');
         navigation.navigate('OtpVerification', { phone: phoneValidation.formatted });
       } else {
-        Alert.alert('Error', response.message || 'Failed to send OTP. Please try again.');
+        showError(response.message || 'Failed to send OTP. Please try again.');
       }
     } catch (error) {
       setLoading(false);
-      console.error('Login error:', error);
-      Alert.alert('Error', 'Network error. Please check your connection and try again.');
+      showError('Network error. Please check your connection and try again.');
     }
   };
 

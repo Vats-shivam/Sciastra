@@ -74,7 +74,8 @@ const ProfileScreen = ({ navigation }) => {
           profilePic: currentUser.profilePic,
           email: currentUser.email,
           connectionsCount: 0, // Will be updated when connection service is integrated
-          skills: currentUser.topics || [],
+          topics: currentUser.topics || [],
+          skills: currentUser.skills || [],
           workExperience: currentUser.experiences?.map(exp => ({
             id: exp.id,
             company: exp.company,
@@ -83,9 +84,18 @@ const ProfileScreen = ({ navigation }) => {
             description: exp.description,
             isCurrentRole: exp.isCurrentRole
           })) || [],
-          education: [], // Will be added when education endpoints are available
+          education: currentUser.education?.map(edu => ({
+            id: edu.id,
+            institution: edu.institution,
+            degree: edu.degree,
+            fieldOfStudy: edu.fieldOfStudy,
+            duration: `${new Date(edu.startDate).getFullYear()} - ${edu.endDate ? new Date(edu.endDate).getFullYear() : 'Present'}`,
+            grade: edu.grade,
+            isCurrent: edu.isCurrent
+          })) || [],
           rawData: currentUser // Keep original data for updates
         };
+
         setUser(transformedUser);
       } else {
         // If no profile exists, show setup prompt
@@ -316,91 +326,6 @@ const ProfileScreen = ({ navigation }) => {
     );
   };
 
-  const renderAboutSection = () => (
-    <ScrollView style={styles.tabContent}>
-      <View style={styles.aboutSection}>
-        <Text style={styles.aboutText}>{user.bio}</Text>
-        
-        {/* Connections Count */}
-        <View style={styles.connectionsContainer}>
-          <Text style={styles.connectionsCount}>{user.connectionsCount}+ Connections</Text>
-        </View>
-
-        {/* Skills Section */}
-        <View style={styles.sectionContainer}>
-          <View style={styles.sectionHeader}>
-            <Icon name="lightbulb-outline" size={24} color={colors.primary} />
-            <Text style={styles.sectionTitle}>Skills</Text>
-            <TouchableOpacity style={styles.editIcon}>
-              <Icon name="pencil" size={20} color={colors.textSecondary} />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.addIcon}>
-              <Icon name="plus" size={20} color={colors.textSecondary} />
-            </TouchableOpacity>
-          </View>
-          <View style={styles.skillsContainer}>
-            {user.skills?.map((skill, index) => (
-              <View key={index} style={styles.skillChip}>
-                <Text style={styles.skillText}>{skill}</Text>
-              </View>
-            ))}
-          </View>
-        </View>
-
-        {/* Work Experience Section */}
-        <View style={styles.sectionContainer}>
-          <View style={styles.sectionHeader}>
-            <Icon name="briefcase-outline" size={24} color={colors.primary} />
-            <Text style={styles.sectionTitle}>Work Experience</Text>
-            <TouchableOpacity style={styles.editIcon}>
-              <Icon name="pencil" size={20} color={colors.textSecondary} />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.addIcon}>
-              <Icon name="plus" size={20} color={colors.textSecondary} />
-            </TouchableOpacity>
-          </View>
-          {user.workExperience?.map((work) => (
-            <View key={work.id} style={styles.experienceItem}>
-              <View style={styles.experienceHeader}>
-                <Icon name="domain" size={40} color={colors.primary} />
-                <View style={styles.experienceDetails}>
-                  <Text style={styles.experienceCompany}>{work.company}</Text>
-                  <Text style={styles.experiencePosition}>{work.position}</Text>
-                  <Text style={styles.experienceDuration}>{work.duration}</Text>
-                </View>
-              </View>
-            </View>
-          ))}
-        </View>
-
-        {/* Education Section */}
-        <View style={styles.sectionContainer}>
-          <View style={styles.sectionHeader}>
-            <Icon name="school-outline" size={24} color={colors.primary} />
-            <Text style={styles.sectionTitle}>Education</Text>
-            <TouchableOpacity style={styles.editIcon}>
-              <Icon name="pencil" size={20} color={colors.textSecondary} />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.addIcon}>
-              <Icon name="plus" size={20} color={colors.textSecondary} />
-            </TouchableOpacity>
-          </View>
-          {user.education?.map((edu) => (
-            <View key={edu.id} style={styles.experienceItem}>
-              <View style={styles.experienceHeader}>
-                <Icon name="school" size={40} color={colors.primary} />
-                <View style={styles.experienceDetails}>
-                  <Text style={styles.experienceCompany}>{edu.institution}</Text>
-                  <Text style={styles.experiencePosition}>{edu.degree}</Text>
-                  <Text style={styles.experienceDuration}>{edu.duration}</Text>
-                </View>
-              </View>
-            </View>
-          ))}
-        </View>
-      </View>
-    </ScrollView>
-  );
 
   const renderPostsSection = () => (
     <ScrollView style={styles.tabContent}>
@@ -514,17 +439,34 @@ const ProfileScreen = ({ navigation }) => {
               <Text style={styles.connectionsCount}>{user.connectionsCount}+ Connections</Text>
             </View>
 
+            {/* Topics Section */}
+            {user.topics && user.topics.length > 0 && (
+              <View style={styles.sectionContainer}>
+                <View style={styles.sectionHeader}>
+                  <Icon name="tag-outline" size={24} color={colors.primary} />
+                  <Text style={styles.sectionTitle}>Topics of Interest</Text>
+                </View>
+                <View style={styles.skillsContainer}>
+                  {user.topics.map((topic, index) => (
+                    <View key={index} style={styles.skillChip}>
+                      <Text style={styles.skillText}>{topic}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
+
             {/* Skills Section */}
             <View style={styles.sectionContainer}>
               <View style={styles.sectionHeader}>
                 <Icon name="lightbulb-outline" size={24} color={colors.primary} />
                 <Text style={styles.sectionTitle}>Skills</Text>
-                <TouchableOpacity style={styles.editIcon} onPress={handleEditProfile}>
+                {/* <TouchableOpacity style={styles.editIcon} onPress={handleEditProfile}>
                   <Icon name="pencil" size={20} color={colors.textSecondary} />
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.addIcon} onPress={handleAddSkill}>
                   <Icon name="plus" size={20} color={colors.textSecondary} />
-                </TouchableOpacity>
+                </TouchableOpacity> */}
               </View>
               <View style={styles.skillsContainer}>
                 {user.skills?.length > 0 ? user.skills.map((skill, index) => (
@@ -546,12 +488,12 @@ const ProfileScreen = ({ navigation }) => {
               <View style={styles.sectionHeader}>
                 <Icon name="briefcase-outline" size={24} color={colors.primary} />
                 <Text style={styles.sectionTitle}>Work Experience</Text>
-                <TouchableOpacity style={styles.editIcon} onPress={handleEditProfile}>
+                {/* <TouchableOpacity style={styles.editIcon} onPress={handleEditProfile}>
                   <Icon name="pencil" size={20} color={colors.textSecondary} />
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.addIcon} onPress={handleAddExperience}>
                   <Icon name="plus" size={20} color={colors.textSecondary} />
-                </TouchableOpacity>
+                </TouchableOpacity> */}
               </View>
               {user.workExperience?.length > 0 ? user.workExperience.map((work) => (
                 <TouchableOpacity 
@@ -569,7 +511,7 @@ const ProfileScreen = ({ navigation }) => {
                         <Text style={styles.experienceDescription}>{work.description}</Text>
                       )}
                     </View>
-                    <Icon name="chevron-right" size={20} color={colors.textSecondary} />
+                    {/* <Icon name="chevron-right" size={20} color={colors.textSecondary} /> */}
                   </View>
                 </TouchableOpacity>
               )) : (
@@ -582,26 +524,32 @@ const ProfileScreen = ({ navigation }) => {
               <View style={styles.sectionHeader}>
                 <Icon name="school-outline" size={24} color={colors.primary} />
                 <Text style={styles.sectionTitle}>Education</Text>
-                <TouchableOpacity style={styles.editIcon} onPress={handleEditProfile}>
+                {/* <TouchableOpacity style={styles.editIcon} onPress={handleEditProfile}>
                   <Icon name="pencil" size={20} color={colors.textSecondary} />
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.addIcon} onPress={handleAddEducation}>
                   <Icon name="plus" size={20} color={colors.textSecondary} />
-                </TouchableOpacity>
+                </TouchableOpacity> */}
               </View>
-              {user.education?.length > 0 ? user.education.map((edu) => (
+{user.education?.length > 0 ? user.education.map((edu) => (
                 <View key={edu.id} style={styles.experienceItem}>
                   <View style={styles.experienceHeader}>
                     <Icon name="school" size={40} color={colors.primary} />
                     <View style={styles.experienceDetails}>
                       <Text style={styles.experienceCompany}>{edu.institution}</Text>
-                      <Text style={styles.experiencePosition}>{edu.degree}</Text>
+                      <Text style={styles.experiencePosition}>
+                        {edu.degree}
+                        {edu.fieldOfStudy && ` in ${edu.fieldOfStudy}`}
+                      </Text>
                       <Text style={styles.experienceDuration}>{edu.duration}</Text>
+                      {edu.grade && (
+                        <Text style={styles.experienceDescription}>Grade: {edu.grade}</Text>
+                      )}
                     </View>
                   </View>
                 </View>
               )) : (
-                <Text style={styles.emptyText}>No education added yet. Education management coming soon.</Text>
+                <Text style={styles.emptyText}>No education added yet.</Text>
               )}
             </View>
           </View>

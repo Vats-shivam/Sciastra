@@ -8,7 +8,6 @@ import {
   StyleSheet,
   SafeAreaView,
   RefreshControl,
-  Alert,
   FlatList,
   Image,
   Modal,
@@ -19,6 +18,7 @@ import colors from '../config/colors';
 import postApi from '../api/PostApi';
 import authApi from '../api/AuthApi';
 import { useLoader } from '../context/LoaderContext';
+import { useNotification } from '../contexts/NotificationContext';
 
 // Reaction types from backend enum
 const REACTIONS = [
@@ -31,14 +31,15 @@ const REACTIONS = [
 ];
 
 const PostDetailScreen = ({ route, navigation }) => {
-  const { postId } = route.params;
+  const { postId, postData } = route.params;
   const { showLoader, hideLoader } = useLoader();
+  const { showError, showSuccess } = useNotification();
 
-  const [post, setPost] = useState(null);
+  const [post, setPost] = useState(postData || null);
   const [comments, setComments] = useState([]);
   const [reactions, setReactions] = useState([]);
   const [newComment, setNewComment] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!postData); // If we have post data, start with loading false
   const [refreshing, setRefreshing] = useState(false);
   const [commentsLoading, setCommentsLoading] = useState(false);
   const [reactionsLoading, setReactionsLoading] = useState(false);
@@ -47,25 +48,46 @@ const PostDetailScreen = ({ route, navigation }) => {
 
   useEffect(() => {
     loadPostDetails();
-  }, [postId]);
+  }, [postId, postData]);
 
   const loadPostDetails = async () => {
     try {
       setLoading(true);
 
-      // Load post details, comments, and reactions in parallel
-      const [postResult, commentsResult, reactionsResult] = await Promise.all([
-        postApi.getPostById(postId),
+      // Debug log the postData structure
+      if (postData) {
+        console.log('PostDetail - Using passed postData:', JSON.stringify(postData, null, 2));
+      }
+
+      // Only fetch post data if not already provided from previous screen
+      const promises = [
         postApi.getPostComments(postId, 1, 20),
         postApi.getPostReactions(postId, 1, 50)
-      ]);
+      ];
 
-      if (postResult.success) {
-        setPost(postResult.data);
+      // Add post fetch only if we don't have post data already
+      if (!postData) {
+        promises.unshift(postApi.getPostById(postId));
+      }
+
+      const results = await Promise.all(promises);
+
+      let postResult, commentsResult, reactionsResult;
+
+      if (!postData) {
+        // If we fetched post data, it's the first result
+        [postResult, commentsResult, reactionsResult] = results;
+        if (postResult.success) {
+          console.log('PostDetail - Using API postResult:', JSON.stringify(postResult.data, null, 2));
+          setPost(postResult.data);
+        } else {
+          showError('Failed to load post details');
+          navigation.goBack();
+          return;
+        }
       } else {
-        Alert.alert('Error', 'Failed to load post details');
-        navigation.goBack();
-        return;
+        // If we already have post data, skip to comments and reactions
+        [commentsResult, reactionsResult] = results;
       }
 
       if (commentsResult.success) {
@@ -77,8 +99,7 @@ const PostDetailScreen = ({ route, navigation }) => {
       }
 
     } catch (error) {
-      console.error('Error loading post details:', error);
-      Alert.alert('Error', 'Failed to load post details');
+      showError('Failed to load post details');
     } finally {
       setLoading(false);
     }
@@ -92,7 +113,7 @@ const PostDetailScreen = ({ route, navigation }) => {
 
   const addComment = async () => {
     if (!newComment.trim()) {
-      Alert.alert('Error', 'Please enter a comment');
+      showError('Please enter a comment');
       return;
     }
 
@@ -117,11 +138,10 @@ const PostDetailScreen = ({ route, navigation }) => {
           }));
         }
       } else {
-        Alert.alert('Error', result.message || 'Failed to add comment');
+        showError(result.message || 'Failed to add comment');
       }
     } catch (error) {
-      console.error('Error adding comment:', error);
-      Alert.alert('Error', 'Failed to add comment');
+      showError('Failed to add comment');
     } finally {
       hideLoader();
     }
@@ -261,15 +281,15 @@ const PostDetailScreen = ({ route, navigation }) => {
           <View style={styles.postHeader}>
             <Image
               source={{
-                uri: post.user?.profile?.profilePic
-                  ? postApi.getImageSource(post.user.profile.profilePic, authApi.getAccessToken()).uri
-                  : 'https://randomuser.me/api/portraits/men/1.jpg'
+                uri: post.author?.profile?.profilePic
+                  ? postApi.getImageSource(post.author.profile.profilePic, authApi.getAccessToken()).uri
+                  : post.author?.profilePic || 'https://randomuser.me/api/portraits/men/1.jpg'
               }}
               style={styles.avatar}
             />
             <View style={styles.authorInfo}>
               <Text style={styles.authorName}>
-                {post.user?.profile?.name || 'Unknown User'}
+                {post.author?.profile?.name || post.author?.name || 'Unknown User'}
               </Text>
               <Text style={styles.postTime}>
                 {new Date(post.createdAt).toLocaleDateString()}
