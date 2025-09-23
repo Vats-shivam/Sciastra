@@ -8,7 +8,7 @@
     "userInterfaceStyle": "light",
     "newArchEnabled": false,
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
@@ -16,24 +16,38 @@
       "supportsTablet": true
     },
     "android": {
-      "package": "com.yourcompany.scistracommunityapp",
-      "versionCode": 3,
+      "package": "com.xcience.scistracommunityapp",
+      "versionCode": 12,
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "usesCleartextTraffic": true,
+      "allowBackup": false,
+      "requestLegacyExternalStorage": true,
+      "networkSecurityConfig": "network_security_config"
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/icon.png"
     },
     "updates": {
       "enabled": true,
       "fallbackToCacheTimeout": 0
     },
+    "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
+      ]
+    ],
     "extra": {
       "eas": {
-        "projectId": "538c5299-2bfb-4e16-a953-e5692a99de7c"
+        "projectId": "3781d378-989e-4510-9f71-576209c4ae7f"
       }
     }
   }

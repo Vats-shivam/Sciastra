@@ -1,6 +1,7 @@
 // screens/SettingsScreen.js
 import React, { useState } from 'react';
-import { View, Text, Switch, StyleSheet } from 'react-native';
+import { View, Text, Switch, StyleSheet, TouchableOpacity } from 'react-native';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Container from '../components/Container';
 import Button from '../components/Button';
 import colors from '../config/colors';
@@ -34,6 +35,16 @@ const SettingsScreen = ({ navigation }) => {
         <Switch value={privacyEnabled} onValueChange={setPrivacyEnabled} />
       </View>
 
+      {/* Debug Section */}
+      <TouchableOpacity
+        style={styles.debugRow}
+        onPress={() => navigation.navigate('DebugLogs')}
+      >
+        <Icon name="bug" size={20} color={colors.warning} />
+        <Text style={styles.debugLabel}>Debug Logs</Text>
+        <Icon name="chevron-right" size={20} color={colors.textSecondary} />
+      </TouchableOpacity>
+
       <Button title="Logout" buttonColor={colors.accent} onPress={handleLogout} />
     </Container>
   );
@@ -50,6 +61,20 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 16,
     color: colors.textPrimary,
+  },
+  debugRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    borderBottomColor: colors.textSecondary,
+    borderBottomWidth: 1,
+    marginVertical: 8,
+  },
+  debugLabel: {
+    fontSize: 16,
+    color: colors.warning,
+    marginLeft: 12,
+    flex: 1,
   },
 });
 

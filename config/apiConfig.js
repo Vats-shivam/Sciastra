@@ -1,21 +1,22 @@
 // API Configuration according to MOBILE_INTEGRATION_PROMPT.md
 const getBaseUrl = (port) => {
-  // If using ngrok with API Gateway (single endpoint for all services)
-  const NGROK_URL = "https://d47fb32fdadc.ngrok-free.app";
+  // Environment detection
+  const isProduction = !__DEV__;
 
-  // Check if ngrok is being used as API Gateway (single endpoint)
-  if (NGROK_URL) {
-    // Return ngrok URL for API Gateway setup
-    return NGROK_URL;
-  }
+  // Production API URL - Temporarily use HTTP due to self-signed SSL certificate
+  const PRODUCTION_URL = "https://Xcience.in";
 
-  // For direct service access (individual ports)
-  return `http://localhost:${port}`;
+  // Development URLs
+  const DEVELOPMENT_URL = "http://Xcience.in"; // Use HTTP for both environments
 
-  // Alternative configurations:
+  // Use the same URL for both environments for now
+  return PRODUCTION_URL;
+
+  // Alternative configurations for different environments:
+  // For local development: return `http://localhost:${port}`;
   // For Android Emulator: return `http://10.0.2.2:${port}`;
   // For physical device: return `http://YOUR_COMPUTER_IP:${port}`;
-  // For production: return `https://api.sciastra.com`;
+  // For production: return PRODUCTION_URL;
 };
 
 export const API_ENDPOINTS = {
@@ -161,6 +162,12 @@ export const getCommonHeaders = (includeAuth = true, accessToken = null) => {
 
   if (includeAuth && accessToken) {
     headers.Authorization = `Bearer ${accessToken}`;
+  }
+
+  // Add debug info for production builds
+  if (!__DEV__) {
+    console.log('API Base URL:', getBaseUrl());
+    console.log('Using HTTPS:', getBaseUrl().startsWith('https'));
   }
 
   return headers;

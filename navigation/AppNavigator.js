@@ -18,6 +18,7 @@ import RegisteredEvents from '../screens/RegisteredEvents';
 
 import EditProfileScreen from '../screens/EditProfile';
 import NotificationsScreen from '../screens/Notification';
+import DebugLogsScreen from '../screens/DebugLogs';
 
 const Stack = createStackNavigator();
 
@@ -46,6 +47,9 @@ const AppNavigator = () => {
       <Stack.Screen name="EventRegister" component={EventRegister} />
       <Stack.Screen name="EventPayment" component={EventPayment} />
       <Stack.Screen name="RegisteredEvents" component={RegisteredEvents} />
+
+      {/* Debug screens */}
+      <Stack.Screen name="DebugLogs" component={DebugLogsScreen} />
     </Stack.Navigator>
   );
 };

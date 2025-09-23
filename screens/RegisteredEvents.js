@@ -121,9 +121,9 @@ const RegisteredEvents = ({ navigation }) => {
             <View style={styles.emptyContainer}>
               <Icon name="calendar-remove" size={64} color={colors.textMuted} />
               <Text style={styles.emptyText}>You have not registered for any events yet.</Text>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.exploreButton}
-                onPress={() => navigation.navigate("EventTab")}
+                onPress={() => navigation.navigate("MainTabs", { screen: "EventTab" })}
               >
                 <Text style={styles.exploreButtonText}>Explore Events</Text>
               </TouchableOpacity>
@@ -227,10 +227,15 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   exploreButton: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.button,
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 8,
+    shadowColor: colors.button,
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
   },
   exploreButtonText: {
     color: colors.white,
