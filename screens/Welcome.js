@@ -33,13 +33,13 @@ const onboardingData = [
     id: '2',
     title: 'Where Curiosity Meets Opportunity',
     description: 'Explore Workshops, Seminars, And Research Openings. Join Exclusive Webinars And Events Hosted By Mentors And Experts.',
-    image: require('../assets/onboarding1.png'),
+    image: require('../assets/2.jpg'),
   },
   {
     id: '3',
     title: 'Be Seen. Be Heard. Be Remembered.',
     description: 'Share Your Insights, Share Your Work, And Create A Community That Amplifies Your Journey Starts Today.',
-    image: require('../assets/onboarding1.png'), 
+    image: require('../assets/3.jpg'), 
   },
 ];
 
