@@ -129,11 +129,24 @@ class AuthManager {
       const result = await profileApi.completeProfileSetup(profileData, imageUri);
       
       if (result.success) {
+        // Update user state with the complete profile data
         this.authState.user = result.data;
         this.setLoading(false);
+
+        // Force a double notification to ensure AuthNavigator re-evaluates
         this.notifyListeners();
+
         console.log('AuthManager: Profile setup completed, updated user:', this.authState.user);
+        console.log('AuthManager: User name from result:', result.data?.name);
         console.log('AuthManager: needsProfileSetup after completion:', this.needsProfileSetup());
+        console.log('AuthManager: needsOnboarding after completion:', this.needsOnboarding());
+
+        // Additional notification after a brief delay to ensure state propagation
+        setTimeout(() => {
+          console.log('AuthManager: Second notification - needsProfileSetup:', this.needsProfileSetup());
+          this.notifyListeners();
+        }, 100);
+
         return result;
       } else {
         this.setLoading(false);

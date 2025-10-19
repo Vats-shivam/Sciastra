@@ -21,15 +21,17 @@
     },
     "production": {
       "autoIncrement": true,
-      "android": {
-        "buildType": "apk",
-        "gradleCommand": ":app:assembleRelease"
-      }
-    },
-    "production-aab": {
       "distribution": "store",
       "android": {
         "buildType": "app-bundle"
+      }
+    },
+    "production-apk": {
+      "autoIncrement": true,
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk",
+        "gradleCommand": ":app:assembleRelease"
       }
     }
   },

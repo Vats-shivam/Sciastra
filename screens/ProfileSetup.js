@@ -226,14 +226,29 @@ const ProfileSetupScreen = ({ navigation, route }) => {
       if (result.success) {
         showSuccess('Your profile has been created successfully!');
 
-        // The AuthManager should have notified listeners automatically
-        // and the AuthNavigator will handle the redirection
-        // No manual navigation needed
+        console.log('ProfileSetup: Profile setup successful, navigating to SuggestedConnections...');
 
-        // Optional: Add a small delay to ensure the success message is visible
+        // Direct navigation to SuggestedConnections after successful profile setup
         setTimeout(() => {
-          // Auth state should be updated by now, AuthNavigator will handle navigation
-        }, 500);
+          try {
+            navigation.reset({
+              index: 0,
+              routes: [{ name: 'SuggestedConnections' }],
+            });
+            console.log('ProfileSetup: Successfully navigated to SuggestedConnections');
+          } catch (error) {
+            console.error('ProfileSetup: Navigation error:', error);
+            // Fallback to replace navigation
+            try {
+              navigation.replace('SuggestedConnections');
+              console.log('ProfileSetup: Successfully replaced with SuggestedConnections');
+            } catch (fallbackError) {
+              console.error('ProfileSetup: Fallback navigation also failed:', fallbackError);
+              // Force AuthManager state update as last resort
+              authManager.notifyListeners();
+            }
+          }
+        }, 1500);
       } else {
         showError(result.message || 'Failed to save profile. Please try again.');
       }
