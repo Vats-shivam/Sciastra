@@ -226,29 +226,12 @@ const ProfileSetupScreen = ({ navigation, route }) => {
       if (result.success) {
         showSuccess('Your profile has been created successfully!');
 
-        console.log('ProfileSetup: Profile setup successful, navigating to SuggestedConnections...');
-
-        // Direct navigation to SuggestedConnections after successful profile setup
-        setTimeout(() => {
-          try {
-            navigation.reset({
-              index: 0,
-              routes: [{ name: 'SuggestedConnections' }],
-            });
-            console.log('ProfileSetup: Successfully navigated to SuggestedConnections');
-          } catch (error) {
-            console.error('ProfileSetup: Navigation error:', error);
-            // Fallback to replace navigation
-            try {
-              navigation.replace('SuggestedConnections');
-              console.log('ProfileSetup: Successfully replaced with SuggestedConnections');
-            } catch (fallbackError) {
-              console.error('ProfileSetup: Fallback navigation also failed:', fallbackError);
-              // Force AuthManager state update as last resort
-              authManager.notifyListeners();
-            }
-          }
-        }, 1500);
+        // Immediate navigation after success
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'SuggestedConnections' }],
+        });
+        return; // Prevent any further logic that can cause delays
       } else {
         showError(result.message || 'Failed to save profile. Please try again.');
       }
@@ -468,7 +451,7 @@ const ProfileSetupScreen = ({ navigation, route }) => {
                     </TouchableOpacity>
                   </View>
                   <TextInput
-                    style={styles.input}
+                    style={[styles.input, styles.cardInput]}
                     placeholder="Company/Organization"
                     value={experience.company}
                     onChangeText={(text) => updateExperience(index, 'company', text)}
@@ -476,7 +459,7 @@ const ProfileSetupScreen = ({ navigation, route }) => {
                     maxLength={100}
                   />
                   <TextInput
-                    style={styles.input}
+                    style={[styles.input, styles.cardInput]}
                     placeholder="Role/Position"
                     value={experience.role}
                     onChangeText={(text) => updateExperience(index, 'role', text)}
@@ -548,7 +531,7 @@ const ProfileSetupScreen = ({ navigation, route }) => {
                     </TouchableOpacity>
                   </View>
                   <TextInput
-                    style={styles.input}
+                    style={[styles.input, styles.cardInput]}
                     placeholder="Institution/University"
                     value={edu.institution}
                     onChangeText={(text) => updateEducation(index, 'institution', text)}
@@ -556,7 +539,7 @@ const ProfileSetupScreen = ({ navigation, route }) => {
                     maxLength={100}
                   />
                   <TextInput
-                    style={styles.input}
+                    style={[styles.input, styles.cardInput]}
                     placeholder="Degree (e.g., Bachelor of Science)"
                     value={edu.degree}
                     onChangeText={(text) => updateEducation(index, 'degree', text)}
@@ -564,7 +547,7 @@ const ProfileSetupScreen = ({ navigation, route }) => {
                     maxLength={100}
                   />
                   <TextInput
-                    style={styles.input}
+                    style={[styles.input, styles.cardInput]}
                     placeholder="Field of Study (e.g., Computer Science)"
                     value={edu.fieldOfStudy}
                     onChangeText={(text) => updateEducation(index, 'fieldOfStudy', text)}
@@ -885,9 +868,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.05)',
     borderRadius: 12,
     padding: 16,
-    marginBottom: 16,
+    marginBottom: 20,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
+    minHeight: 200,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -904,10 +888,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: 16,
+    gap: 8,
   },
   dateInput: {
     flex: 1,
-    marginRight: 8,
     marginBottom: 0,
   },
   checkboxContainer: {
@@ -921,6 +905,9 @@ const styles = StyleSheet.create({
   checkboxText: {
     color: 'rgba(255,255,255,0.8)',
     fontSize: 14,
+  },
+  cardInput: {
+    marginBottom: 12,
   },
 });
 

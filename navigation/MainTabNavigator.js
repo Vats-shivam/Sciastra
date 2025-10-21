@@ -1,6 +1,7 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { View } from 'react-native';
+import { View, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
 // Import screens
@@ -16,6 +17,8 @@ import colors from '../config/colors';
 const Tab = createBottomTabNavigator();
 
 const MainTabNavigator = () => {
+  const insets = useSafeAreaInsets();
+  
   return (
     <Tab.Navigator
       initialRouteName="HomeTab"
@@ -26,8 +29,8 @@ const MainTabNavigator = () => {
           borderTopWidth: 0,
           elevation: 0,
           shadowOpacity: 0,
-          height: 70,
-          paddingBottom: 10,
+          height: Platform.OS === 'android' ? 70 + insets.bottom : 70,
+          paddingBottom: Platform.OS === 'android' ? insets.bottom + 10 : 10,
           paddingTop: 10,
         },
         tabBarActiveTintColor: colors.white,
