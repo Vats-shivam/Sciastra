@@ -9,6 +9,7 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
+  StatusBar,
 } from "react-native";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { useNavigation } from "@react-navigation/native";
@@ -221,7 +222,10 @@ const HomeScreen = () => {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       {/* Header with Search */}
-      <View style={styles.headerContainer}>
+      <View style={[
+        styles.headerContainer,
+        searching && styles.headerContainerSearching
+      ]}>
         {!searching ? (
           <Header
             title="SCICOMM"
@@ -232,15 +236,19 @@ const HomeScreen = () => {
           />
         ) : (
           <View style={styles.searchBar}>
-            <Icon
-              name="arrow-left"
-              size={20}
-              color={colors.textPrimary}
+            <TouchableOpacity
               onPress={() => {
                 setSearching(false);
                 clearSearch();
               }}
-            />
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Icon
+                name="arrow-left"
+                size={20}
+                color={colors.textPrimary}
+              />
+            </TouchableOpacity>
             <TextInput
               autoFocus
               placeholder="Search posts or people"
@@ -282,9 +290,11 @@ const HomeScreen = () => {
 
 const styles = StyleSheet.create({
   headerContainer: {
-    paddingTop: Platform.OS === 'ios' ? 40 : 8,
     paddingBottom: 8,
     backgroundColor: colors.background,
+  },
+  headerContainerSearching: {
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 8 : 44,
   },
   searchBar: {
     flexDirection: "row",

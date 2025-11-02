@@ -274,7 +274,7 @@ const EventDetailScreen = ({ route, navigation }) => {
       >
         {/* Event Banner */}
         <Image
-          source={event.banner_url ? { uri: event.banner_url } : require("../assets/splash-icon.png")}
+          source={event.featuredImage ? { uri: event.featuredImage } : require("../assets/splash-icon.png")}
           style={styles.banner}
           resizeMode="cover"
         />

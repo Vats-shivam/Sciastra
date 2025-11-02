@@ -11,6 +11,7 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { Modal, Pressable } from 'react-native';
 import Header from '../components/Header';
 import { useLoader } from "../context/LoaderContext";
+import ConnectionApi from '../api/ConnectionApi';
 
 const ProfileScreen = ({ navigation }) => {
   const { showLoader, hideLoader } = useLoader();
@@ -73,7 +74,7 @@ const ProfileScreen = ({ navigation }) => {
           bio: currentUser.bio || 'Add a bio to tell others about yourself',
           profilePic: currentUser.profilePic,
           email: currentUser.email,
-          connectionsCount: 0, // Will be updated when connection service is integrated
+          connectionsCount: 0, // Will be updated below
           topics: currentUser.topics || [],
           skills: currentUser.skills || [],
           workExperience: currentUser.experiences?.map(exp => ({
@@ -95,6 +96,18 @@ const ProfileScreen = ({ navigation }) => {
           })) || [],
           rawData: currentUser // Keep original data for updates
         };
+
+        // Fetch actual connections count
+        try {
+          const connectionsResult = await ConnectionApi.getConnections(1, 1);
+          if (connectionsResult.success && connectionsResult.data) {
+            const totalConnections = connectionsResult.data.pagination?.total || 0;
+            transformedUser.connectionsCount = totalConnections;
+          }
+        } catch (error) {
+          console.log('Could not fetch connections count:', error);
+          transformedUser.connectionsCount = 0;
+        }
 
         setUser(transformedUser);
       } else {
@@ -436,7 +449,9 @@ const ProfileScreen = ({ navigation }) => {
             
             {/* Connections Count */}
             <View style={styles.connectionsContainer}>
-              <Text style={styles.connectionsCount}>{user.connectionsCount}+ Connections</Text>
+              <Text style={styles.connectionsCount}>
+                {user.connectionsCount} Connection{user.connectionsCount !== 1 ? 's' : ''}
+              </Text>
             </View>
 
             {/* Topics Section */}

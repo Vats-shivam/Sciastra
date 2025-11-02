@@ -113,7 +113,7 @@ class ConnectionApi {
     const storageKey = 'mock_connections';
     
     if (url.includes('/status/')) {
-      const userId = url.split('/').pop();
+      const userId = url.split('/').pop().split('?')[0];
       return this.getMockStatus(userId);
     }
     
@@ -137,6 +137,20 @@ class ConnectionApi {
     
     if (url.includes('/sent')) {
       return this.getMockSentRequests();
+    }
+    
+    if (url.includes('/friends/') && options.method === 'GET') {
+      const userId = url.split('/friends/')[1].split('?')[0];
+      return this.getMockUserConnections(userId);
+    }
+    
+    if (url.includes('/friends') && options.method === 'GET') {
+      return this.getMockConnections();
+    }
+    
+    if (options.method === 'DELETE' && url.includes('/connections/')) {
+      const userId = url.split('/').pop();
+      return this.mockRemoveConnection(userId);
     }
     
     return { success: true, data: {} };
@@ -244,6 +258,114 @@ class ConnectionApi {
       };
     } catch (error) {
       return { success: false, error: 'Failed to reject connection request' };
+    }
+  }
+
+  async mockRemoveConnection(userId) {
+    try {
+      const connections = await AsyncStorage.getItem('mock_connections');
+      const connectionData = connections ? JSON.parse(connections) : {};
+      
+      // Remove the connection for this user
+      if (connectionData[userId]) {
+        delete connectionData[userId];
+        await AsyncStorage.setItem('mock_connections', JSON.stringify(connectionData));
+        console.log('Mock: Removed connection for user:', userId);
+        
+        return {
+          success: true,
+          data: { message: 'Connection removed successfully' }
+        };
+      } else {
+        return {
+          success: false,
+          error: 'Connection not found'
+        };
+      }
+    } catch (error) {
+      console.error('Error removing mock connection:', error);
+      return { success: false, error: 'Failed to remove connection' };
+    }
+  }
+
+  async getMockConnections() {
+    try {
+      const connections = await AsyncStorage.getItem('mock_connections');
+      const connectionData = connections ? JSON.parse(connections) : {};
+      
+      const acceptedConnections = [];
+      for (const userId in connectionData) {
+        if (connectionData[userId].status === 'ACCEPTED') {
+          acceptedConnections.push({
+            id: connectionData[userId].connectionId,
+            status: 'ACCEPTED',
+            createdAt: connectionData[userId].createdAt,
+            user: {
+              id: userId,
+              name: connectionData[userId].fromUserName || `User ${userId}`,
+              profession: 'Mock User',
+              profilePic: null
+            }
+          });
+        }
+      }
+      
+      return {
+        success: true,
+        data: {
+          connections: acceptedConnections,
+          pagination: {
+            page: 1,
+            limit: 50,
+            total: acceptedConnections.length,
+            pages: 1
+          }
+        }
+      };
+    } catch (error) {
+      return {
+        success: true,
+        data: {
+          connections: [],
+          pagination: { page: 1, limit: 50, total: 0, pages: 1 }
+        }
+      };
+    }
+  }
+
+  async getMockUserConnections(userId) {
+    try {
+      // Count actual accepted connections from storage
+      const connections = await AsyncStorage.getItem('mock_connections');
+      const connectionData = connections ? JSON.parse(connections) : {};
+      
+      let connectionCount = 0;
+      for (const connUserId in connectionData) {
+        if (connectionData[connUserId].status === 'ACCEPTED') {
+          connectionCount++;
+        }
+      }
+      
+      return {
+        success: true,
+        data: {
+          connections: [],
+          pagination: {
+            page: 1,
+            limit: 1,
+            total: connectionCount,
+            pages: connectionCount
+          }
+        }
+      };
+    } catch (error) {
+      return {
+        success: true,
+        data: {
+          connections: [],
+          pagination: { page: 1, limit: 1, total: 0, pages: 0 }
+        }
+      };
     }
   }
 
@@ -431,6 +553,26 @@ class ConnectionApi {
       return result;
     } catch (error) {
       return this.handleApiError(error, 'getConnections');
+    }
+  }
+
+  // Get connections for a specific user (for viewing their profile)
+  async getUserConnections(userId, page = 1, limit = 1) {
+    try {
+      if (!userId) {
+        return { success: false, error: 'User ID is required' };
+      }
+
+      // For now, the API might not have a specific endpoint for getting another user's connections count
+      // So we'll use the friends endpoint and return mock data with proper count
+      const url = `${this.baseURL}${API_ENDPOINTS.CONNECTION.GET_FRIENDS}/${userId}?page=${page}&limit=${limit}`;
+      const result = await this.makeRequest(url, {
+        method: 'GET',
+      });
+
+      return result;
+    } catch (error) {
+      return this.handleApiError(error, 'getUserConnections');
     }
   }
 

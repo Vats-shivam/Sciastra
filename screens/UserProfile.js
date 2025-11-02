@@ -1,6 +1,6 @@
 // screens/UserProfile.js
 import React, { useState, useEffect } from 'react';
-import { View, Text, Image, ScrollView, StyleSheet, TouchableOpacity, Modal, Animated } from 'react-native';
+import { View, Text, Image, ScrollView, StyleSheet, TouchableOpacity, Modal, Animated, Alert } from 'react-native';
 import Container from '../components/Container';
 import colors from '../config/colors';
 import { api } from '../api/MockApi';
@@ -24,7 +24,7 @@ const UserProfileScreen = ({ navigation, route }) => {
   const [showConnectionModal, setShowConnectionModal] = useState(false);
   const [modalAnimation] = useState(new Animated.Value(0));
   const { showLoader, hideLoader } = useLoader();
-  const { showError, showSuccess } = useNotification();
+  const { showError, showSuccess, showWarning, showInfo } = useNotification();
 
   useEffect(() => {
     // If this is the current user, redirect to Profile screen
@@ -72,6 +72,20 @@ const UserProfileScreen = ({ navigation, route }) => {
       
       setConnectionData(connectionInfo);
       
+      // Fetch actual connections count for this user
+      // Note: For now using limit=1 just to get the total count from pagination
+      try {
+        const connectionsResult = await ConnectionApi.getUserConnections(userId, 1, 1);
+        if (connectionsResult.success && connectionsResult.data) {
+          const totalConnections = connectionsResult.data.pagination?.total || 0;
+          profileResult.data.connectionsCount = totalConnections;
+        }
+      } catch (error) {
+        console.log('Could not fetch connections count:', error);
+        // Set default to 0 if can't fetch
+        profileResult.data.connectionsCount = 0;
+      }
+      
       // Load user posts (using mock for now)
       const userPosts = await api.getUserPosts(userId);
       
@@ -95,11 +109,11 @@ const UserProfileScreen = ({ navigation, route }) => {
         await refreshConnectionStatus();
         showSuccess('Connection request sent!');
       } else {
-        Alert.alert('Error', result.error || 'Failed to send connection request');
+        showError(result.error || 'Failed to send connection request');
       }
     } catch (error) {
       console.error('Send connection error:', error);
-      Alert.alert('Error', 'Failed to send connection request');
+      showError('Failed to send connection request');
     } finally {
       hideLoader();
     }
@@ -108,7 +122,7 @@ const UserProfileScreen = ({ navigation, route }) => {
   const handleAcceptRequest = async () => {
     try {
       if (!connectionData?.connectionId) {
-        Alert.alert('Error', 'Connection ID not found');
+        showError('Connection ID not found');
         return;
       }
 
@@ -117,13 +131,13 @@ const UserProfileScreen = ({ navigation, route }) => {
       if (result.success) {
         // Reload connection status to get updated information
         await refreshConnectionStatus();
-        Alert.alert('Success', 'Connection request accepted!');
+        showSuccess('Connection request accepted!');
       } else {
-        Alert.alert('Error', result.error || 'Failed to accept connection request');
+        showError(result.error || 'Failed to accept connection request');
       }
     } catch (error) {
       console.error('Accept request error:', error);
-      Alert.alert('Error', 'Failed to accept connection request');
+      showError('Failed to accept connection request');
     } finally {
       hideLoader();
     }
@@ -132,7 +146,7 @@ const UserProfileScreen = ({ navigation, route }) => {
   const handleRejectRequest = async () => {
     try {
       if (!connectionData?.connectionId) {
-        Alert.alert('Error', 'Connection ID not found');
+        showError('Connection ID not found');
         return;
       }
 
@@ -141,13 +155,13 @@ const UserProfileScreen = ({ navigation, route }) => {
       if (result.success) {
         // Reload connection status to get updated information
         await refreshConnectionStatus();
-        Alert.alert('Success', 'Connection request rejected');
+        showSuccess('Connection request rejected');
       } else {
-        Alert.alert('Error', result.error || 'Failed to reject connection request');
+        showError(result.error || 'Failed to reject connection request');
       }
     } catch (error) {
       console.error('Reject request error:', error);
-      Alert.alert('Error', 'Failed to reject connection request');
+      showError('Failed to reject connection request');
     } finally {
       hideLoader();
     }
@@ -206,11 +220,11 @@ const UserProfileScreen = ({ navigation, route }) => {
           });
         } else {
           console.error('Failed to create/get chat room:', chatResult.message);
-          Alert.alert('Error', 'Failed to start chat. Please try again.');
+          showError('Failed to start chat. Please try again.');
         }
       } catch (error) {
         console.error('Error starting chat:', error);
-        Alert.alert('Error', 'Failed to start chat. Please try again.');
+        showError('Failed to start chat. Please try again.');
       } finally {
         hideLoader();
       }
@@ -224,19 +238,11 @@ const UserProfileScreen = ({ navigation, route }) => {
         friction: 8,
       }).start();
     } else if (connectionStatus === 'pending_outgoing') {
-      // Show alert for pending request
-      Alert.alert(
-        'Request Pending',
-        'Your connection request is still pending. You can send messages once the request is accepted.',
-        [{ text: 'OK' }]
-      );
+      // Show notification for pending request
+      showWarning('You will be able to chat once the other person accepts your request', 4000);
     } else if (connectionStatus === 'pending_incoming') {
-      // Show alert to accept the request first
-      Alert.alert(
-        'Connection Request',
-        'Accept the connection request first to start messaging.',
-        [{ text: 'OK' }]
-      );
+      // Show notification to accept the request first
+      showInfo('Accept the connection request first to start messaging', 3500);
     }
   };
 
@@ -259,13 +265,13 @@ const UserProfileScreen = ({ navigation, route }) => {
               if (result.success) {
                 // Refresh connection status to get updated information
                 await refreshConnectionStatus();
-                Alert.alert('Success', 'Connection removed successfully');
+                showSuccess('Connection removed successfully');
               } else {
-                Alert.alert('Error', result.error || 'Failed to remove connection');
+                showError(result.error || 'Failed to remove connection');
               }
             } catch (error) {
               console.error('Remove connection error:', error);
-              Alert.alert('Error', 'Failed to remove connection');
+              showError('Failed to remove connection');
             } finally {
               hideLoader();
             }
@@ -305,7 +311,9 @@ const UserProfileScreen = ({ navigation, route }) => {
         
         {/* Connections Count */}
         <View style={styles.connectionsContainer}>
-          <Text style={styles.connectionsCount}>{user.connectionsCount || 0}+ Connections</Text>
+          <Text style={styles.connectionsCount}>
+            {user.connectionsCount || 0} Connection{user.connectionsCount !== 1 ? 's' : ''}
+          </Text>
         </View>
 
         {/* Skills Section */}
@@ -543,7 +551,9 @@ const UserProfileScreen = ({ navigation, route }) => {
             
             {/* Connections Count */}
             <View style={styles.connectionsContainer}>
-              <Text style={styles.connectionsCount}>{user.connectionsCount || 0}+ Connections</Text>
+              <Text style={styles.connectionsCount}>
+                {user.connectionsCount || 0} Connection{user.connectionsCount !== 1 ? 's' : ''}
+              </Text>
             </View>
 
             {/* Skills Section */}

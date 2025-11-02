@@ -16,6 +16,7 @@ import {
   Modal,
   Dimensions
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import * as ImagePicker from 'expo-image-picker';
 import Animated, {
@@ -35,6 +36,7 @@ import { useLoader } from '../context/LoaderContext';
 const OneToOneChatScreen = ({ route, navigation }) => {
   const { userId, userName, avatar, isOnline = true, isMock = false } = route.params;
   const { showLoader, hideLoader } = useLoader();
+  const insets = useSafeAreaInsets();
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [chatRoom, setChatRoom] = useState(null);
@@ -788,7 +790,7 @@ const OneToOneChatScreen = ({ route, navigation }) => {
       )}
 
       {/* Message Input */}
-      <View style={styles.inputContainer}>
+      <View style={[styles.inputContainer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
         <View style={styles.inputWrapper}>
           <TextInput
             style={styles.input}
