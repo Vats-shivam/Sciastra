@@ -18,6 +18,7 @@ import Header from '../components/Header';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import ConnectionApi from '../api/ConnectionApi';
 import { useLoader } from '../context/LoaderContext';
+import useScreenApiLogger from '../hooks/useScreenApiLogger';
 
 const REQUEST_CATEGORIES = [
   { id: 'received', label: 'Received', icon: 'account-clock' },
@@ -34,30 +35,14 @@ const ConnectionRequestsScreen = () => {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
+  useScreenApiLogger('ConnectionRequests');
+
   // Load data when screen is focused
   useFocusEffect(
     useCallback(() => {
       loadData();
-      // Create some mock incoming requests for testing if none exist
-      createTestData();
     }, [])
   );
-
-  const createTestData = async () => {
-    try {
-      // Check if we already have test data
-      const result = await ConnectionApi.getReceivedRequests(1, 1);
-      if (result.success && result.data.connections && result.data.connections.length === 0) {
-        console.log('Creating test connection requests...');
-        await ConnectionApi.createMockIncomingRequest('user123', 'John Doe');
-        await ConnectionApi.createMockIncomingRequest('user456', 'Jane Smith');
-        // Reload data after creating test requests
-        setTimeout(() => loadData(), 1000);
-      }
-    } catch (error) {
-      console.log('Error creating test data:', error);
-    }
-  };
 
   // Debug function to manually check all endpoints
   const debugBackendEndpoints = async () => {

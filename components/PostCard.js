@@ -416,12 +416,6 @@ const PostCard = ({ post }) => {
         >
           <Icon name="comment-outline" size={22} color={colors.textSecondary} />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.actionButton}>
-          <Icon name="share-outline" size={22} color={colors.textSecondary} />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.actionButton}>
-          <Icon name="send-outline" size={22} color={colors.textSecondary} />
-        </TouchableOpacity>
       </View>
 
       {/* Reaction Picker */}

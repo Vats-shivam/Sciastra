@@ -17,6 +17,7 @@ import colors from '../config/colors';
 import authManager from '../services/AuthManager';
 import authApi from '../api/AuthApi';
 import { useNotification } from '../contexts/NotificationContext';
+import useScreenApiLogger from '../hooks/useScreenApiLogger';
 
 const OtpVerificationScreen = ({ navigation, route }) => {
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
@@ -25,6 +26,8 @@ const OtpVerificationScreen = ({ navigation, route }) => {
   const [smsListener, setSmsListener] = useState(null);
   const phone = route.params?.phone;
   const { showSuccess, showError } = useNotification();
+
+  useScreenApiLogger('OTPVerification');
 
   // Create refs for each input
   const inputRefs = useRef([]);
@@ -267,7 +270,7 @@ const OtpVerificationScreen = ({ navigation, route }) => {
             </TouchableOpacity>
 
             {/* Bypass Hint for Testing */}
-            {phone === '9999999999' && (
+            {/* {phone === '9999999999' && (
               <View style={styles.bypassHint}>
                 <Text style={styles.bypassText}>
                   🔧 Test Mode: Use OTP "123456" for bypass
@@ -279,7 +282,7 @@ const OtpVerificationScreen = ({ navigation, route }) => {
                   <Text style={styles.fillTestOtpText}>Fill Test OTP</Text>
                 </TouchableOpacity>
               </View>
-            )}
+            )} */}
 
             {/* Resend Section */}
             <View style={styles.resendContainer}>

@@ -21,6 +21,7 @@ import authManager from '../services/AuthManager';
 import authApi from '../api/AuthApi';
 import { useLoader } from '../context/LoaderContext';
 import { useNotification } from '../contexts/NotificationContext';
+import useScreenApiLogger from '../hooks/useScreenApiLogger';
 
 const ProfileSetupScreen = ({ navigation, route }) => {
   const [photoUri, setPhotoUri] = useState(null);
@@ -43,6 +44,8 @@ const ProfileSetupScreen = ({ navigation, route }) => {
 
   const { showLoader, hideLoader } = useLoader();
   const { showSuccess, showError } = useNotification();
+
+  useScreenApiLogger('ProfileSetup');
 
   // Check authentication status on component mount
   useEffect(() => {

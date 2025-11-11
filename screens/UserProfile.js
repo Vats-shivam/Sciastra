@@ -3,7 +3,6 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, Image, ScrollView, StyleSheet, TouchableOpacity, Modal, Animated, Alert } from 'react-native';
 import Container from '../components/Container';
 import colors from '../config/colors';
-import { api } from '../api/MockApi';
 import ConnectionApi from '../api/ConnectionApi';
 import ProfileApi from '../api/ProfileApi';
 import chatApi from '../api/ChatApi';
@@ -12,6 +11,8 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Header from '../components/Header';
 import { useLoader } from "../context/LoaderContext";
 import { useNotification } from '../contexts/NotificationContext';
+import postApi from '../api/PostApi';
+import useScreenApiLogger from '../hooks/useScreenApiLogger';
 
 const UserProfileScreen = ({ navigation, route }) => {
   const { userId } = route.params;
@@ -25,6 +26,8 @@ const UserProfileScreen = ({ navigation, route }) => {
   const [modalAnimation] = useState(new Animated.Value(0));
   const { showLoader, hideLoader } = useLoader();
   const { showError, showSuccess, showWarning, showInfo } = useNotification();
+
+  useScreenApiLogger('UserProfile');
 
   useEffect(() => {
     // If this is the current user, redirect to Profile screen
@@ -86,11 +89,59 @@ const UserProfileScreen = ({ navigation, route }) => {
         profileResult.data.connectionsCount = 0;
       }
       
-      // Load user posts (using mock for now)
-      const userPosts = await api.getUserPosts(userId);
+      // Transform profile data to match UI expectations
+      const transformedUser = {
+        ...profileResult.data,
+        // Map profession to designation if needed
+        designation: profileResult.data.designation || profileResult.data.profession || 'No designation',
+        // Transform experiences to workExperience format
+        workExperience: profileResult.data.experiences?.map(exp => ({
+          id: exp.id,
+          company: exp.company,
+          position: exp.role || exp.position,
+          duration: exp.startDate 
+            ? `${new Date(exp.startDate).getFullYear()} - ${exp.endDate ? new Date(exp.endDate).getFullYear() : 'Present'}`
+            : (exp.duration || 'Duration not specified'),
+          description: exp.description,
+          isCurrentRole: exp.isCurrentRole || exp.isCurrent
+        })) || [],
+        // Transform education format
+        education: profileResult.data.education?.map(edu => ({
+          id: edu.id,
+          institution: edu.institution,
+          degree: edu.degree,
+          fieldOfStudy: edu.fieldOfStudy,
+          duration: edu.startDate
+            ? `${new Date(edu.startDate).getFullYear()} - ${edu.endDate ? new Date(edu.endDate).getFullYear() : 'Present'}`
+            : (edu.duration || 'Duration not specified'),
+          grade: edu.grade,
+          isCurrent: edu.isCurrent
+        })) || [],
+      };
       
-      setUser(profileResult.data);
-      setPosts(userPosts);
+      setUser(transformedUser);
+      
+      // Load user posts
+      try {
+        const postsResult = await postApi.getUserPosts(userId, 1, 10);
+        console.log('UserProfile: Posts result:', postsResult);
+        
+        if (postsResult.success && postsResult.data) {
+          // Handle different response structures
+          const postsArray = Array.isArray(postsResult.data) 
+            ? postsResult.data 
+            : (postsResult.data.posts || postsResult.data.data || []);
+          
+          console.log('UserProfile: Posts array:', postsArray);
+          setPosts(Array.isArray(postsArray) ? postsArray : []);
+        } else {
+          console.warn('UserProfile: Failed to load user posts:', postsResult.message || postsResult.error);
+          setPosts([]);
+        }
+      } catch (postError) {
+        console.error('UserProfile: Error loading user posts:', postError);
+        setPosts([]);
+      }
       setConnectionStatus(status);
     } catch (error) {
       console.error('Error loading user data:', error);
@@ -546,83 +597,110 @@ const UserProfileScreen = ({ navigation, route }) => {
 
         {/* Tab Content */}
         {activeTab === 'About' ? (
-          <View style={styles.aboutSection}>
-            <Text style={styles.aboutText}>{user.bio}</Text>
-            
-            {/* Connections Count */}
-            <View style={styles.connectionsContainer}>
-              <Text style={styles.connectionsCount}>
-                {user.connectionsCount || 0} Connection{user.connectionsCount !== 1 ? 's' : ''}
-              </Text>
-            </View>
+          <ScrollView style={styles.tabContent}>
+            <View style={styles.aboutSection}>
+              <Text style={styles.aboutText}>{user.bio || 'No bio available'}</Text>
+              
+              {/* Connections Count */}
+              <View style={styles.connectionsContainer}>
+                <Text style={styles.connectionsCount}>
+                  {user.connectionsCount || 0} Connection{user.connectionsCount !== 1 ? 's' : ''}
+                </Text>
+              </View>
 
-            {/* Skills Section */}
-            <View style={styles.sectionContainer}>
-              <View style={styles.sectionHeader}>
-                <Icon name="lightbulb-outline" size={24} color={colors.primary} />
-                <Text style={styles.sectionTitle}>Skills</Text>
-              </View>
-              <View style={styles.skillsContainer}>
-                {user.skills?.map((skill, index) => (
-                  <View key={index} style={styles.skillChip}>
-                    <Text style={styles.skillText}>{skill}</Text>
-                  </View>
-                )) || <Text style={styles.noDataText}>No skills listed</Text>}
-              </View>
-            </View>
-
-            {/* Work Experience Section */}
-            <View style={styles.sectionContainer}>
-              <View style={styles.sectionHeader}>
-                <Icon name="briefcase-outline" size={24} color={colors.primary} />
-                <Text style={styles.sectionTitle}>Work Experience</Text>
-              </View>
-              {user.workExperience?.map((work) => (
-                <View key={work.id} style={styles.experienceItem}>
-                  <View style={styles.experienceHeader}>
-                    <Icon name="domain" size={40} color={colors.primary} />
-                    <View style={styles.experienceDetails}>
-                      <Text style={styles.experienceCompany}>{work.company}</Text>
-                      <Text style={styles.experiencePosition}>{work.position}</Text>
-                      <Text style={styles.experienceDuration}>{work.duration}</Text>
-                    </View>
-                  </View>
+              {/* Skills Section */}
+              <View style={styles.sectionContainer}>
+                <View style={styles.sectionHeader}>
+                  <Icon name="lightbulb-outline" size={24} color={colors.primary} />
+                  <Text style={styles.sectionTitle}>Skills</Text>
                 </View>
-              )) || <Text style={styles.noDataText}>No work experience listed</Text>}
-            </View>
-
-            {/* Education Section */}
-            <View style={styles.sectionContainer}>
-              <View style={styles.sectionHeader}>
-                <Icon name="school-outline" size={24} color={colors.primary} />
-                <Text style={styles.sectionTitle}>Education</Text>
-              </View>
-              {user.education?.map((edu) => (
-                <View key={edu.id} style={styles.experienceItem}>
-                  <View style={styles.experienceHeader}>
-                    <Icon name="school" size={40} color={colors.primary} />
-                    <View style={styles.experienceDetails}>
-                      <Text style={styles.experienceCompany}>{edu.institution}</Text>
-                      <Text style={styles.experiencePosition}>{edu.degree}</Text>
-                      <Text style={styles.experienceDuration}>{edu.duration}</Text>
-                    </View>
-                  </View>
+                <View style={styles.skillsContainer}>
+                  {user.skills && user.skills.length > 0 ? (
+                    user.skills.map((skill, index) => (
+                      <View key={index} style={styles.skillChip}>
+                        <Text style={styles.skillText}>{skill}</Text>
+                      </View>
+                    ))
+                  ) : (
+                    <Text style={styles.noDataText}>No skills listed</Text>
+                  )}
                 </View>
-              )) || <Text style={styles.noDataText}>No education listed</Text>}
+              </View>
+
+              {/* Work Experience Section */}
+              <View style={styles.sectionContainer}>
+                <View style={styles.sectionHeader}>
+                  <Icon name="briefcase-outline" size={24} color={colors.primary} />
+                  <Text style={styles.sectionTitle}>Work Experience</Text>
+                </View>
+                {user.workExperience && user.workExperience.length > 0 ? (
+                  user.workExperience.map((work) => (
+                    <View key={work.id} style={styles.experienceItem}>
+                      <View style={styles.experienceHeader}>
+                        <Icon name="domain" size={40} color={colors.primary} />
+                        <View style={styles.experienceDetails}>
+                          <Text style={styles.experienceCompany}>{work.company}</Text>
+                          <Text style={styles.experiencePosition}>{work.position}</Text>
+                          <Text style={styles.experienceDuration}>{work.duration}</Text>
+                          {work.description && (
+                            <Text style={styles.experienceDescription}>{work.description}</Text>
+                          )}
+                        </View>
+                      </View>
+                    </View>
+                  ))
+                ) : (
+                  <Text style={styles.noDataText}>No work experience listed</Text>
+                )}
+              </View>
+
+              {/* Education Section */}
+              <View style={styles.sectionContainer}>
+                <View style={styles.sectionHeader}>
+                  <Icon name="school-outline" size={24} color={colors.primary} />
+                  <Text style={styles.sectionTitle}>Education</Text>
+                </View>
+                {user.education && user.education.length > 0 ? (
+                  user.education.map((edu) => (
+                    <View key={edu.id} style={styles.experienceItem}>
+                      <View style={styles.experienceHeader}>
+                        <Icon name="school" size={40} color={colors.primary} />
+                        <View style={styles.experienceDetails}>
+                          <Text style={styles.experienceCompany}>{edu.institution}</Text>
+                          <Text style={styles.experiencePosition}>
+                            {edu.degree}
+                            {edu.fieldOfStudy && ` in ${edu.fieldOfStudy}`}
+                          </Text>
+                          <Text style={styles.experienceDuration}>{edu.duration}</Text>
+                          {edu.grade && (
+                            <Text style={styles.experienceDescription}>Grade: {edu.grade}</Text>
+                          )}
+                        </View>
+                      </View>
+                    </View>
+                  ))
+                ) : (
+                  <Text style={styles.noDataText}>No education listed</Text>
+                )}
+              </View>
             </View>
-          </View>
+          </ScrollView>
         ) : (
-          <View style={styles.postsContainer}>
-            {posts.length > 0 ? (
-              posts.map(post => (
-                <PostCard key={post.id} post={post} style={styles.postCard} />
-              ))
-            ) : (
-              <View style={styles.noPosts}>
-                <Text style={styles.noPostsText}>No posts yet</Text>
-              </View>
-            )}
-          </View>
+          <ScrollView style={styles.tabContent}>
+            <View style={styles.postsContainer}>
+              {posts.length > 0 ? (
+                posts.map(post => (
+                  <PostCard key={post.id} post={post} style={styles.postCard} />
+                ))
+              ) : (
+                <View style={styles.noPosts}>
+                  <Icon name="file-document-outline" size={64} color={colors.textMuted} />
+                  <Text style={styles.noPostsText}>No posts yet</Text>
+                  <Text style={styles.noPostsSubtext}>This user hasn't shared any posts</Text>
+                </View>
+              )}
+            </View>
+          </ScrollView>
         )}
       </ScrollView>
 
@@ -901,13 +979,25 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 12,
   },
+  tabContent: {
+    flex: 1,
+  },
   noPosts: {
     alignItems: 'center',
-    paddingVertical: 40,
+    paddingVertical: 60,
+    paddingHorizontal: 20,
   },
   noPostsText: {
+    color: colors.textPrimary,
+    fontSize: 18,
+    fontWeight: '600',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  noPostsSubtext: {
     color: colors.textSecondary,
-    fontSize: 16,
+    fontSize: 14,
+    textAlign: 'center',
   },
   smallButton: {
     minWidth: 50,

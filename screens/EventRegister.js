@@ -5,6 +5,7 @@ import colors from "../config/colors";
 import Header from "../components/Header";
 import eventsApi from "../api/EventsApi";
 import { useNotification } from "../contexts/NotificationContext";
+import useScreenApiLogger from "../hooks/useScreenApiLogger";
 
 const EventRegister = ({ route, navigation }) => {
   const event = route?.params?.event;
@@ -14,6 +15,8 @@ const EventRegister = ({ route, navigation }) => {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const { showSuccess, showError } = useNotification();
+
+  useScreenApiLogger("EventRegister");
 
   const handleProceed = async () => {
     if (!name || !email || !phone) {

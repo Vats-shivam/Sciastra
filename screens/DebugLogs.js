@@ -16,6 +16,7 @@ import Header from '../components/Header';
 import colors from '../config/colors';
 import logger from '../services/Logger';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import useScreenApiLogger from '../hooks/useScreenApiLogger';
 
 const DebugLogsScreen = ({ navigation }) => {
   const [logs, setLogs] = useState([]);
@@ -23,6 +24,8 @@ const DebugLogsScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
   const [selectedLevel, setSelectedLevel] = useState('all');
   const [searchText, setSearchText] = useState('');
+
+  useScreenApiLogger('DebugLogs');
 
   const logLevels = [
     { key: 'all', label: 'All', color: colors.textPrimary },

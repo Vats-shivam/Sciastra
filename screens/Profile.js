@@ -3,7 +3,6 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, Image, ScrollView, StyleSheet, TouchableOpacity, Alert, RefreshControl, TextInput, ActivityIndicator } from 'react-native';
 import Container from '../components/Container';
 import colors from '../config/colors';
-import { api } from '../api/MockApi';
 import authManager from '../services/AuthManager';
 import postApi from '../api/PostApi';
 import PostCard from '../components/PostCard';
@@ -12,6 +11,7 @@ import { Modal, Pressable } from 'react-native';
 import Header from '../components/Header';
 import { useLoader } from "../context/LoaderContext";
 import ConnectionApi from '../api/ConnectionApi';
+import useScreenApiLogger from '../hooks/useScreenApiLogger';
 
 const ProfileScreen = ({ navigation }) => {
   const { showLoader, hideLoader } = useLoader();
@@ -35,6 +35,8 @@ const ProfileScreen = ({ navigation }) => {
   });
   const [editingExperience, setEditingExperience] = useState(null);
   const [modalLoading, setModalLoading] = useState(false);
+
+  useScreenApiLogger('Profile');
 
   useEffect(() => {
     initializeProfile();
@@ -140,22 +142,17 @@ const ProfileScreen = ({ navigation }) => {
             setPosts(Array.isArray(postsArray) ? postsArray : []);
           } else {
             console.error('Failed to load user posts:', postsResult.message);
-            // Fallback to mock data
-            const userPosts = await api.getUserPosts('1');
-            setPosts(userPosts);
+            setPosts([]);
           }
         }
       } catch (error) {
         console.error('Error loading user posts:', error);
-        // Fallback to mock data
-        const userPosts = await api.getUserPosts('1');
-        setPosts(userPosts);
+        setPosts([]);
       }
     } catch (error) {
       console.error('Error loading current user data:', error);
-      // Fallback to mock data or show error
-      const currentUser = await api.getCurrentUser();
-      setUser(currentUser);
+      Alert.alert('Error', 'Failed to load profile data.');
+      setUser(null);
     } finally {
       setLoading(false);
     }

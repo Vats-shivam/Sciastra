@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, Image, StyleSheet, ScrollView, TouchableOpacity, Modal, ActivityIndicator, Alert, Linking } from "react-native";
+import { View, Text, Image, StyleSheet, ScrollView, TouchableOpacity, Modal, ActivityIndicator, Linking } from "react-native";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Container from "../components/Container";
 import Button from "../components/Button";
@@ -10,6 +10,9 @@ import Header from "../components/Header";
 import eventsApi from "../api/EventsApi";
 import { useNotification } from "../contexts/NotificationContext";
 import authApi from "../api/AuthApi";
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import authManager from "../services/AuthManager";
+import useScreenApiLogger from "../hooks/useScreenApiLogger";
 
 const INSTRUCTIONS = [
   "Registration is mandatory for all participants.",
@@ -80,8 +83,12 @@ const EventDetailScreen = ({ route, navigation }) => {
   const [checkingRegistration, setCheckingRegistration] = useState(false);
   const [registrationStatus, setRegistrationStatus] = useState(null);
   const [showEventStartedModal, setShowEventStartedModal] = useState(false);
+  const [showRegisterConfirm, setShowRegisterConfirm] = useState(false);
   const [registering, setRegistering] = useState(false);
   const { showError, showSuccess } = useNotification();
+  const insets = useSafeAreaInsets();
+
+  useScreenApiLogger("EventDetail");
 
   const eventStarted = event ? isEventStarted(event) : false;
   const { status: eventStatus, color: statusColor } = event ? getEventStatus(event) : { status: '', color: colors.gray };
@@ -114,11 +121,11 @@ const EventDetailScreen = ({ route, navigation }) => {
         setEvent(result.data);
       } else {
         showError('Failed to load event details');
-        setEvent(mockEvent); // Fallback to mock data
+        setEvent(null);
       }
     } catch (error) {
       showError('Something went wrong while loading event details');
-      setEvent(mockEvent); // Fallback to mock data
+      setEvent(null);
     } finally {
       setLoading(false);
     }
@@ -146,79 +153,85 @@ const EventDetailScreen = ({ route, navigation }) => {
       return;
     }
 
-    // Show confirmation popup
-    Alert.alert(
-      "Register for Event",
-      `Would you like to register for "${event.title}"?${event.cheapest_ticket_price === 0 ? ' This is a free event.' : ` Registration fee: ₹${event.cheapest_ticket_price}`}`,
-      [
-        {
-          text: "Cancel",
-          style: "cancel"
-        },
-        {
-          text: "Register",
-          onPress: () => registerForEvent(),
-          style: "default"
-        }
-      ]
-    );
+    setShowRegisterConfirm(true);
   };
 
   const registerForEvent = async () => {
     try {
       setRegistering(true);
-      
+
       // Check if event has already started
       if (eventStarted) {
+        setShowRegisterConfirm(false);
         setShowEventStartedModal(true);
         return;
       }
-      
+
       // Check if user is logged in
-      const currentUser = authApi.getCurrentUserId();
-      if (!currentUser) {
+      const currentUserId = authApi.getCurrentUserId();
+      if (!currentUserId) {
         showError('Please login to register for events');
         navigation.navigate('Login');
+        setShowRegisterConfirm(false);
         return;
       }
-      
-      // Get current user ID and create basic registration data
-      const userId = authApi.getCurrentUserId();
-      const userEmail = await AsyncStorage.getItem('userEmail') || '';
-      const userName = await AsyncStorage.getItem('userName') || 'User';
-      
-      // Format registration data according to API spec with fallback values
-      const registrationData = {
-        "Full Name": userName,
-        "Email": userEmail,
-        "Company": '', // These fields can be updated in a registration form if needed
-        "Experience Level": 'Not specified',
-        "Dietary Restrictions": 'None'
-      };
-      
-      // Register for the event with the formatted data
+
+      // Gather user data from profile/cache as fallbacks
+      const currentUserProfile = authManager.getCurrentUser?.() || {};
+      const storedEmail = await AsyncStorage.getItem('userEmail');
+      const storedName = await AsyncStorage.getItem('userName');
+      const storedPhone = await AsyncStorage.getItem('userPhone');
+
+      const userEmail = (currentUserProfile.email || storedEmail || '').trim();
+      const userName = currentUserProfile.name || storedName || 'User';
+      const userPhone = currentUserProfile.phoneNumber || currentUserProfile.phone || storedPhone || '';
+
+      if (!userEmail) {
+        showError('Please add an email to your profile before registering for events.');
+        return;
+      }
+
       if (!event?.id) {
         throw new Error('Event information is not available');
       }
-      
+
+      // Format registration payload including both API-friendly keys and legacy keys
+      const registrationData = {
+        fullName: userName,
+        name: userName,
+        email: userEmail,
+        phone: userPhone,
+        company: currentUserProfile.company || '',
+        experienceLevel: currentUserProfile.experienceLevel || 'Not specified',
+        dietaryRestrictions: 'None',
+        "Full Name": userName,
+        "Email": userEmail,
+        "Phone": userPhone,
+        "Company": currentUserProfile.company || '',
+        "Experience Level": currentUserProfile.experienceLevel || 'Not specified',
+        "Dietary Restrictions": 'None'
+      };
+
       const response = await eventsApi.registerForEvent(event.id, registrationData);
-      
+
       if (response.success) {
-        // Update local state to reflect registration
         setRegistrationStatus({
           is_registered: true,
           registration_date: new Date().toISOString(),
         });
-        
+
         showSuccess('Successfully registered for the event!');
       } else {
         showError(response.message || 'Failed to register for the event');
       }
     } catch (error) {
       console.error('Registration error:', error);
-      showError('An error occurred while registering for the event');
+      showError(error.message === 'Please add an email to your profile before registering for events.'
+        ? error.message
+        : 'An error occurred while registering for the event');
     } finally {
       setRegistering(false);
+      setShowRegisterConfirm(false);
     }
   };
 
@@ -269,7 +282,7 @@ const EventDetailScreen = ({ route, navigation }) => {
       
       <ScrollView 
         style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: 140 + insets.bottom } ]}
         showsVerticalScrollIndicator={false}
       >
         {/* Event Banner */}
@@ -361,7 +374,7 @@ const EventDetailScreen = ({ route, navigation }) => {
       </ScrollView>
 
       {/* Register Button */}
-      <View style={styles.footer}>
+      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
         <Button
           title={getButtonText()}
           onPress={handleRegister}
@@ -374,7 +387,7 @@ const EventDetailScreen = ({ route, navigation }) => {
         />
       </View>
       {!isRegistrationOpen && (
-        <View style={styles.footer}>
+        <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
           <TouchableOpacity 
             style={[
               styles.registerButton,
@@ -413,6 +426,47 @@ const EventDetailScreen = ({ route, navigation }) => {
             >
               <Text style={styles.modalButtonText}>Got It</Text>
             </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={showRegisterConfirm}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowRegisterConfirm(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Icon name="calendar-check" size={48} color={colors.primary} />
+            <Text style={styles.modalTitle}>Register for Event</Text>
+            <Text style={styles.modalText}>
+              {`Would you like to register for "${event?.title || ''}"?`}
+              {event?.cheapest_ticket_price === 0
+                ? ' This is a free event.'
+                : ` Registration fee: ₹${event?.cheapest_ticket_price || 0}`}
+            </Text>
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.modalActionButton, styles.modalSecondaryButton]}
+                onPress={() => setShowRegisterConfirm(false)}
+                disabled={registering}
+              >
+                <Text style={[styles.modalActionText, styles.modalSecondaryText]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalActionButton, styles.modalPrimaryButton]}
+                onPress={registerForEvent}
+                disabled={registering}
+                activeOpacity={0.9}
+              >
+                {registering ? (
+                  <ActivityIndicator size="small" color={colors.white} />
+                ) : (
+                  <Text style={[styles.modalActionText, styles.modalPrimaryText]}>Register</Text>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -667,6 +721,39 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontSize: 16,
     fontWeight: '600',
+  },
+
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+    marginTop: 16,
+    gap: 12,
+  },
+  modalActionButton: {
+    flex: 1,
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalActionText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  modalSecondaryButton: {
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  modalSecondaryText: {
+    color: colors.textPrimary,
+  },
+  modalPrimaryButton: {
+    backgroundColor: '#8B5CF6',
+  },
+  modalPrimaryText: {
+    color: colors.white,
   },
 
   // Loading and Error States

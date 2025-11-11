@@ -9,6 +9,7 @@ import {
   getCommonHeaders
 } from '../config/apiConfig';
 import authApi from './AuthApi';
+import apiLogger from '../services/ApiLogger';
 
 class ChatApiService {
   constructor() {
@@ -38,6 +39,9 @@ class ChatApiService {
           ...options,
         };
 
+        const method = (config.method || 'GET').toUpperCase();
+        apiLogger.logApiCall(url, method);
+
         // Create AbortController for timeout
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), REQUEST_CONFIG.TIMEOUT);
@@ -59,6 +63,14 @@ class ChatApiService {
         const data = await response.json();
         console.log('ChatApi: Response data:', JSON.stringify(data, null, 2));
 
+        apiLogger.logApiResponse(
+          url,
+          method,
+          response.status,
+          data,
+          response.ok ? null : data?.message || 'Request failed'
+        );
+
         // Handle token expiration
         if (response.status === 401 && !options.skipRefresh) {
           const refreshed = await authApi.refreshAccessToken();
@@ -74,13 +86,6 @@ class ChatApiService {
 
         if (!response.ok) {
           const errorMessage = this.getErrorMessage(response.status, data.message);
-          
-          // If chat service is not available (404), fall back to demo mode
-          if (response.status === 404) {
-            console.log('ChatApi: Chat service not available (404), falling back to demo mode');
-            return this.handleDemoFallback(url, options);
-          }
-          
           throw new Error(errorMessage);
         }
 
@@ -103,183 +108,6 @@ class ChatApiService {
     }
   }
 
-  // Handle demo fallback when chat service is not available
-  handleDemoFallback(url, options) {
-    console.log('ChatApi: Using demo fallback for URL:', url, 'method:', options.method);
-    
-    if (url.includes('/rooms') && options.method === 'POST') {
-      // Create room fallback
-      const body = JSON.parse(options.body || '{}');
-      const memberIds = body.memberIds || [];
-      const participantId = memberIds[0] || 'demo_user_1';
-      
-      return {
-        success: true,
-        data: {
-          id: `demo_room_${Date.now()}`,
-          isGroup: body.isGroup || false,
-          participants: [
-            {
-              userId: authApi.getCurrentUserId(),
-              name: 'You',
-              profilePic: null,
-            },
-            {
-              userId: participantId,
-              name: 'Demo User',
-              profilePic: null,
-            }
-          ],
-          lastMessage: null,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        }
-      };
-    }
-    
-    if (url.includes('/rooms') && options.method === 'GET') {
-      // Get rooms fallback
-      return {
-        success: true,
-        data: [
-          {
-            id: 'demo_room_1',
-            type: 'direct',
-            participants: [
-              {
-                userId: authApi.getCurrentUserId(),
-                name: 'You',
-                profilePic: null,
-              },
-              {
-                userId: 'demo_user_1',
-                name: 'Demo User',
-                profilePic: null,
-              }
-            ],
-            lastMessage: {
-              id: 'msg_1',
-              content: 'Welcome to demo chat!',
-              senderId: 'demo_user_1',
-              createdAt: new Date(Date.now() - 3600000).toISOString(),
-            },
-            unreadCount: 1,
-            createdAt: new Date(Date.now() - 86400000).toISOString(),
-            updatedAt: new Date(Date.now() - 3600000).toISOString(),
-          }
-        ]
-      };
-    }
-    
-    if (url.includes('/messages') && options.method === 'GET') {
-      // Get messages fallback
-      return {
-        success: true,
-        data: {
-          messages: [
-            {
-              id: 'demo_msg_1',
-              roomId: url.split('/')[4], // Extract room ID from URL
-              senderId: 'demo_user_1',
-              content: 'Hello! This is a demo message.',
-              messageType: 'text',
-              createdAt: new Date(Date.now() - 7200000).toISOString(),
-              readBy: [],
-            },
-            {
-              id: 'demo_msg_2',
-              roomId: url.split('/')[4],
-              senderId: authApi.getCurrentUserId(),
-              content: 'Hi! This is demo mode.',
-              messageType: 'text',
-              createdAt: new Date(Date.now() - 3600000).toISOString(),
-              readBy: ['demo_user_1'],
-            }
-          ],
-          pagination: {
-            hasMore: false,
-            page: 1,
-            limit: 50,
-            total: 2,
-          }
-        }
-      };
-    }
-    
-    if (url.includes('/messages') && options.method === 'POST') {
-      // Send message fallback
-      const body = JSON.parse(options.body || '{}');
-      const roomId = url.split('/')[4]; // Extract room ID from URL
-
-      const demoMessage = {
-        id: 'demo_msg_' + Date.now(),
-        roomId: roomId,
-        senderId: authApi.getCurrentUserId(),
-        content: body.content,
-        messageType: body.messageType || 'text',
-        media: body.media || null, // Include media if present
-        createdAt: new Date().toISOString(),
-        readBy: [],
-      };
-
-      // Simulate real-time delivery
-      setTimeout(() => {
-        this.handleIncomingMessage(demoMessage);
-      }, 100);
-
-      return {
-        success: true,
-        data: demoMessage
-      };
-    }
-
-    if (url.includes('/media/upload') && options.method === 'POST') {
-      // Media upload fallback
-      console.log('ChatApi: Demo media upload fallback');
-
-      // Extract roomId from FormData
-      let roomId = 'demo_room';
-      if (options.body && options.body._parts) {
-        const roomIdPart = options.body._parts.find(part => part[0] === 'roomId');
-        if (roomIdPart) {
-          roomId = roomIdPart[1];
-        }
-      }
-
-      // Generate a mock media key
-      const mockMediaKey = `demo-media/${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
-
-      return {
-        success: true,
-        data: {
-          mediaKey: mockMediaKey,
-          uploadUrl: 'demo://uploaded',
-          message: {
-            id: 'demo_media_msg_' + Date.now(),
-            roomId: roomId,
-            senderId: authApi.getCurrentUserId(),
-            content: '',
-            media: {
-              key: mockMediaKey,
-              type: 'image',
-              mimeType: 'image/jpeg',
-              fileName: 'demo-image.jpg',
-              displayUrl: 'https://picsum.photos/300/200'
-            },
-            createdAt: new Date().toISOString(),
-            readBy: [],
-          }
-        }
-      };
-    }
-    
-    // Default fallback
-    return {
-      success: true,
-      data: {},
-      message: 'Demo mode - chat service not available'
-    };
-  }
 
   // Get appropriate error message based on status code
   getErrorMessage(status, apiMessage) {
@@ -314,12 +142,6 @@ class ChatApiService {
         return false;
       }
 
-      // Check for bypass mode
-      if (userId === 'bypass_user_1234567890') {
-        console.log('Using bypass mode for chat socket');
-        this.isConnected = true;
-        return true;
-      }
 
       // Disconnect existing socket if any
       if (this.socket) {
@@ -349,7 +171,7 @@ class ChatApiService {
 
       this.socket.on('connect_error', (error) => {
         console.error('Chat socket connection error:', error.message);
-        console.log('Chat service may not be running. Falling back to demo mode.');
+        console.log('Chat service may not be running.');
         this.isConnected = false;
       });
 
@@ -568,9 +390,6 @@ class ChatApiService {
         throw new Error('Participant user ID is required');
       }
 
-      // Check for bypass mode
-      
-
       // Use the new find-or-create endpoint to prevent duplicates
       const response = await this.makeRequest(`${this.baseUrl}/chat/chat/rooms/find/${participantUserId}`, {
         method: 'GET',
@@ -606,35 +425,6 @@ class ChatApiService {
         throw new Error('Member IDs are required for group chat');
       }
 
-      // Check for bypass mode
-      if (userId === 'bypass_user_1234567890') {
-        console.log('Using bypass mode for group chat creation');
-
-        const mockRoom = {
-          id: `group_${Date.now()}`,
-          isGroup: true,
-          name: groupName || 'Group Chat',
-          participants: [
-            {
-              userId: userId,
-              name: 'You',
-              profilePic: null,
-            },
-            ...memberIds.map((id, index) => ({
-              userId: id,
-              name: `User ${index + 1}`,
-              profilePic: null,
-            }))
-          ],
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        };
-
-        return {
-          success: true,
-          data: mockRoom,
-        };
-      }
 
       const payload = {
         isGroup: true,
@@ -673,43 +463,6 @@ class ChatApiService {
         throw new Error(ERROR_MESSAGES.UNAUTHORIZED);
       }
 
-      // Check for bypass mode
-      if (userId === 'bypass_user_1234567890') {
-        console.log('Using bypass mode for chat rooms');
-        
-        const mockRooms = [
-          {
-            id: 'room_1',
-            isGroup: false,
-            participants: [
-              {
-                userId: userId,
-                name: 'You',
-                profilePic: null,
-              },
-              {
-                userId: 'demo_user_1',
-                name: 'Demo User',
-                profilePic: null,
-              }
-            ],
-            lastMessage: {
-              id: 'msg_1',
-              content: 'Hello! Welcome to the demo chat.',
-              senderId: 'demo_user_1',
-              createdAt: new Date(Date.now() - 3600000).toISOString(), // 1 hour ago
-            },
-            unreadCount: 1,
-            createdAt: new Date(Date.now() - 86400000).toISOString(), // 1 day ago
-            updatedAt: new Date(Date.now() - 3600000).toISOString(),
-          }
-        ];
-
-        return {
-          success: true,
-          data: mockRooms,
-        };
-      }
 
       const url = `${this.baseUrl}/chat/chat/rooms?page=${page}&limit=${limit}`;
 
@@ -746,30 +499,6 @@ class ChatApiService {
         throw new Error('Room ID and message content are required');
       }
 
-      // Check for bypass mode
-      if (userId === 'bypass_user_1234567890') {
-        console.log('Using bypass mode for sending message');
-        
-        const mockMessage = {
-          id: 'msg_' + Date.now(),
-          roomId: roomId,
-          senderId: userId,
-          content: content,
-          messageType: messageType,
-          createdAt: new Date().toISOString(),
-          readBy: [],
-        };
-
-        // Simulate real-time delivery
-        setTimeout(() => {
-          this.handleIncomingMessage(mockMessage);
-        }, 100);
-
-        return {
-          success: true,
-          data: mockMessage,
-        };
-      }
 
       const payload = {
         content: content,
@@ -841,44 +570,6 @@ class ChatApiService {
         throw new Error('Room ID is required');
       }
 
-      // Check for bypass mode
-      if (userId === 'bypass_user_1234567890') {
-        console.log('Using bypass mode for messages');
-        
-        const mockMessages = [
-          {
-            id: 'msg_1',
-            roomId: roomId,
-            senderId: 'demo_user_1',
-            content: 'Hello! How are you doing?',
-            messageType: 'text',
-            createdAt: new Date(Date.now() - 7200000).toISOString(), // 2 hours ago
-            readBy: [],
-          },
-          {
-            id: 'msg_2',
-            roomId: roomId,
-            senderId: userId,
-            content: 'Hi! I\'m doing great, thanks!',
-            messageType: 'text',
-            createdAt: new Date(Date.now() - 3600000).toISOString(), // 1 hour ago
-            readBy: ['demo_user_1'],
-          }
-        ];
-
-        return {
-          success: true,
-          data: {
-            messages: mockMessages,
-            pagination: {
-              hasMore: false,
-              page: page,
-              limit: limit,
-              total: mockMessages.length,
-            }
-          }
-        };
-      }
 
       const url = `${this.baseUrl}/chat/chat/rooms/${roomId}/messages?page=${page}&limit=${limit}`;
 
@@ -915,14 +606,6 @@ class ChatApiService {
         return { success: true };
       }
 
-      // Check for bypass mode
-      if (userId === 'bypass_user_1234567890') {
-        console.log('Using bypass mode for marking messages as read');
-        return {
-          success: true,
-          message: 'Messages marked as read (demo mode)',
-        };
-      }
 
       // For now, mark each message individually as the backend expects single message ID
       // This could be optimized to support bulk operations if the backend supports it
@@ -962,11 +645,6 @@ class ChatApiService {
         return;
       }
 
-      // Check for bypass mode
-      if (userId === 'bypass_user_1234567890') {
-        console.log('Using bypass mode for typing indicator');
-        return;
-      }
 
       if (this.isConnected && this.socket) {
         if (isTyping) {
@@ -988,11 +666,6 @@ class ChatApiService {
         return;
       }
 
-      // Check for bypass mode
-      if (userId === 'bypass_user_1234567890') {
-        console.log('Using bypass mode for joining room');
-        return;
-      }
 
       if (this.isConnected && this.socket) {
         console.log('🏠 JOINING ROOM VIA WEBSOCKET:', roomId);
@@ -1016,11 +689,6 @@ class ChatApiService {
         return;
       }
 
-      // Check for bypass mode
-      if (userId === 'bypass_user_1234567890') {
-        console.log('Using bypass mode for leaving room');
-        return;
-      }
 
       if (this.isConnected && this.socket) {
         this.socket.emit('leave:room', { roomId });
@@ -1043,11 +711,6 @@ class ChatApiService {
         return;
       }
 
-      // Check for bypass mode
-      if (userId === 'bypass_user_1234567890') {
-        console.log('Using bypass mode for marking message as read');
-        return;
-      }
 
       if (this.isConnected && this.socket) {
         this.socket.emit('mark:read', {
@@ -1060,7 +723,7 @@ class ChatApiService {
     }
   }
 
-  // Get current user ID for bypass checking
+  // Get current user ID
   getCurrentUserId() {
     return authApi.getCurrentUserId();
   }
@@ -1336,9 +999,9 @@ class ChatApiService {
       const directUploadResult = await this.uploadMediaDirect(roomId, imageUri, fileType);
 
       if (directUploadResult.success) {
-        // If direct upload includes the complete message (demo mode), return it
+        // If direct upload includes the complete message, return it
         if (directUploadResult.data.message) {
-          console.log('🎯 Demo upload returned complete message:', directUploadResult.data.message);
+          console.log('🎯 Upload returned complete message:', directUploadResult.data.message);
 
           // Simulate the message being received
           setTimeout(() => {

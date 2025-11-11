@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_ENDPOINTS, REQUEST_CONFIG, STORAGE_KEYS, ERROR_MESSAGES, getCommonHeaders } from '../config/apiConfig';
+import apiLogger from '../services/ApiLogger';
 
 class ConnectionApi {
   constructor() {
@@ -46,23 +47,22 @@ class ConnectionApi {
     }
   }
 
-  // Make authenticated request with fallback to mock data
+  // Make authenticated request
   async makeRequest(url, options = {}) {
     try {
       const accessToken = await this.getAccessToken();
       if (!accessToken) {
-        // Fallback to mock data for demo purposes
-        return this.getMockResponse(url, options);
+        return { success: false, error: ERROR_MESSAGES.UNAUTHORIZED };
       }
 
       const headers = getCommonHeaders(true, accessToken);
       
-      // Create AbortController for timeout
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), REQUEST_CONFIG.TIMEOUT);
       
-      console.log('ConnectionApi: Making request to:', url, 'with options:', options);
-      
+      const method = (options.method || 'GET').toUpperCase();
+      apiLogger.logApiCall(url, method);
+
       const response = await fetch(url, {
         ...options,
         headers: {
@@ -82,380 +82,31 @@ class ConnectionApi {
         } catch {
           errorData = { message: errorText };
         }
+
+        apiLogger.logApiResponse(
+          url,
+          method,
+          response.status,
+          errorData,
+          errorData.message || ERROR_MESSAGES.GENERIC_ERROR
+        );
         
-        throw {
-          response: {
+        return {
+          success: false,
+          error: errorData.message || ERROR_MESSAGES.GENERIC_ERROR,
             status: response.status,
-            data: errorData,
-          },
         };
       }
 
       const data = await response.json();
-      console.log('ConnectionApi: Response received:', JSON.stringify(data, null, 2));
+      apiLogger.logApiResponse(url, method, response.status, data);
       return { success: true, data: data.data || data };
     } catch (error) {
       if (error.name === 'AbortError') {
         return { success: false, error: ERROR_MESSAGES.TIMEOUT_ERROR };
       }
       
-      console.log('ConnectionApi: Request failed, falling back to mock:', error.message);
-      // Fallback to mock data if network fails
-      return this.getMockResponse(url, options);
-    }
-  }
-
-  // Mock responses for demo/testing
-  getMockResponse(url, options = {}) {
-    console.log('ConnectionApi: Using mock response for:', url, options.method);
-    
-    // Store connection states in AsyncStorage for persistence
-    const storageKey = 'mock_connections';
-    
-    if (url.includes('/status/')) {
-      const userId = url.split('/').pop().split('?')[0];
-      return this.getMockStatus(userId);
-    }
-    
-    if (url.includes('/request') && options.method === 'POST') {
-      return this.mockSendRequest(JSON.parse(options.body || '{}'));
-    }
-    
-    if (url.includes('/accept/') && options.method === 'PUT') {
-      const connectionId = url.split('/').pop();
-      return this.mockAcceptRequest(connectionId);
-    }
-    
-    if (url.includes('/reject/') && options.method === 'PUT') {
-      const connectionId = url.split('/').pop();
-      return this.mockRejectRequest(connectionId);
-    }
-    
-    if (url.includes('/received')) {
-      return this.getMockReceivedRequests();
-    }
-    
-    if (url.includes('/sent')) {
-      return this.getMockSentRequests();
-    }
-    
-    if (url.includes('/friends/') && options.method === 'GET') {
-      const userId = url.split('/friends/')[1].split('?')[0];
-      return this.getMockUserConnections(userId);
-    }
-    
-    if (url.includes('/friends') && options.method === 'GET') {
-      return this.getMockConnections();
-    }
-    
-    if (options.method === 'DELETE' && url.includes('/connections/')) {
-      const userId = url.split('/').pop();
-      return this.mockRemoveConnection(userId);
-    }
-    
-    return { success: true, data: {} };
-  }
-
-  async getMockStatus(userId) {
-    try {
-      const connections = await AsyncStorage.getItem('mock_connections');
-      const connectionData = connections ? JSON.parse(connections) : {};
-      const userConnection = connectionData[userId];
-      
-      if (!userConnection) {
-        return {
-          success: true,
-          data: {
-            status: 'NONE',
-            connectionId: null,
-            isIncoming: false
-          }
-        };
-      }
-      
-      return {
-        success: true,
-        data: {
-          status: userConnection.status,
-          connectionId: userConnection.connectionId,
-          isIncoming: userConnection.isIncoming
-        }
-      };
-    } catch (error) {
-      return {
-        success: true,
-        data: { status: 'NONE', connectionId: null, isIncoming: false }
-      };
-    }
-  }
-
-  async mockSendRequest(body) {
-    try {
-      const connections = await AsyncStorage.getItem('mock_connections');
-      const connectionData = connections ? JSON.parse(connections) : {};
-      
-      const connectionId = `conn_${Date.now()}`;
-      connectionData[body.receiverId] = {
-        status: 'PENDING',
-        connectionId: connectionId,
-        isIncoming: false,
-        createdAt: new Date().toISOString()
-      };
-      
-      await AsyncStorage.setItem('mock_connections', JSON.stringify(connectionData));
-      
-      return {
-        success: true,
-        data: { connectionId, message: 'Connection request sent successfully' }
-      };
-    } catch (error) {
-      return { success: false, error: 'Failed to send connection request' };
-    }
-  }
-
-  async mockAcceptRequest(connectionId) {
-    try {
-      const connections = await AsyncStorage.getItem('mock_connections');
-      const connectionData = connections ? JSON.parse(connections) : {};
-      
-      // Find and update the connection
-      for (const userId in connectionData) {
-        if (connectionData[userId].connectionId === connectionId) {
-          connectionData[userId].status = 'ACCEPTED';
-          break;
-        }
-      }
-      
-      await AsyncStorage.setItem('mock_connections', JSON.stringify(connectionData));
-      
-      return {
-        success: true,
-        data: { message: 'Connection request accepted' }
-      };
-    } catch (error) {
-      return { success: false, error: 'Failed to accept connection request' };
-    }
-  }
-
-  async mockRejectRequest(connectionId) {
-    try {
-      const connections = await AsyncStorage.getItem('mock_connections');
-      const connectionData = connections ? JSON.parse(connections) : {};
-      
-      // Find and remove the connection
-      for (const userId in connectionData) {
-        if (connectionData[userId].connectionId === connectionId) {
-          delete connectionData[userId];
-          break;
-        }
-      }
-      
-      await AsyncStorage.setItem('mock_connections', JSON.stringify(connectionData));
-      
-      return {
-        success: true,
-        data: { message: 'Connection request rejected' }
-      };
-    } catch (error) {
-      return { success: false, error: 'Failed to reject connection request' };
-    }
-  }
-
-  async mockRemoveConnection(userId) {
-    try {
-      const connections = await AsyncStorage.getItem('mock_connections');
-      const connectionData = connections ? JSON.parse(connections) : {};
-      
-      // Remove the connection for this user
-      if (connectionData[userId]) {
-        delete connectionData[userId];
-        await AsyncStorage.setItem('mock_connections', JSON.stringify(connectionData));
-        console.log('Mock: Removed connection for user:', userId);
-        
-        return {
-          success: true,
-          data: { message: 'Connection removed successfully' }
-        };
-      } else {
-        return {
-          success: false,
-          error: 'Connection not found'
-        };
-      }
-    } catch (error) {
-      console.error('Error removing mock connection:', error);
-      return { success: false, error: 'Failed to remove connection' };
-    }
-  }
-
-  async getMockConnections() {
-    try {
-      const connections = await AsyncStorage.getItem('mock_connections');
-      const connectionData = connections ? JSON.parse(connections) : {};
-      
-      const acceptedConnections = [];
-      for (const userId in connectionData) {
-        if (connectionData[userId].status === 'ACCEPTED') {
-          acceptedConnections.push({
-            id: connectionData[userId].connectionId,
-            status: 'ACCEPTED',
-            createdAt: connectionData[userId].createdAt,
-            user: {
-              id: userId,
-              name: connectionData[userId].fromUserName || `User ${userId}`,
-              profession: 'Mock User',
-              profilePic: null
-            }
-          });
-        }
-      }
-      
-      return {
-        success: true,
-        data: {
-          connections: acceptedConnections,
-          pagination: {
-            page: 1,
-            limit: 50,
-            total: acceptedConnections.length,
-            pages: 1
-          }
-        }
-      };
-    } catch (error) {
-      return {
-        success: true,
-        data: {
-          connections: [],
-          pagination: { page: 1, limit: 50, total: 0, pages: 1 }
-        }
-      };
-    }
-  }
-
-  async getMockUserConnections(userId) {
-    try {
-      // Count actual accepted connections from storage
-      const connections = await AsyncStorage.getItem('mock_connections');
-      const connectionData = connections ? JSON.parse(connections) : {};
-      
-      let connectionCount = 0;
-      for (const connUserId in connectionData) {
-        if (connectionData[connUserId].status === 'ACCEPTED') {
-          connectionCount++;
-        }
-      }
-      
-      return {
-        success: true,
-        data: {
-          connections: [],
-          pagination: {
-            page: 1,
-            limit: 1,
-            total: connectionCount,
-            pages: connectionCount
-          }
-        }
-      };
-    } catch (error) {
-      return {
-        success: true,
-        data: {
-          connections: [],
-          pagination: { page: 1, limit: 1, total: 0, pages: 0 }
-        }
-      };
-    }
-  }
-
-  async getMockReceivedRequests() {
-    try {
-      const connections = await AsyncStorage.getItem('mock_connections');
-      const connectionData = connections ? JSON.parse(connections) : {};
-      
-      const receivedRequests = [];
-      for (const userId in connectionData) {
-        if (connectionData[userId].isIncoming && connectionData[userId].status === 'PENDING') {
-          receivedRequests.push({
-            id: connectionData[userId].connectionId,
-            status: 'PENDING',
-            createdAt: connectionData[userId].createdAt,
-            user: {
-              id: userId,
-              name: connectionData[userId].fromUserName || `User ${userId}`,
-              profession: 'Mock User',
-              profilePic: null
-            }
-          });
-        }
-      }
-      
-      return {
-        success: true,
-        data: {
-          connections: receivedRequests,
-          pagination: {
-            page: 1,
-            limit: 50,
-            total: receivedRequests.length,
-            pages: 1
-          }
-        }
-      };
-    } catch (error) {
-      return {
-        success: true,
-        data: {
-          connections: [],
-          pagination: { page: 1, limit: 50, total: 0, pages: 1 }
-        }
-      };
-    }
-  }
-
-  async getMockSentRequests() {
-    try {
-      const connections = await AsyncStorage.getItem('mock_connections');
-      const connectionData = connections ? JSON.parse(connections) : {};
-      
-      const sentRequests = [];
-      for (const userId in connectionData) {
-        if (!connectionData[userId].isIncoming && connectionData[userId].status === 'PENDING') {
-          sentRequests.push({
-            id: connectionData[userId].connectionId,
-            status: 'PENDING',
-            createdAt: connectionData[userId].createdAt,
-            user: {
-              id: userId,
-              name: `User ${userId}`,
-              profession: 'Mock User',
-              profilePic: null
-            }
-          });
-        }
-      }
-      
-      return {
-        success: true,
-        data: {
-          connections: sentRequests,
-          pagination: {
-            page: 1,
-            limit: 50,
-            total: sentRequests.length,
-            pages: 1
-          }
-        }
-      };
-    } catch (error) {
-      return {
-        success: true,
-        data: {
-          connections: [],
-          pagination: { page: 1, limit: 50, total: 0, pages: 1 }
-        }
-      };
+      return this.handleApiError(error, 'makeRequest');
     }
   }
 
@@ -467,12 +118,10 @@ class ConnectionApi {
       }
 
       const url = `${this.baseURL}${API_ENDPOINTS.CONNECTION.SEND_REQUEST}`;
-      const result = await this.makeRequest(url, {
+      return await this.makeRequest(url, {
         method: 'POST',
         body: JSON.stringify({ receiverId }),
       });
-
-      return result;
     } catch (error) {
       return this.handleApiError(error, 'sendConnectionRequest');
     }
@@ -486,11 +135,9 @@ class ConnectionApi {
       }
 
       const url = `${this.baseURL}${API_ENDPOINTS.CONNECTION.ACCEPT_REQUEST}/${connectionId}`;
-      const result = await this.makeRequest(url, {
+      return await this.makeRequest(url, {
         method: 'PUT',
       });
-
-      return result;
     } catch (error) {
       return this.handleApiError(error, 'acceptConnectionRequest');
     }
@@ -504,11 +151,9 @@ class ConnectionApi {
       }
 
       const url = `${this.baseURL}${API_ENDPOINTS.CONNECTION.REJECT_REQUEST}/${connectionId}`;
-      const result = await this.makeRequest(url, {
+      return await this.makeRequest(url, {
         method: 'PUT',
       });
-
-      return result;
     } catch (error) {
       return this.handleApiError(error, 'rejectConnectionRequest');
     }
@@ -518,11 +163,7 @@ class ConnectionApi {
   async getSentRequests(page = 1, limit = 10) {
     try {
       const url = `${this.baseURL}${API_ENDPOINTS.CONNECTION.GET_SENT}?page=${page}&limit=${limit}`;
-      const result = await this.makeRequest(url, {
-        method: 'GET',
-      });
-
-      return result;
+      return await this.makeRequest(url, { method: 'GET' });
     } catch (error) {
       return this.handleApiError(error, 'getSentRequests');
     }
@@ -532,11 +173,7 @@ class ConnectionApi {
   async getReceivedRequests(page = 1, limit = 10) {
     try {
       const url = `${this.baseURL}${API_ENDPOINTS.CONNECTION.GET_RECEIVED}?page=${page}&limit=${limit}`;
-      const result = await this.makeRequest(url, {
-        method: 'GET',
-      });
-
-      return result;
+      return await this.makeRequest(url, { method: 'GET' });
     } catch (error) {
       return this.handleApiError(error, 'getReceivedRequests');
     }
@@ -546,11 +183,7 @@ class ConnectionApi {
   async getConnections(page = 1, limit = 10) {
     try {
       const url = `${this.baseURL}${API_ENDPOINTS.CONNECTION.GET_FRIENDS}?page=${page}&limit=${limit}`;
-      const result = await this.makeRequest(url, {
-        method: 'GET',
-      });
-
-      return result;
+      return await this.makeRequest(url, { method: 'GET' });
     } catch (error) {
       return this.handleApiError(error, 'getConnections');
     }
@@ -563,14 +196,9 @@ class ConnectionApi {
         return { success: false, error: 'User ID is required' };
       }
 
-      // For now, the API might not have a specific endpoint for getting another user's connections count
-      // So we'll use the friends endpoint and return mock data with proper count
+      // Use the friends endpoint to obtain the connection count for the requested user
       const url = `${this.baseURL}${API_ENDPOINTS.CONNECTION.GET_FRIENDS}/${userId}?page=${page}&limit=${limit}`;
-      const result = await this.makeRequest(url, {
-        method: 'GET',
-      });
-
-      return result;
+      return await this.makeRequest(url, { method: 'GET' });
     } catch (error) {
       return this.handleApiError(error, 'getUserConnections');
     }
@@ -584,11 +212,7 @@ class ConnectionApi {
       }
 
       const url = `${this.baseURL}${API_ENDPOINTS.CONNECTION.REMOVE}/${targetUserId}`;
-      const result = await this.makeRequest(url, {
-        method: 'DELETE',
-      });
-
-      return result;
+      return await this.makeRequest(url, { method: 'DELETE' });
     } catch (error) {
       return this.handleApiError(error, 'removeConnection');
     }
@@ -602,11 +226,7 @@ class ConnectionApi {
       }
 
       const url = `${this.baseURL}${API_ENDPOINTS.CONNECTION.GET_STATUS}/${targetUserId}`;
-      const result = await this.makeRequest(url, {
-        method: 'GET',
-      });
-
-      return result;
+      return await this.makeRequest(url, { method: 'GET' });
     } catch (error) {
       return this.handleApiError(error, 'getConnectionStatus');
     }
@@ -625,43 +245,6 @@ class ConnectionApi {
     } catch (error) {
       console.error('Connection service health check failed:', error);
       return false;
-    }
-  }
-
-  // Utility function to create mock incoming requests for testing
-  async createMockIncomingRequest(fromUserId, fromUserName = null) {
-    try {
-      const connections = await AsyncStorage.getItem('mock_connections');
-      const connectionData = connections ? JSON.parse(connections) : {};
-      
-      const connectionId = `conn_incoming_${Date.now()}`;
-      connectionData[fromUserId] = {
-        status: 'PENDING',
-        connectionId: connectionId,
-        isIncoming: true,
-        createdAt: new Date().toISOString(),
-        fromUserName: fromUserName || `User ${fromUserId}`
-      };
-      
-      await AsyncStorage.setItem('mock_connections', JSON.stringify(connectionData));
-      
-      console.log('Created mock incoming request from:', fromUserId, 'with ID:', connectionId);
-      return { success: true, connectionId };
-    } catch (error) {
-      console.error('Error creating mock incoming request:', error);
-      return { success: false, error: error.message };
-    }
-  }
-
-  // Utility function to clear all mock connections (for testing)
-  async clearMockConnections() {
-    try {
-      await AsyncStorage.removeItem('mock_connections');
-      console.log('Cleared all mock connections');
-      return { success: true };
-    } catch (error) {
-      console.error('Error clearing mock connections:', error);
-      return { success: false, error: error.message };
     }
   }
 }

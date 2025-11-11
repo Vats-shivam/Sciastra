@@ -17,6 +17,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import LottieView from 'lottie-react-native';
 import colors from '../config/colors';
+import useScreenApiLogger from '../hooks/useScreenApiLogger';
 
 const { width, height } = Dimensions.get('window');
 
@@ -52,6 +53,8 @@ const OnboardingScreen = ({ navigation }) => {
   const formOpacity = useRef(new Animated.Value(0)).current;
   const flatListRef = useRef(null);
   
+  useScreenApiLogger('Welcome');
+
   // no heavy entrance animation; we'll animate content per-slide if needed
   useEffect(() => {}, []);
 

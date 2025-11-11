@@ -2,6 +2,7 @@
 import axios from 'axios';
 import { REQUEST_CONFIG, ERROR_MESSAGES } from '../config/apiConfig';
 import logger from '../services/Logger';
+import apiLogger from '../services/ApiLogger';
 
 class BaseApiService {
   constructor(baseURL) {
@@ -14,15 +15,24 @@ class BaseApiService {
     axios.interceptors.request.use(
       (config) => {
         const { url, method, headers, data } = config;
+        const normalizedMethod = method?.toUpperCase() || 'GET';
+        const normalizedUrl =
+          url?.startsWith('http') || !config.baseURL
+            ? url
+            : `${config.baseURL}${url}`;
+
+        if (normalizedUrl) {
+          apiLogger.logApiCall(normalizedUrl, normalizedMethod);
+        }
 
         // Log the request
-        logger.logApiRequest(url, method?.toUpperCase(), headers, data);
+        logger.logApiRequest(url, normalizedMethod, headers, data);
 
         // Log production environment info
         if (!__DEV__) {
           logger.info('Production API Request', {
             url,
-            method: method?.toUpperCase(),
+            method: normalizedMethod,
             baseURL: config.baseURL,
             timeout: config.timeout,
           });
@@ -40,6 +50,11 @@ class BaseApiService {
     axios.interceptors.response.use(
       (response) => {
         const { config, status, data } = response;
+        const normalizedMethod = config.method?.toUpperCase() || 'GET';
+        const normalizedUrl =
+          config.url?.startsWith('http') || !config.baseURL
+            ? config.url
+            : `${config.baseURL}${config.url}`;
 
         // Log successful response
         logger.logApiResponse(
@@ -49,6 +64,10 @@ class BaseApiService {
           data
         );
 
+        if (normalizedUrl) {
+          apiLogger.logApiResponse(normalizedUrl, normalizedMethod, status, data);
+        }
+
         return response;
       },
       (error) => {
@@ -56,6 +75,11 @@ class BaseApiService {
         const { config, response } = error;
         const status = response?.status;
         const responseData = response?.data;
+        const normalizedMethod = config?.method?.toUpperCase() || 'GET';
+        const normalizedUrl =
+          config?.url?.startsWith('http') || !config?.baseURL
+            ? config?.url
+            : `${config?.baseURL || ''}${config?.url || ''}`;
 
         logger.logApiResponse(
           config?.url,
@@ -64,6 +88,16 @@ class BaseApiService {
           responseData,
           error
         );
+
+        if (normalizedUrl) {
+          apiLogger.logApiResponse(
+            normalizedUrl,
+            normalizedMethod,
+            status ?? 'NETWORK_ERROR',
+            responseData,
+            error
+          );
+        }
 
         // Log network errors specifically
         if (error.message.includes('Network Error') || !response) {

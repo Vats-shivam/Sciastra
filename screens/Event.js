@@ -6,12 +6,11 @@ import EventCard from "../components/EventCard";
 import Header from "../components/Header";
 import eventsApi from "../api/EventsApi";
 import { useLoader } from "../context/LoaderContext";
+import useScreenApiLogger from "../hooks/useScreenApiLogger";
 
 const DEFAULT_CATEGORIES = [
-  { id: "for-you", label: "For You", icon: "star" },
+  { id: "ALL", label: "All", icon: "format-list-bulleted" },
   { id: "FEATURED", label: "Featured", icon: "star-outline" },
-  { id: "SPOTLIGHT", label: "Spotlight", icon: "spotlight-beam" },
-  { id: "TRENDING", label: "Trending", icon: "trending-up" },
 ];
 
 function SectionHeader({ title, onSeeAll }) {
@@ -66,7 +65,9 @@ const EventScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('for-you');
+  const [selectedCategory, setSelectedCategory] = useState('ALL');
+
+  useScreenApiLogger("Event");
 
   const goDetail = (event) => navigation.navigate("EventDetail", { event });
 
@@ -74,30 +75,10 @@ const EventScreen = ({ navigation }) => {
     loadInitialData();
   }, []);
 
-  useEffect(() => {
-    if (selectedCategory !== 'for-you') {
-      loadEventsByCategory(selectedCategory);
-    } else {
-      loadAllEvents();
-    }
-  }, [selectedCategory]);
-
   const loadInitialData = async () => {
     setLoading(true);
     showLoader();
     try {
-      // Load categories
-      const categoriesResult = await eventsApi.getAvailableCategories();
-      if (categoriesResult.success) {
-        const apiCategories = categoriesResult.data.categories.map(cat => ({
-          id: cat.id,
-          label: cat.name,
-          icon: getIconForCategory(cat.id),
-        }));
-        setCategories([DEFAULT_CATEGORIES[0], ...apiCategories]); // Keep "For You" first
-      }
-
-      // Load all events for "For You" tab
       await loadAllEvents();
     } catch (error) {
       console.error('Error loading initial data:', error);
@@ -132,15 +113,6 @@ const EventScreen = ({ navigation }) => {
     }
   };
 
-  const getIconForCategory = (categoryId) => {
-    switch (categoryId) {
-      case 'FEATURED': return 'star-outline';
-      case 'SPOTLIGHT': return 'spotlight-beam';
-      case 'TRENDING': return 'trending-up';
-      default: return 'calendar';
-    }
-  };
-
   const loadEventsByCategory = async (category) => {
     try {
       setLoading(true);
@@ -162,7 +134,7 @@ const EventScreen = ({ navigation }) => {
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      if (selectedCategory === 'for-you') {
+      if (selectedCategory === 'ALL') {
         await loadAllEvents();
       } else {
         await loadEventsByCategory(selectedCategory);
@@ -175,7 +147,7 @@ const EventScreen = ({ navigation }) => {
   const handleSearch = async (query) => {
     setSearchQuery(query);
     if (!query.trim()) {
-      if (selectedCategory === 'for-you') {
+      if (selectedCategory === 'ALL') {
         await loadAllEvents();
       } else {
         await loadEventsByCategory(selectedCategory);
@@ -198,10 +170,15 @@ const EventScreen = ({ navigation }) => {
   const handleCategorySelect = (categoryId) => {
     setSelectedCategory(categoryId);
     setSearchQuery(''); // Clear search when changing category
+    if (categoryId === 'ALL') {
+      loadAllEvents();
+    } else {
+      loadEventsByCategory(categoryId);
+    }
   };
 
   const renderAllEvents = () => {
-    const title = selectedCategory === 'for-you'
+    const title = selectedCategory === 'ALL'
       ? 'All Events'
       : `${categories.find(c => c.id === selectedCategory)?.label || selectedCategory} Events`;
 
@@ -222,12 +199,12 @@ const EventScreen = ({ navigation }) => {
             <View style={styles.emptyContainer}>
               <Icon name="calendar-remove" size={64} color={colors.textMuted} />
               <Text style={styles.emptyText}>
-                {selectedCategory === 'for-you' 
+                {selectedCategory === 'ALL' 
                   ? 'No events available at the moment' 
                   : 'No events found in this category'}
               </Text>
               <Text style={styles.emptySubText}>
-                {selectedCategory === 'for-you' 
+                {selectedCategory === 'ALL' 
                   ? 'Check back later for new events' 
                   : 'Try selecting a different category'}
               </Text>

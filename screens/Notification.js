@@ -6,18 +6,15 @@ import Card from '../components/Card';
 import colors from '../config/colors';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useNotification } from '../contexts/NotificationContext';
-
-const mockNotifications = [
-  { id: '1', text: 'Alice liked your post.', type: 'like', timestamp: new Date().toISOString(), read: false },
-  { id: '2', text: 'Bob commented: "Great work!"', type: 'comment', timestamp: new Date().toISOString(), read: false },
-  { id: '3', text: 'Charlie sent you a connection request.', type: 'connection', timestamp: new Date().toISOString(), read: true },
-];
+import useScreenApiLogger from '../hooks/useScreenApiLogger';
 
 const NotificationsScreen = () => {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const { showError } = useNotification();
+
+  useScreenApiLogger('Notification');
 
   useEffect(() => {
     loadNotifications();
@@ -32,15 +29,13 @@ const NotificationsScreen = () => {
       //   setNotifications(result.data);
       // } else {
       //   showError('Failed to load notifications');
-      //   setNotifications(mockNotifications);
+      //   setNotifications([]);
       // }
 
-      // Simulate API call with mock data
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      setNotifications(mockNotifications);
+      setNotifications([]);
     } catch (error) {
       showError('Something went wrong while loading notifications');
-      setNotifications(mockNotifications);
+      setNotifications([]);
     } finally {
       setLoading(false);
     }
@@ -50,8 +45,7 @@ const NotificationsScreen = () => {
     setRefreshing(true);
     try {
       // TODO: Replace with actual API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      setNotifications(mockNotifications);
+      setNotifications([]);
     } catch (error) {
       showError('Failed to refresh notifications');
     } finally {

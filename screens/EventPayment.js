@@ -3,9 +3,12 @@ import { View, Text, StyleSheet, TouchableOpacity, Alert } from "react-native";
 import Container from "../components/Container";
 import colors from "../config/colors";
 import Header from "../components/Header";
+import useScreenApiLogger from "../hooks/useScreenApiLogger";
 
 const EventPayment = ({ route, navigation }) => {
   const { event, name, email, phone } = route?.params || {};
+
+  useScreenApiLogger("EventPayment");
 
   const handlePay = () => {
     Alert.alert("Payment Success", "Thank you for registering!", [

@@ -7,6 +7,7 @@ import {
   getApiBaseUrl,
   getCommonHeaders 
 } from '../config/apiConfig';
+import apiLogger from '../services/ApiLogger';
 
 class AuthApiService {
   constructor() {
@@ -73,6 +74,9 @@ class AuthApiService {
           ...options,
         };
 
+        const method = (config.method || 'GET').toUpperCase();
+        apiLogger.logApiCall(url, method);
+
         // Create AbortController for timeout
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), REQUEST_CONFIG.TIMEOUT);
@@ -111,6 +115,14 @@ class AuthApiService {
             message: this.getErrorMessage(response.status, 'Service temporarily unavailable'),
           };
         }
+
+        apiLogger.logApiResponse(
+          url,
+          method,
+          response.status,
+          data,
+          response.ok ? null : data?.message || 'Request failed'
+        );
 
         // Handle token expiration
         if (response.status === 401 && this.refreshToken && !options.skipRefresh) {

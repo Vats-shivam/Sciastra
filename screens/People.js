@@ -19,6 +19,7 @@ import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import ConnectionApi from "../api/ConnectionApi";
 import chatApi from "../api/ChatApi";
 import { useLoader } from "../context/LoaderContext";
+import useScreenApiLogger from "../hooks/useScreenApiLogger";
 
 
 const PEOPLE_CATEGORIES = [
@@ -39,6 +40,8 @@ const ConnectionsScreen = () => {
   const [receivedRequests, setReceivedRequests] = useState([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+
+  useScreenApiLogger("People");
 
   // Load data when screen is focused
   useFocusEffect(

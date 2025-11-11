@@ -17,7 +17,7 @@
     },
     "android": {
       "package": "com.xcience.scistracommunityapp",
-      "versionCode": 13,
+      "versionCode": 16,
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#ffffff"
@@ -47,7 +47,7 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "3781d378-989e-4510-9f71-576209c4ae7f"
+        "projectId": "01006aad-b1d4-499e-9ed8-f8dd53dd0933"
       }
     }
   }

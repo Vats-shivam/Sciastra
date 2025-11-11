@@ -8,10 +8,13 @@ import {
   Easing,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import useScreenApiLogger from '../hooks/useScreenApiLogger';
 
 const SplashScreen = ({ navigation }) => {
   const scaleAnim = useRef(new Animated.Value(0.5)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
+
+  useScreenApiLogger('Splashscreen');
 
   useEffect(() => {
     // Logo animation

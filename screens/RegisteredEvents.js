@@ -7,6 +7,7 @@ import eventsApi from "../api/EventsApi";
 import { useNotification } from "../contexts/NotificationContext";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { useFocusEffect } from "@react-navigation/native";
+import useScreenApiLogger from "../hooks/useScreenApiLogger";
 
 const formatDate = (dateString) => {
   if (!dateString) return "";
@@ -44,6 +45,8 @@ const RegisteredEvents = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const { showError } = useNotification();
+
+  useScreenApiLogger("RegisteredEvents");
 
   useEffect(() => {
     loadRegisteredEvents();

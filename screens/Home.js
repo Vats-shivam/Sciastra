@@ -14,11 +14,11 @@ import {
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { useNavigation } from "@react-navigation/native";
 import colors from "../config/colors";
-import { api } from "../api/MockApi";
 import postApi from "../api/PostApi";
 import PostCard from "../components/PostCard";
 import Header from "../components/Header";
 import { useLoader } from "../context/LoaderContext";
+import useScreenApiLogger from "../hooks/useScreenApiLogger";
 
 const trendingSearches = ["React Native", "AI", "Blockchain", "Jobs", "Events"];
 
@@ -30,6 +30,8 @@ const HomeScreen = () => {
   const [feedPosts, setFeedPosts] = useState([]);
   const [searchResultsPosts, setSearchResultsPosts] = useState([]);
   const [searchResultsPeople, setSearchResultsPeople] = useState([]);
+
+  useScreenApiLogger("Home");
 
   useEffect(() => {
     loadFeedPosts();
@@ -55,14 +57,12 @@ const HomeScreen = () => {
       if (result.success) {
         setFeedPosts(result.data.posts || []);
       } else {
-        // Fallback to mock data
-        const posts = await api.fetchFeedPosts();
-        setFeedPosts(posts);
+        console.error('Failed to load feed posts:', result.message);
+        setFeedPosts([]);
       }
     } catch (error) {
-      // Fallback to mock data
-      const posts = await api.fetchFeedPosts();
-      setFeedPosts(posts);
+      console.error('Error loading feed posts:', error);
+      setFeedPosts([]);
     } finally {
       hideLoader();
     }
@@ -109,10 +109,7 @@ const HomeScreen = () => {
           )
         );
         
-        const users = await api.fetchSuggestedConnections();
-        setSearchResultsPeople(
-          users.filter((u) => u.name.toLowerCase().includes(lowerQ))
-        );
+        setSearchResultsPeople([]);
       }
     } catch (error) {
       // Fallback to local search
@@ -126,10 +123,7 @@ const HomeScreen = () => {
         )
       );
       
-      const users = await api.fetchSuggestedConnections();
-      setSearchResultsPeople(
-        users.filter((u) => u.name.toLowerCase().includes(lowerQ))
-      );
+      setSearchResultsPeople([]);
     }
   };
 
@@ -142,10 +136,11 @@ const HomeScreen = () => {
   const handlePostClick = async (postId) => {
     showLoader();
     try {
-      // Simulate loading comments for the post
-      await api.fetchComments(postId);
-      navigation.navigate("PostDetail", { postId });
+      await postApi.getPostById(postId);
+    } catch (error) {
+      console.error('Error preloading post details:', error);
     } finally {
+      navigation.navigate("PostDetail", { postId });
       hideLoader();
     }
   };

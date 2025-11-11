@@ -17,10 +17,11 @@ import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import colors from '../config/colors';
-import { api } from '../api/MockApi';
 import postApi from '../api/PostApi';
 import Header from '../components/Header';
 import authManager from '../services/AuthManager';
+import { useNotification } from '../contexts/NotificationContext';
+import useScreenApiLogger from '../hooks/useScreenApiLogger';
 
 const { width } = Dimensions.get('window');
 
@@ -32,6 +33,9 @@ const PostCreationScreen = ({ navigation }) => {
   const [uploadProgress, setUploadProgress] = useState('');
   const [textInputFocused, setTextInputFocused] = useState(false);
   const [userName, setUserName] = useState('You'); // Default fallback
+  const { showError, showSuccess, showWarning } = useNotification();
+
+  useScreenApiLogger('PostCreation');
 
   // Load user information on component mount
   useEffect(() => {
@@ -52,13 +56,13 @@ const PostCreationScreen = ({ navigation }) => {
 
   const pickImages = async () => {
     if (images.length >= 5) {
-      Alert.alert('Limit Reached', 'You can only add up to 5 images per post.');
+      showWarning('You can only add up to 5 images per post.');
       return;
     }
 
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permissionResult.granted) {
-      Alert.alert('Permission Required', 'Please grant camera roll permissions to add images.');
+      showWarning('Please grant camera roll permissions to add images.');
       return;
     }
 
@@ -89,13 +93,13 @@ const PostCreationScreen = ({ navigation }) => {
 
   const takePicture = async () => {
     if (images.length >= 5) {
-      Alert.alert('Limit Reached', 'You can only add up to 5 images per post.');
+      showWarning('You can only add up to 5 images per post.');
       return;
     }
 
     const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
     if (!permissionResult.granted) {
-      Alert.alert('Permission Required', 'Please grant camera permissions to take photos.');
+      showWarning('Please grant camera permissions to take photos.');
       return;
     }
 
@@ -121,7 +125,7 @@ const PostCreationScreen = ({ navigation }) => {
 
   const handlePost = async () => {
     if (!text.trim() && images.length === 0) {
-      Alert.alert('Empty Post', 'Please write something or add an image to share.');
+      showWarning('Please write something or add an image to share.');
       return;
     }
 
@@ -168,17 +172,12 @@ const PostCreationScreen = ({ navigation }) => {
         setText('');
         setImages([]);
         setVisibility('public');
-
-        Alert.alert('Success!', 'Your post has been published successfully.', [
-          {
-            text: 'OK',
-            onPress: () => navigation.goBack(),
-          },
-        ]);
+        showSuccess('Your post has been published successfully!');
+        navigation.goBack();
       } else {
         const errorMessage = result.message || 'Failed to publish your post';
         console.error('Post creation failed:', errorMessage);
-        Alert.alert('Upload Failed', errorMessage + '. Please check your connection and try again.');
+        showError(`${errorMessage}. Please check your connection and try again.`);
       }
     } catch (error) {
       console.error('Post creation error:', error);
@@ -192,7 +191,7 @@ const PostCreationScreen = ({ navigation }) => {
         errorMessage = 'Upload timeout. Please try again with smaller images.';
       }
 
-      Alert.alert('Error', errorMessage);
+      showError(errorMessage);
     } finally {
       setLoading(false);
       setUploadProgress('');

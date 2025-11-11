@@ -8,6 +8,7 @@ import {
   getCommonHeaders 
 } from '../config/apiConfig';
 import authApi from './AuthApi';
+import apiLogger from '../services/ApiLogger';
 
 class ProfileApiService {
   constructor() {
@@ -32,6 +33,9 @@ class ProfileApiService {
           ...options,
         };
 
+        const method = (config.method || 'GET').toUpperCase();
+        apiLogger.logApiCall(url, method);
+
         // Create AbortController for timeout
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), REQUEST_CONFIG.TIMEOUT);
@@ -52,6 +56,14 @@ class ProfileApiService {
 
         const data = await response.json();
         console.log('Profile API: Parsed response data:', JSON.stringify(data, null, 2));
+
+        apiLogger.logApiResponse(
+          url,
+          method,
+          response.status,
+          data,
+          response.ok ? null : data?.message || 'Request failed'
+        );
 
         // Handle token expiration
         if (response.status === 401 && !options.skipRefresh) {

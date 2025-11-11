@@ -18,62 +18,30 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import colors from '../config/colors';
 import chatApi from '../api/ChatApi';
 import { useLoader } from '../context/LoaderContext';
-
-const initialChats = [
-  { 
-    id: '1', 
-    name: 'Alice Johnson', 
-    lastMessage: 'See you tomorrow!', 
-    time: '12:30 PM',
-    unread: 2,
-    avatar: 'https://randomuser.me/api/portraits/women/44.jpg',
-    isOnline: true
-  },
-  { 
-    id: '2', 
-    name: 'Bob Lee', 
-    lastMessage: 'Thanks for the help!', 
-    time: '10:15 AM',
-    unread: 0,
-    avatar: 'https://randomuser.me/api/portraits/men/32.jpg',
-    isOnline: false
-  },
-  { 
-    id: '3', 
-    name: 'Sarah Wilson', 
-    lastMessage: 'Did you see the latest update?', 
-    time: 'Yesterday',
-    unread: 1,
-    avatar: 'https://randomuser.me/api/portraits/women/68.jpg',
-    isOnline: true
-  },
-];
+import useScreenApiLogger from '../hooks/useScreenApiLogger';
 
 const ChatListScreen = ({ navigation }) => {
   const { showLoader, hideLoader } = useLoader();
-  const [chats, setChats] = useState(initialChats);
+  const [chats, setChats] = useState([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+
+  useScreenApiLogger('ChatList');
   
   const handleChatPress = (chat) => {
-    // For Alice Johnson, use mock data
-    if (chat.name === 'Alice Johnson') {
-      navigation.navigate('OneToOneChat', { 
-        userId: 'alice123', 
-        userName: 'Alice Johnson',
-        avatar: 'https://randomuser.me/api/portraits/women/44.jpg',
-        isOnline: true,
-        isMock: true
-      });
-    } else {
-      console.log(chat,"ssssssssssss")
-      navigation.navigate('OneToOneChat', { 
-        userId: getOtherParticipantId(chat.room), 
-        userName: chat.name,
-        avatar: chat.avatar,
-        isOnline: chat.isOnline
-      });
+    const participantId = getOtherParticipantId(chat.room);
+
+    if (!participantId) {
+      console.warn('ChatList: Unable to determine participant for chat', chat);
+      return;
     }
+
+    navigation.navigate('OneToOneChat', { 
+      userId: participantId, 
+      userName: chat.name,
+      avatar: chat.avatar,
+      isOnline: chat.isOnline
+    });
   };
 
   useEffect(() => {
@@ -96,16 +64,27 @@ const ChatListScreen = ({ navigation }) => {
       const result = await chatApi.getChatRooms(1, 20);
       console.log('ChatList: Get chat rooms result:', result);
       
-      if (result.success) {
-        const rooms = result.data.chatRooms || [];
+      if (result.success && result.data) {
+        // Handle different response structures
+        const rooms = Array.isArray(result.data) 
+          ? result.data 
+          : (result.data.chatRooms || result.data.rooms || []);
+        
         console.log('ChatList: Received rooms:', rooms);
+
+        if (rooms.length === 0) {
+          setChats([]);
+          return;
+        }
 
         const formattedChats = rooms.map(room => ({
           id: room.id,
           name: getOtherParticipantName(room),
-          lastMessage: room.messages?.[0]?.content || 'No messages yet',
-          time: room.messages?.[0] ? new Date(room.messages[0].createdAt).toLocaleDateString() : 'No time',
-          unread: 0, // Backend doesn't provide unread count yet
+          lastMessage: room.messages?.[0]?.content || room.lastMessage?.content || 'No messages yet',
+          time: room.messages?.[0] 
+            ? new Date(room.messages[0].createdAt).toLocaleDateString() 
+            : (room.lastMessage?.createdAt ? new Date(room.lastMessage.createdAt).toLocaleDateString() : ''),
+          unread: room.unreadCount || 0,
           avatar: getOtherParticipantAvatar(room),
           isOnline: true, // Default to online since we don't have real-time status
           room: room,
@@ -114,10 +93,12 @@ const ChatListScreen = ({ navigation }) => {
         console.log('ChatList: Formatted chats:', formattedChats);
         setChats(formattedChats);
       } else {
-        console.error('ChatList: Failed to load chat rooms:', result.message);
+        console.error('ChatList: Failed to load chat rooms:', result.message || result.error);
+        setChats([]);
       }
     } catch (error) {
       console.error('Error loading chat rooms:', error);
+      setChats([]);
     } finally {
       setLoading(false);
     }
@@ -230,7 +211,7 @@ const ChatListScreen = ({ navigation }) => {
             tintColor={colors.primary}
           />
         }
-        ListEmptyComponent={() => (
+        ListEmptyComponent={
           loading ? (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color={colors.primary} />
@@ -238,11 +219,12 @@ const ChatListScreen = ({ navigation }) => {
             </View>
           ) : (
             <View style={styles.emptyContainer}>
+              <Icon name="message-outline" size={64} color={colors.textMuted} />
               <Text style={styles.emptyText}>No chats yet</Text>
               <Text style={styles.emptySubtext}>Start a conversation with someone!</Text>
             </View>
           )
-        )}
+        }
       />
     </View>
   );

@@ -7,11 +7,14 @@ import Button from '../components/Button';
 import colors from '../config/colors';
 import authManager from '../services/AuthManager';
 import { useNotification } from '../contexts/NotificationContext';
+import useScreenApiLogger from '../hooks/useScreenApiLogger';
 
 const SettingsScreen = ({ navigation }) => {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [privacyEnabled, setPrivacyEnabled] = useState(false);
   const { showError, showSuccess } = useNotification();
+
+  useScreenApiLogger('Settings');
 
   const handleLogout = async () => {
     try {

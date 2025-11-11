@@ -15,11 +15,14 @@ import Svg, { Path } from 'react-native-svg';
 import colors from '../config/colors';
 import authApi from '../api/AuthApi';
 import { useNotification } from '../contexts/NotificationContext';
+import useScreenApiLogger from '../hooks/useScreenApiLogger';
 
 const LoginScreen = ({ navigation }) => {
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
   const { showError, showSuccess } = useNotification();
+
+  useScreenApiLogger('Login');
 
   const handleLogin = async () => {
     // Validate phone number using AuthApi
@@ -113,11 +116,11 @@ const LoginScreen = ({ navigation }) => {
             </TouchableOpacity>
 
             {/* Bypass Hint for Testing */}
-            <View style={styles.bypassHint}>
+            {/* <View style={styles.bypassHint}>
               <Text style={styles.bypassText}>
                 🔧 Test Mode: Use phone "1234567890" and OTP "197941" for bypass authentication
               </Text>
-            </View>
+            </View> */}
 
             {/* Terms */}
             <View style={styles.termsContainer}>

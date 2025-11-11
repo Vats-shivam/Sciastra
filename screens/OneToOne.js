@@ -32,10 +32,13 @@ import colors from '../config/colors';
 import chatApi from '../api/ChatApi';
 import authApi from '../api/AuthApi';
 import { useLoader } from '../context/LoaderContext';
+import { useNotification } from '../contexts/NotificationContext';
+import useScreenApiLogger from '../hooks/useScreenApiLogger';
 
 const OneToOneChatScreen = ({ route, navigation }) => {
-  const { userId, userName, avatar, isOnline = true, isMock = false } = route.params;
+  const { userId, userName, avatar, isOnline = true } = route.params;
   const { showLoader, hideLoader } = useLoader();
+  const { showError, showWarning } = useNotification();
   const insets = useSafeAreaInsets();
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
@@ -46,7 +49,9 @@ const OneToOneChatScreen = ({ route, navigation }) => {
   const [fullScreenImage, setFullScreenImage] = useState(null);
   const flatListRef = useRef(null);
   const typingTimeoutRef = useRef(null);
-  const currentUserId = isMock ? 'currentUser123' : authApi.getCurrentUserId();
+  const currentUserId = authApi.getCurrentUserId();
+
+  useScreenApiLogger('OneToOne');
 
   // Zoom and pan animation values
   const scale = useSharedValue(1);
@@ -56,51 +61,7 @@ const OneToOneChatScreen = ({ route, navigation }) => {
   const baseTranslateX = useSharedValue(0);
   const baseTranslateY = useSharedValue(0);
   
-  // Mock messages for Alice Johnson
-  const mockMessages = [
-    {
-      id: '1',
-      text: 'Hey there! How are you doing?',
-      sender: 'other',
-      createdAt: new Date(Date.now() - 3600000).toISOString(),
-      read: true
-    },
-    {
-      id: '2',
-      text: "I'm doing great! Just finished my morning coffee.",
-      sender: 'me',
-      createdAt: new Date(Date.now() - 3500000).toISOString(),
-      read: true
-    },
-    {
-      id: '3',
-      text: 'That sounds nice! What are your plans for today?',
-      sender: 'other',
-      createdAt: new Date(Date.now() - 3400000).toISOString(),
-      read: true
-    },
-    {
-      id: '4',
-      text: 'I was thinking of going for a hike. The weather is perfect!',
-      sender: 'me',
-      createdAt: new Date(Date.now() - 3300000).toISOString(),
-      read: true
-    },
-    {
-      id: '5',
-      text: 'That sounds amazing! Which trail are you thinking of?',
-      sender: 'other',
-      createdAt: new Date(Date.now() - 3200000).toISOString(),
-      read: true
-    },
-    {
-      id: '6',
-      text: 'I was thinking of the Pine Ridge Trail. Have you been there before?',
-      sender: 'me',
-      createdAt: new Date(Date.now() - 3100000).toISOString(),
-      read: false
-    }
-  ];
+  
 
   useEffect(() => {
     initializeChat();
@@ -126,87 +87,78 @@ const OneToOneChatScreen = ({ route, navigation }) => {
       console.log('OneToOneChat: Initializing chat with userId:', userId, 'userName:', userName);
       setLoading(true);
 
-      if (isMock) {
-        // Use mock data for Alice Johnson
-        setMessages(mockMessages);
-        setChatRoom({ id: 'mockRoom123' });
+      // Create or get direct chat room
+      const roomResult = await chatApi.createOrGetDirectChat(userId);
+      console.log('OneToOneChat: Room creation result:', roomResult);
+
+      if (roomResult.success) {
+        const room = roomResult.data;
+        setChatRoom(room);
+
+        // Load messages for this room
+        const messagesResult = await chatApi.getMessages(room.id, 1, 50);
+        console.log('OneToOneChat: Messages result:', messagesResult);
+
+        if (messagesResult.success) {
+          const apiMessages = messagesResult.data.messages || [];
+          const formattedMessages = apiMessages.map(msg => {
+            const formattedMsg = {
+              id: msg.id,
+              text: msg.content,
+              sender: msg.sender?.id === currentUserId ? 'me' : 'other',
+              createdAt: msg.createdAt,
+              read: msg.read || false,
+              media: msg.media ? {
+                type: msg.media.type,
+                uri: msg.media.key ? chatApi.getMediaDisplayUrl(msg.media.key) : null,
+                key: msg.media.key,
+                mimeType: msg.media.mimeType,
+                fileName: msg.media.fileName
+              } : null,
+              originalMessage: msg
+            };
+
+            if (msg.media) {
+              console.log('📜 Historical message with media:', {
+                messageId: msg.id,
+                mediaKey: msg.media?.key,
+                constructedUri: msg.media?.key ? chatApi.getMediaDisplayUrl(msg.media.key) : null,
+                formattedMedia: formattedMsg.media
+              });
+            }
+
+            return formattedMsg;
+          });
+          console.log('OneToOneChat: Formatted messages:', formattedMessages);
+          setMessages(formattedMessages);
+        }
+
+        // Clean up any existing listeners first to prevent duplicates
+        console.log('🧹 Clearing existing listeners before adding new ones');
+        chatApi.clearRoomListeners(room.id);
+
+        // Join room for real-time updates
+        chatApi.joinRoom(room.id);
+
+        // Add message listener
+        console.log('🔧 Adding message listener for room:', room.id);
+        chatApi.addMessageListener(room.id, handleNewMessage);
+
+        // Add typing listener
+        console.log('🔧 Adding typing listener for room:', room.id);
+        chatApi.addTypingListener(room.id, handleTypingEvent);
+
+        // Set navigation title
         navigation.setOptions({
           title: userName || 'Chat'
         });
       } else {
-        // Create or get direct chat room
-        const roomResult = await chatApi.createOrGetDirectChat(userId);
-        console.log('OneToOneChat: Room creation result:', roomResult);
-
-        if (roomResult.success) {
-          const room = roomResult.data;
-          setChatRoom(room);
-
-          // Load messages for this room
-          const messagesResult = await chatApi.getMessages(room.id, 1, 50);
-          console.log('OneToOneChat: Messages result:', messagesResult);
-
-          if (messagesResult.success) {
-            const apiMessages = messagesResult.data.messages || [];
-            const formattedMessages = apiMessages.map(msg => {
-              const formattedMsg = {
-                id: msg.id,
-                text: msg.content,
-                sender: msg.sender?.id === currentUserId ? 'me' : 'other',
-                createdAt: msg.createdAt,
-                read: msg.read || false,
-                media: msg.media ? {
-                  type: msg.media.type,
-                  uri: msg.media.key ? chatApi.getMediaDisplayUrl(msg.media.key) : null,
-                  key: msg.media.key,
-                  mimeType: msg.media.mimeType,
-                  fileName: msg.media.fileName
-                } : null,
-                originalMessage: msg
-              };
-
-              if (msg.media) {
-                console.log('📜 Historical message with media:', {
-                  messageId: msg.id,
-                  mediaKey: msg.media?.key,
-                  constructedUri: msg.media?.key ? chatApi.getMediaDisplayUrl(msg.media.key) : null,
-                  formattedMedia: formattedMsg.media
-                });
-              }
-
-              return formattedMsg;
-            });
-            console.log('OneToOneChat: Formatted messages:', formattedMessages);
-            setMessages(formattedMessages);
-          }
-
-          // Clean up any existing listeners first to prevent duplicates
-          console.log('🧹 Clearing existing listeners before adding new ones');
-          chatApi.clearRoomListeners(room.id);
-
-          // Join room for real-time updates
-          chatApi.joinRoom(room.id);
-
-          // Add message listener
-          console.log('🔧 Adding message listener for room:', room.id);
-          chatApi.addMessageListener(room.id, handleNewMessage);
-
-          // Add typing listener
-          console.log('🔧 Adding typing listener for room:', room.id);
-          chatApi.addTypingListener(room.id, handleTypingEvent);
-
-          // Set navigation title
-          navigation.setOptions({
-            title: userName || 'Chat'
-          });
-        } else {
-          console.error('OneToOneChat: Failed to create/get chat room:', roomResult.message);
-          Alert.alert('Error', 'Failed to load chat. Please try again.');
-        }
+        console.error('OneToOneChat: Failed to create/get chat room:', roomResult.message);
+        showError('Failed to load chat. Please try again.');
       }
     } catch (error) {
       console.error('OneToOneChat: Initialize chat error:', error);
-      Alert.alert('Error', 'Failed to initialize chat. Please try again.');
+      showError('Failed to initialize chat. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -308,7 +260,7 @@ const OneToOneChatScreen = ({ route, navigation }) => {
   const handleInputChange = (text) => {
     setInput(text);
 
-    if (!isMock && chatRoom) {
+    if (chatRoom) {
       // Send typing start indicator
       if (!isTyping && text.length > 0) {
         setIsTyping(true);
@@ -348,48 +300,41 @@ const OneToOneChatScreen = ({ route, navigation }) => {
 
     setMessages(prev => [...prev, newMessage]);
 
-    if (isMock) {
-      // Simulate reply after 1 second
-      setTimeout(() => {
-        const reply = {
-          id: (Date.now() + 1).toString(),
-          text: 'Thanks for your message! I\'ll get back to you soon.',
-          sender: 'other',
-          createdAt: new Date().toISOString(),
-          read: false
-        };
-        setMessages(prev => [...prev, reply]);
-      }, 1000);
-    } else if (chatRoom) {
-      try {
-        // Send the message to the server
-        const result = await chatApi.sendMessage(chatRoom.id, messageText);
+    if (!chatRoom) {
+      showError('Chat room not found. Please try again.');
+      setMessages(prev => prev.filter(msg => msg.id !== newMessage.id));
+      setInput(messageText);
+      return;
+    }
 
-        if (!result.success) {
-          // Handle error - maybe show an alert and keep the message in input
-          Alert.alert('Error', 'Failed to send message. Please try again.');
-          setInput(messageText);
-          // Remove the optimistic message
-          setMessages(prev => prev.filter(msg => msg.id !== newMessage.id));
-        } else {
-          // Update the temporary message with server data
-          setMessages(prev =>
-            prev.map(msg =>
-              msg.id === newMessage.id
-                ? {
-                    ...msg,
-                    id: result.data.id,
-                    createdAt: result.data.createdAt,
-                    status: 'sent' // Mark as successfully sent
-                  }
-                : msg
-            )
-          );
-        }
-      } catch (error) {
-        console.error('Error sending message:', error);
-        Alert.alert('Error', 'An error occurred while sending the message.');
+    try {
+      // Send the message to the server
+      const result = await chatApi.sendMessage(chatRoom.id, messageText);
+
+      if (!result.success) {
+        // Handle error - maybe show an alert and keep the message in input
+        showError('Failed to send message. Please try again.');
+        setInput(messageText);
+        // Remove the optimistic message
+        setMessages(prev => prev.filter(msg => msg.id !== newMessage.id));
+      } else {
+        // Update the temporary message with server data
+        setMessages(prev =>
+          prev.map(msg =>
+            msg.id === newMessage.id
+              ? {
+                  ...msg,
+                  id: result.data.id,
+                  createdAt: result.data.createdAt,
+                  status: 'sent' // Mark as successfully sent
+                }
+              : msg
+          )
+        );
       }
+    } catch (error) {
+      console.error('Error sending message:', error);
+      showError('An error occurred while sending the message.');
     }
   };
 
@@ -399,7 +344,7 @@ const OneToOneChatScreen = ({ route, navigation }) => {
       // Request permission
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission Required', 'Please grant access to your photo library to send images.');
+        showWarning('Please grant access to your photo library to send images.');
         return;
       }
 
@@ -418,7 +363,7 @@ const OneToOneChatScreen = ({ route, navigation }) => {
       }
     } catch (error) {
       console.error('Error selecting image:', error);
-      Alert.alert('Error', 'Failed to select image. Please try again.');
+      showError('Failed to select image. Please try again.');
     }
   };
 
@@ -427,7 +372,7 @@ const OneToOneChatScreen = ({ route, navigation }) => {
       // Request permission
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission Required', 'Please grant camera access to take photos.');
+        showWarning('Please grant camera access to take photos.');
         return;
       }
 
@@ -445,13 +390,13 @@ const OneToOneChatScreen = ({ route, navigation }) => {
       }
     } catch (error) {
       console.error('Error taking photo:', error);
-      Alert.alert('Error', 'Failed to take photo. Please try again.');
+      showError('Failed to take photo. Please try again.');
     }
   };
 
   const sendImageMessage = async (imageUri, caption = '') => {
-    if (!chatRoom && !isMock) {
-      Alert.alert('Error', 'Chat room not found. Please try again.');
+    if (!chatRoom) {
+      showError('Chat room not found. Please try again.');
       return;
     }
 
@@ -472,54 +417,41 @@ const OneToOneChatScreen = ({ route, navigation }) => {
 
     setMessages(prev => [...prev, tempMessage]);
 
-    if (isMock) {
-      // Mock image sending
-      setTimeout(() => {
+    try {
+      showLoader('Sending image...');
+      const result = await chatApi.sendImageMessage(chatRoom.id, imageUri, caption);
+
+      if (result.success) {
+        // Update the temporary message with server data
         setMessages(prev =>
           prev.map(msg =>
             msg.id === tempMessage.id
-              ? { ...msg, status: 'sent', media: { ...msg.media, isUploading: false } }
+              ? {
+                  ...msg,
+                  id: result.data.id,
+                  createdAt: result.data.createdAt,
+                  status: 'sent',
+                  media: {
+                    ...msg.media,
+                    isUploading: false,
+                    key: result.data.media?.key,
+                    displayUrl: result.data.media?.key ? chatApi.getMediaDisplayUrl(result.data.media.key) : imageUri
+                  }
+                }
               : msg
           )
         );
-      }, 2000);
-    } else {
-      try {
-        showLoader('Sending image...');
-        const result = await chatApi.sendImageMessage(chatRoom.id, imageUri, caption);
-
-        if (result.success) {
-          // Update the temporary message with server data
-          setMessages(prev =>
-            prev.map(msg =>
-              msg.id === tempMessage.id
-                ? {
-                    ...msg,
-                    id: result.data.id,
-                    createdAt: result.data.createdAt,
-                    status: 'sent',
-                    media: {
-                      ...msg.media,
-                      isUploading: false,
-                      key: result.data.media?.key,
-                      displayUrl: result.data.media?.key ? chatApi.getMediaDisplayUrl(result.data.media.key) : imageUri
-                    }
-                  }
-                : msg
-            )
-          );
-        } else {
-          throw new Error(result.message);
-        }
-      } catch (error) {
-        console.error('Error sending image:', error);
-        Alert.alert('Error', 'Failed to send image. Please try again.');
-
-        // Remove the failed message
-        setMessages(prev => prev.filter(msg => msg.id !== tempMessage.id));
-      } finally {
-        hideLoader();
+      } else {
+        throw new Error(result.message);
       }
+    } catch (error) {
+      console.error('Error sending image:', error);
+      showError('Failed to send image. Please try again.');
+
+      // Remove the failed message
+      setMessages(prev => prev.filter(msg => msg.id !== tempMessage.id));
+    } finally {
+      hideLoader();
     }
   };
 
@@ -762,59 +694,64 @@ const OneToOneChatScreen = ({ route, navigation }) => {
         </TouchableOpacity>
       </View>
 
-      {/* Messages List */}
+      {/* Messages and Input Container */}
       <KeyboardAvoidingView 
-        style={styles.messagesContainer}
-        behavior={Platform.OS === 'ios' ? 'padding' : null}
+        style={styles.keyboardAvoidingView}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
+        {/* Messages List */}
         <FlatList
           ref={flatListRef}
           data={messages}
           keyExtractor={(item) => item.id.toString()}
           renderItem={renderMessage}
           contentContainerStyle={styles.messagesList}
+          style={styles.messagesContainer}
           onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
           onLayout={() => flatListRef.current?.scrollToEnd({ animated: true })}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         />
+
+        {/* Typing Indicator */}
+        {typingUsers.length > 0 && (
+          <View style={styles.typingContainer}>
+            <Text style={styles.typingText}>
+              {userName} is typing...
+            </Text>
+          </View>
+        )}
+
+        {/* Message Input */}
+        <View style={[styles.inputContainer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+          <View style={styles.inputWrapper}>
+            <TextInput
+              style={styles.input}
+              value={input}
+              onChangeText={handleInputChange}
+              placeholder="Type a message..."
+              placeholderTextColor={colors.textMuted}
+              multiline
+              returnKeyType="send"
+              blurOnSubmit={false}
+            />
+            <TouchableOpacity style={styles.attachmentButton} onPress={selectAndSendImage}>
+              <Icon name="paperclip" size={24} color={colors.primary} />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.cameraButton} onPress={takeAndSendPhoto}>
+              <Icon name="camera" size={24} color={colors.primary} />
+            </TouchableOpacity>
+          </View>
+          <TouchableOpacity 
+            style={[styles.sendButton, !input.trim() && styles.sendButtonDisabled]}
+            onPress={handleSend}
+            disabled={!input.trim()}
+          >
+            <Icon name="send" size={24} color={colors.textInverse} />
+          </TouchableOpacity>
+        </View>
       </KeyboardAvoidingView>
-
-      {/* Typing Indicator */}
-      {typingUsers.length > 0 && (
-        <View style={styles.typingContainer}>
-          <Text style={styles.typingText}>
-            {userName} is typing...
-          </Text>
-        </View>
-      )}
-
-      {/* Message Input */}
-      <View style={[styles.inputContainer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
-        <View style={styles.inputWrapper}>
-          <TextInput
-            style={styles.input}
-            value={input}
-            onChangeText={handleInputChange}
-            placeholder="Type a message..."
-            placeholderTextColor={colors.textMuted}
-            multiline
-          />
-          <TouchableOpacity style={styles.attachmentButton} onPress={selectAndSendImage}>
-            <Icon name="paperclip" size={24} color={colors.primary} />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.cameraButton} onPress={takeAndSendPhoto}>
-            <Icon name="camera" size={24} color={colors.primary} />
-          </TouchableOpacity>
-        </View>
-        <TouchableOpacity 
-          style={[styles.sendButton, !input.trim() && styles.sendButtonDisabled]}
-          onPress={handleSend}
-          disabled={!input.trim()}
-        >
-          <Icon name="send" size={24} color={colors.textInverse} />
-        </TouchableOpacity>
-      </View>
 
       {/* Full Screen Image Modal */}
       <Modal
@@ -917,6 +854,9 @@ const styles = StyleSheet.create({
   },
   headerButton: {
     padding: 8,
+  },
+  keyboardAvoidingView: {
+    flex: 1,
   },
   messagesContainer: {
     flex: 1,

@@ -11,14 +11,18 @@ import {
   FlatList,
   Image,
   Modal,
-  ActivityIndicator
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import colors from '../config/colors';
 import postApi from '../api/PostApi';
 import authApi from '../api/AuthApi';
 import { useLoader } from '../context/LoaderContext';
 import { useNotification } from '../contexts/NotificationContext';
+import useScreenApiLogger from '../hooks/useScreenApiLogger';
 
 // Reaction types from backend enum
 const REACTIONS = [
@@ -34,6 +38,9 @@ const PostDetailScreen = ({ route, navigation }) => {
   const { postId, postData } = route.params;
   const { showLoader, hideLoader } = useLoader();
   const { showError, showSuccess } = useNotification();
+  const insets = useSafeAreaInsets();
+
+  useScreenApiLogger('PostDetail');
 
   const [post, setPost] = useState(postData || null);
   const [comments, setComments] = useState([]);
@@ -259,7 +266,7 @@ const PostDetailScreen = ({ route, navigation }) => {
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top || 0 }] }>
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Icon name="arrow-left" size={24} color={colors.primary} />
         </TouchableOpacity>
@@ -269,147 +276,159 @@ const PostDetailScreen = ({ route, navigation }) => {
         </TouchableOpacity>
       </View>
 
-      <ScrollView
-        style={styles.scrollView}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
+      <KeyboardAvoidingView
+        style={styles.keyboardAvoidingView}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
-        {/* Post Content */}
-        <View style={styles.postCard}>
-          {/* Author Info */}
-          <View style={styles.postHeader}>
-            <Image
-              source={{
-                uri: post.author?.profile?.profilePic
-                  ? postApi.getImageSource(post.author.profile.profilePic, authApi.getAccessToken()).uri
-                  : post.author?.profilePic || 'https://randomuser.me/api/portraits/men/1.jpg'
-              }}
-              style={styles.avatar}
-            />
-            <View style={styles.authorInfo}>
-              <Text style={styles.authorName}>
-                {post.author?.profile?.name || post.author?.name || 'Unknown User'}
-              </Text>
-              <Text style={styles.postTime}>
-                {new Date(post.createdAt).toLocaleDateString()}
-              </Text>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Post Content */}
+          <View style={styles.postCard}>
+            {/* Author Info */}
+            <View style={styles.postHeader}>
+              <Image
+                source={{
+                  uri: post.author?.profile?.profilePic
+                    ? postApi.getImageSource(post.author.profile.profilePic, authApi.getAccessToken()).uri
+                    : post.author?.profilePic || 'https://randomuser.me/api/portraits/men/1.jpg'
+                }}
+                style={styles.avatar}
+              />
+              <View style={styles.authorInfo}>
+                <Text style={styles.authorName}>
+                  {post.author?.profile?.name || post.author?.name || 'Unknown User'}
+                </Text>
+                <Text style={styles.postTime}>
+                  {new Date(post.createdAt).toLocaleDateString()}
+                </Text>
+              </View>
+            </View>
+
+            {/* Post Content */}
+            <Text style={styles.postContent}>{post.content}</Text>
+
+            {/* Post Media */}
+            {post.media && post.media.length > 0 && (
+              <View style={styles.mediaContainer}>
+                {post.media.map((mediaItem, index) => (
+                  <Image
+                    key={index}
+                    source={getImageSource(mediaItem)}
+                    style={styles.postImage}
+                    resizeMode="cover"
+                  />
+                ))}
+              </View>
+            )}
+
+            {/* Engagement Stats */}
+            <View style={styles.engagementStats}>
+              <TouchableOpacity
+                style={styles.statButton}
+                onPress={() => setActiveTab('reactions')}
+              >
+                <Text style={styles.statText}>
+                  {totalReactions} {totalReactions === 1 ? 'reaction' : 'reactions'}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.statButton}
+                onPress={() => setActiveTab('comments')}
+              >
+                <Text style={styles.statText}>
+                  {totalComments} {totalComments === 1 ? 'comment' : 'comments'}
+                </Text>
+              </TouchableOpacity>
             </View>
           </View>
 
-          {/* Post Content */}
-          <Text style={styles.postContent}>{post.content}</Text>
-
-          {/* Post Media */}
-          {post.media && post.media.length > 0 && (
-            <View style={styles.mediaContainer}>
-              {post.media.map((mediaItem, index) => (
-                <Image
-                  key={index}
-                  source={getImageSource(mediaItem)}
-                  style={styles.postImage}
-                  resizeMode="cover"
-                />
-              ))}
-            </View>
-          )}
-
-          {/* Engagement Stats */}
-          <View style={styles.engagementStats}>
+          {/* Tabs */}
+          <View style={styles.tabContainer}>
             <TouchableOpacity
-              style={styles.statButton}
-              onPress={() => setActiveTab('reactions')}
-            >
-              <Text style={styles.statText}>
-                {totalReactions} {totalReactions === 1 ? 'reaction' : 'reactions'}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.statButton}
+              style={[styles.tab, activeTab === 'comments' && styles.activeTab]}
               onPress={() => setActiveTab('comments')}
             >
-              <Text style={styles.statText}>
-                {totalComments} {totalComments === 1 ? 'comment' : 'comments'}
+              <Text style={[styles.tabText, activeTab === 'comments' && styles.activeTabText]}>
+                Comments ({totalComments})
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.tab, activeTab === 'reactions' && styles.activeTab]}
+              onPress={() => setActiveTab('reactions')}
+            >
+              <Text style={[styles.tabText, activeTab === 'reactions' && styles.activeTabText]}>
+                Reactions ({totalReactions})
               </Text>
             </TouchableOpacity>
           </View>
-        </View>
 
-        {/* Tabs */}
-        <View style={styles.tabContainer}>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'comments' && styles.activeTab]}
-            onPress={() => setActiveTab('comments')}
-          >
-            <Text style={[styles.tabText, activeTab === 'comments' && styles.activeTabText]}>
-              Comments ({totalComments})
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'reactions' && styles.activeTab]}
-            onPress={() => setActiveTab('reactions')}
-          >
-            <Text style={[styles.tabText, activeTab === 'reactions' && styles.activeTabText]}>
-              Reactions ({totalReactions})
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Content based on active tab */}
-        {activeTab === 'comments' ? (
-          <View style={styles.commentsSection}>
-            <FlatList
-              data={comments}
-              keyExtractor={(item) => item.id}
-              renderItem={renderComment}
-              scrollEnabled={false}
-              ListEmptyComponent={
+          {/* Content based on active tab */}
+          {activeTab === 'comments' ? (
+            <View style={styles.commentsSection}>
+              {comments.length > 0 ? (
+                <FlatList
+                  data={comments}
+                  keyExtractor={(item) => item.id.toString()}
+                  renderItem={renderComment}
+                  scrollEnabled={false}
+                />
+              ) : (
                 <View style={styles.emptyContainer}>
                   <Text style={styles.emptyText}>No comments yet</Text>
                   <Text style={styles.emptySubtext}>Be the first to comment!</Text>
                 </View>
-              }
-            />
-          </View>
-        ) : (
-          <View style={styles.reactionsSection}>
-            <FlatList
-              data={reactions}
-              keyExtractor={(item) => `${item.userId}_${item.type}`}
-              renderItem={renderReaction}
-              scrollEnabled={false}
-              ListEmptyComponent={
+              )}
+            </View>
+          ) : (
+            <View style={styles.reactionsSection}>
+              {reactions.length > 0 ? (
+                <FlatList
+                  data={reactions}
+                  keyExtractor={(item) => `${item.userId}_${item.type}`}
+                  renderItem={renderReaction}
+                  scrollEnabled={false}
+                />
+              ) : (
                 <View style={styles.emptyContainer}>
                   <Text style={styles.emptyText}>No reactions yet</Text>
                   <Text style={styles.emptySubtext}>Be the first to react!</Text>
                 </View>
-              }
+              )}
+            </View>
+          )}
+        </ScrollView>
+
+        {/* Comment Input */}
+        {activeTab === 'comments' && (
+          <View style={[styles.commentInputContainer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+            <TextInput
+              style={styles.commentInput}
+              placeholder="Write a comment..."
+              placeholderTextColor={colors.textMuted}
+              value={newComment}
+              onChangeText={setNewComment}
+              multiline
+              maxLength={500}
+              returnKeyType="send"
+              blurOnSubmit={false}
             />
+            <TouchableOpacity
+              style={[styles.sendButton, !newComment.trim() && styles.sendButtonDisabled]}
+              onPress={addComment}
+              disabled={!newComment.trim()}
+            >
+              <Icon name="send" size={20} color={colors.textInverse} />
+            </TouchableOpacity>
           </View>
         )}
-      </ScrollView>
-
-      {/* Comment Input */}
-      {activeTab === 'comments' && (
-        <View style={styles.commentInputContainer}>
-          <TextInput
-            style={styles.commentInput}
-            placeholder="Write a comment..."
-            placeholderTextColor={colors.textMuted}
-            value={newComment}
-            onChangeText={setNewComment}
-            multiline
-            maxLength={500}
-          />
-          <TouchableOpacity
-            style={[styles.sendButton, !newComment.trim() && styles.sendButtonDisabled]}
-            onPress={addComment}
-            disabled={!newComment.trim()}
-          >
-            <Icon name="send" size={20} color={colors.textInverse} />
-          </TouchableOpacity>
-        </View>
-      )}
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 };
@@ -434,8 +453,14 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.textPrimary,
   },
+  keyboardAvoidingView: {
+    flex: 1,
+  },
   scrollView: {
     flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 100, // Extra padding to ensure content is scrollable above keyboard
   },
   loadingContainer: {
     flex: 1,

@@ -6,6 +6,7 @@ import {
   getCommonHeaders 
 } from '../config/apiConfig';
 import authApi from './AuthApi';
+import apiLogger from '../services/ApiLogger';
 
 class EventsApiService {
   constructor() {
@@ -33,6 +34,9 @@ class EventsApiService {
           ...options,
         };
 
+        const method = (config.method || 'GET').toUpperCase();
+        apiLogger.logApiCall(fullUrl, method);
+
         // Create AbortController for timeout
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), REQUEST_CONFIG.TIMEOUT);
@@ -43,6 +47,14 @@ class EventsApiService {
         clearTimeout(timeoutId);
 
         const data = await response.json();
+
+        apiLogger.logApiResponse(
+          fullUrl,
+          method,
+          response.status,
+          data,
+          response.ok ? null : data?.message || 'Request failed'
+        );
 
         // Handle token expiration
         if (response.status === 401 && !options.skipRefresh) {

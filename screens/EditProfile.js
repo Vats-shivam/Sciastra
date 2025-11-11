@@ -10,6 +10,7 @@ import authManager from '../services/AuthManager';
 import profileApi from '../api/ProfileApi';
 import { useLoader } from '../context/LoaderContext';
 import { useNotification } from '../contexts/NotificationContext';
+import useScreenApiLogger from '../hooks/useScreenApiLogger';
 
 const EditProfileScreen = ({ navigation }) => {
   const [photoUri, setPhotoUri] = useState(null);
@@ -37,6 +38,8 @@ const EditProfileScreen = ({ navigation }) => {
 
   const { showLoader, hideLoader } = useLoader();
   const { showError, showSuccess } = useNotification();
+
+  useScreenApiLogger('EditProfile');
 
   const pickImage = async () => {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();

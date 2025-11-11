@@ -11,20 +11,33 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import { api } from '../api/MockApi';
 import colors from '../config/colors';
 import authManager from '../services/AuthManager';
+import ConnectionApi from '../api/ConnectionApi';
+import useScreenApiLogger from '../hooks/useScreenApiLogger';
 
 const SuggestedConnectionsScreen = ({ navigation }) => {
   const [connections, setConnections] = useState([]);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [loading, setLoading] = useState(true);
 
+  useScreenApiLogger('SuggestedConnection');
+
   useEffect(() => {
-    api.fetchSuggestedConnections().then(users => {
-      setConnections(users);
-      setLoading(false);
-    });
+    const loadSuggestedConnections = async () => {
+      try {
+        setLoading(true);
+        // TODO: Replace with dedicated suggestion endpoint when available
+        setConnections([]);
+      } catch (error) {
+        console.error('SuggestedConnections: Failed to load suggestions', error);
+        setConnections([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadSuggestedConnections();
   }, []);
 
   const toggleSelect = (id) => {
@@ -34,23 +47,38 @@ const SuggestedConnectionsScreen = ({ navigation }) => {
   };
 
   const sendRequests = async () => {
+    if (selectedIds.size === 0) {
+      return;
+    }
+
     try {
-      api.sendConnectRequest(Array.from(selectedIds)).then(async () => {
-        alert('Connection requests sent!');
-        setSelectedIds(new Set());
-        
-        // Complete onboarding
-        await authManager.completeOnboarding();
-        
-        // AuthManager will automatically handle navigation through AuthNavigator
-        // to the main app
-      });
+      setLoading(true);
+      const ids = Array.from(selectedIds);
+
+      for (const id of ids) {
+        try {
+          const result = await ConnectionApi.sendConnectionRequest(id);
+          if (!result.success) {
+            console.warn('SuggestedConnections: Failed to send request for user', id, result.error);
+          }
+        } catch (requestError) {
+          console.error('SuggestedConnections: Error sending request for user', id, requestError);
+        }
+      }
+
+      alert('Connection requests sent!');
+      setSelectedIds(new Set());
+
+      // Complete onboarding
+      await authManager.completeOnboarding();
     } catch (error) {
       console.error('Error completing onboarding:', error);
-      alert('Connection requests sent!');
-      
+      alert('Failed to send some connection requests. You can try again later.');
+
       // Complete onboarding even if connection requests fail
       await authManager.completeOnboarding();
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -121,6 +149,11 @@ const SuggestedConnectionsScreen = ({ navigation }) => {
           renderItem={renderConnectionItem}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.listContent}
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>No suggestions available right now.</Text>
+            </View>
+          }
         />
 
         {/* Action Buttons */}
@@ -209,6 +242,17 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingBottom: 20,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  emptyText: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 16,
+    textAlign: 'center',
   },
   connectionCard: {
     backgroundColor: colors.card,
