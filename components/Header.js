@@ -1,13 +1,15 @@
 import React from "react";
 import { View, StyleSheet, TouchableOpacity, Image, Text } from "react-native";
 import colors from "../config/colors";
-import Icon from "react-native-vector-icons/MaterialCommunityIcons";
+import HeaderIcon from "./HeaderIcon";
 
 const Header = ({ 
   showSearchIcon = false, 
   showChatIcon = false,
   showBackButton = false,
   showMenuButton = false,
+  showTitle = false,
+  title = "",
   onSearchPress, 
   onChatPress,
   onBackPress,
@@ -16,7 +18,6 @@ const Header = ({
 }) => {
   return (
     <View style={styles.headerContainer}>
-      <View style={styles.gradientOverlay} />
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <Image 
@@ -24,119 +25,80 @@ const Header = ({
             style={styles.logoSvg}
             resizeMode="contain"
           />
-          <View style={styles.logoGlow} />
         </View>
-        <View style={styles.headerCenter}>
-          <Text style={styles.pageTitle}>Create</Text>
-        </View>
+        {showTitle && (
+          <View style={styles.headerCenter}>
+            <Text style={styles.pageTitle}>{title}</Text>
+          </View>
+        )}
         <View style={styles.headerRight}>
+        {showBackButton && (
+          <TouchableOpacity style={styles.iconButton} onPress={onBackPress}>
+            <HeaderIcon name="back" size={24} color={colors.textPrimary} />
+          </TouchableOpacity>
+        )}
         {showSearchIcon && (
           <TouchableOpacity style={styles.iconButton} onPress={onSearchPress}>
-            <Icon name="magnify" size={22} color={colors.textPrimary} />
+            <HeaderIcon name="search" size={26} color={colors.textPrimary} />
           </TouchableOpacity>
         )}
         {showChatIcon && (
           <TouchableOpacity style={styles.iconButton} onPress={onChatPress}>
-            <Icon name="chat-outline" size={22} color={colors.textPrimary} />
+            <HeaderIcon name="message" size={26} color={colors.textPrimary} />
+          </TouchableOpacity>
+        )}
+        {showMenuButton && (
+          <TouchableOpacity style={styles.iconButton} onPress={onMenuPress}>
+            <HeaderIcon name="menu" size={26} color={colors.textPrimary} />
           </TouchableOpacity>
         )}
         </View>
       </View>
-      <View style={styles.bottomGlow} />
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   headerContainer: {
-    position: 'relative',
-    shadowColor: colors.accent,
-    shadowOffset: {
-      width: 0,
-      height: 8,
-    },
-    shadowOpacity: 0.2,
-    shadowRadius: 16,
-    elevation: 12,
-  },
-  gradientOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: `${colors.accent}08`,
-    zIndex: 1,
+    backgroundColor: colors.background,
   },
   header: {
     paddingHorizontal: 16,
     paddingTop: 44,
     paddingBottom: 12,
-    backgroundColor: colors.card,
-    borderBottomColor: `${colors.accent}30`,
-    borderBottomWidth: 2,
+    backgroundColor: colors.background,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    position: 'relative',
-    zIndex: 2,
-  },
-  bottomGlow: {
-    position: 'absolute',
-    bottom: -8,
-    left: 0,
-    right: 0,
-    height: 8,
-    backgroundColor: `${colors.accent}15`,
-    zIndex: 0,
   },
   headerLeft: {
     alignItems: "flex-start",
     justifyContent: "center",
-    position: 'relative',
-  },
-  logoGlow: {
-    position: 'absolute',
-    top: -5,
-    left: -8,
-    right: -8,
-    bottom: -5,
-    backgroundColor: `${colors.accent}15`,
-    borderRadius: 12,
-    zIndex: -1,
   },
   headerCenter: {
-    flex: 1,
+    position: 'absolute',
+    left: 0,
+    right: 0,
     alignItems: 'center',
     justifyContent: 'center',
+    zIndex: -1,
   },
   pageTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: colors.accent,
+    color: colors.textPrimary,
     letterSpacing: 0.5,
   },
   headerRight: { 
     flexDirection: "row", 
     alignItems: "center",
-    position: "absolute",
-    right: 16,
-    top: 54
+    gap: 16,
   },
   logoSvg: {
-    width: 120,
-    height: 38,
-    alignSelf: "flex-start",
-    paddingTop: 4,
-    paddingRight: 6,
-    paddingBottom: 4,
-    paddingLeft: 6,
+    width: 150,
+    height: 52,
   },
   iconButton: { 
-    marginLeft: 10 
-  },
-  backButton: {
-    marginRight: 12,
     padding: 4,
   },
 });

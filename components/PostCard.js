@@ -13,10 +13,11 @@ import {
 } from "react-native";
 import colors from "../config/colors";
 import { useNavigation } from "@react-navigation/native";
-import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import postApi from "../api/PostApi";
 import authApi from "../api/AuthApi";
 import { useNotification } from "../contexts/NotificationContext";
+import PostIcon from "./PostIcon";
+import HeaderIcon from "./HeaderIcon";
 
 const { width: screenWidth } = Dimensions.get("window");
 
@@ -247,7 +248,7 @@ const PostCard = ({ post }) => {
             }
           }}
         >
-          <Icon name="dots-vertical" size={22} color={colors.textSecondary} />
+          <HeaderIcon name="menu" size={20} color={colors.textSecondary} />
         </TouchableOpacity>
       </View>
 
@@ -331,7 +332,7 @@ const PostCard = ({ post }) => {
             style={styles.modalClose}
             onPress={() => setSelectedImage(null)}
           >
-            <Icon name="close" size={30} color={colors.white} />
+            <Text style={{ color: colors.white, fontSize: 30, fontWeight: 'bold' }}>×</Text>
           </TouchableOpacity>
           <Image
             source={{ uri: selectedImage }}
@@ -386,35 +387,42 @@ const PostCard = ({ post }) => {
         <Pressable
           onLongPress={() => !reactionLoading && setShowReactionPicker(true)}
           onPress={() => !reactionLoading && (userReaction ? handleRemoveReaction() : handleReaction("LIKE"))}
-          style={[
-            styles.actionButton,
-            userReaction && styles.actionButtonActive,
-            reactionLoading && styles.actionButtonLoading
-          ]}
+          style={styles.actionButton}
           disabled={reactionLoading}
         >
           {reactionLoading ? (
             <ActivityIndicator size="small" color={colors.primary} />
           ) : (
-            <>
-              <Icon
-                name={userReaction ? "thumb-up" : "thumb-up-outline"}
-                size={22}
-                color={userReaction ? colors.accent : colors.textSecondary}
+            <View style={styles.actionContent}>
+              <PostIcon
+                name="like"
+                size={20}
+                color={colors.textSecondary}
               />
-              {userReaction && (
-                <Text style={styles.reactionEmoji}>
-                  {REACTIONS.find(r => r.type === userReaction)?.icon || '👍'}
-                </Text>
-              )}
-            </>
+              <Text style={styles.actionText}>Like</Text>
+            </View>
           )}
         </Pressable>
         <TouchableOpacity
           style={styles.actionButton}
           onPress={() => navigation.navigate("PostDetail", { postId: post.id, postData: post })}
         >
-          <Icon name="comment-outline" size={22} color={colors.textSecondary} />
+          <View style={styles.actionContent}>
+            <PostIcon name="comment" size={20} color={colors.textSecondary} />
+            <Text style={styles.actionText}>Comment</Text>
+          </View>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.actionButton}>
+          <View style={styles.actionContent}>
+            <PostIcon name="reshare" size={20} color={colors.textSecondary} />
+            <Text style={styles.actionText}>Repost</Text>
+          </View>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.actionButton}>
+          <View style={styles.actionContent}>
+            <PostIcon name="send" size={20} color={colors.textSecondary} />
+            <Text style={styles.actionText}>Send</Text>
+          </View>
         </TouchableOpacity>
       </View>
 
@@ -438,7 +446,7 @@ const PostCard = ({ post }) => {
             style={styles.reactionPickerClose}
             onPress={() => setShowReactionPicker(false)}
           >
-            <Icon name="close" size={16} color={colors.textMuted} />
+            <Text style={{ color: colors.textMuted, fontSize: 16, fontWeight: 'bold' }}>×</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -456,26 +464,30 @@ const PostCard = ({ post }) => {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    padding: 12,
-    marginVertical: 8,
-    shadowColor: colors.primary,
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
+    backgroundColor: colors.background,
+    padding: 16,
+    marginVertical: 4,
     width: "100%",
-    maxWidth: 600,
-    alignSelf: "center",
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    shadowColor: "#848484ff",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    borderRadius : 20 ,
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+    marginBottom : 50 ,
   },
   header: { flexDirection: "row", alignItems: "center" },
   avatar: { width: 48, height: 48, borderRadius: 24 },
-  author: { fontWeight: "700", fontSize: 16, color: colors.primary },
-  subTitle: { fontSize: 12, color: colors.secondary },
-  timestamp: { fontSize: 11, color: colors.textSecondary, marginTop: 2 },
-  description: { color: colors.textPrimary, fontSize: 14, lineHeight: 20 },
-  showMore: { color: colors.accent, fontWeight: "600", marginTop: 4 },
+  author: { fontWeight: "600", fontSize: 15, color: colors.textPrimary },
+  subTitle: { fontSize: 13, color: colors.textMuted, marginTop: 2 },
+  timestamp: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
+  description: { color: colors.textSecondary, fontSize: 14, lineHeight: 20 },
+  showMore: { color: colors.textMuted, fontWeight: "400", marginTop: 4 },
 
   // Media Container
   mediaContainer: {
@@ -554,29 +566,31 @@ const styles = StyleSheet.create({
   statsText: { color: colors.textSecondary, fontSize: 13 },
   actions: {
     flexDirection: "row",
-    justifyContent: "space-around",
+    justifyContent: "space-between",
     alignItems: "center",
-    paddingTop: 8,
+    paddingTop: 12,
     paddingBottom: 4,
     borderTopWidth: 1,
     borderTopColor: colors.border,
+    paddingHorizontal: 8,
   },
   actionButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    minWidth: 60,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    flex: 1,
   },
-  actionButtonActive: {
-    backgroundColor: colors.lightGray,
-    minWidth: 80,
-    paddingHorizontal: 16,
+  actionContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
   },
-  actionButtonLoading: {
-    opacity: 0.6,
+  actionText: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    fontWeight: "500",
   },
   reactionWrapper: { flexDirection: "row", alignItems: "center" },
   reactionsContainer: {

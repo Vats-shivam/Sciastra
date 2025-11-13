@@ -6,8 +6,8 @@ export default {
   accent: '#1a1a1a',  // Pink accent for highlights
   button: "#8A2BE2",
   // Backgrounds
-  background: '#0d0d0d',        // App background (deep near-black)
-  backgroundSecondary: '#1a1a1a', // Slightly lighter for cards/sections
+  background: '#0A1318',        // App background (deep near-black)
+  backgroundSecondary: '#0A1318CC', // Slightly lighter for cards/sections
   backgroundElevated: '#262626',  // For modals, elevated cards
 
   // Text

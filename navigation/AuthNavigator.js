@@ -89,7 +89,19 @@ const AuthNavigator = () => {
   console.log('🧭 AuthNavigator: Navigator key:', navigatorKey);
 
   return (
-    <NavigationContainer>
+    <NavigationContainer
+      theme={{
+        dark: true,
+        colors: {
+          primary: '#9257D2',
+          background: '#0A1318',
+          card: '#0A1318',
+          text: '#F2F2F2',
+          border: '#2e2e2e',
+          notification: '#9257D2',
+        },
+      }}
+    >
       <Stack.Navigator
         key={navigatorKey}
         screenOptions={{ headerShown: false }}
