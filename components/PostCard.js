@@ -412,7 +412,7 @@ const PostCard = ({ post }) => {
             <Text style={styles.actionText}>Comment</Text>
           </View>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.actionButton}>
+        {/* <TouchableOpacity style={styles.actionButton}>
           <View style={styles.actionContent}>
             <PostIcon name="reshare" size={20} color={colors.textSecondary} />
             <Text style={styles.actionText}>Repost</Text>
@@ -423,7 +423,7 @@ const PostCard = ({ post }) => {
             <PostIcon name="send" size={20} color={colors.textSecondary} />
             <Text style={styles.actionText}>Send</Text>
           </View>
-        </TouchableOpacity>
+        </TouchableOpacity> */}
       </View>
 
       {/* Reaction Picker */}
