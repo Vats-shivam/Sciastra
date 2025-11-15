@@ -36,7 +36,7 @@ import { useNotification } from '../contexts/NotificationContext';
 import useScreenApiLogger from '../hooks/useScreenApiLogger';
 
 const OneToOneChatScreen = ({ route, navigation }) => {
-  const { userId, userName, avatar, isOnline = true } = route.params;
+  const { userId, userName, avatar, isOnline: initialIsOnline = true } = route.params;
   const { showLoader, hideLoader } = useLoader();
   const { showError, showWarning } = useNotification();
   const insets = useSafeAreaInsets();
@@ -47,6 +47,7 @@ const OneToOneChatScreen = ({ route, navigation }) => {
   const [isTyping, setIsTyping] = useState(false);
   const [typingUsers, setTypingUsers] = useState([]);
   const [fullScreenImage, setFullScreenImage] = useState(null);
+  const [isOnline, setIsOnline] = useState(initialIsOnline); // Track online status
   const flatListRef = useRef(null);
   const typingTimeoutRef = useRef(null);
   const currentUserId = authApi.getCurrentUserId();
@@ -81,6 +82,26 @@ const OneToOneChatScreen = ({ route, navigation }) => {
       flatListRef.current.scrollToEnd({ animated: true });
     }
   }, [messages]);
+
+  // Listen for user online/offline status changes
+  useEffect(() => {
+    const handleStatusChange = (statusData) => {
+      console.log('📡 User status changed:', statusData);
+      if (statusData.userId === userId) {
+        const newStatus = statusData.status === 'online';
+        setIsOnline(newStatus);
+        console.log(`👤 ${userName} is now ${statusData.status}`);
+      }
+    };
+
+    // Add status listener for this user
+    chatApi.addStatusListener(userId, handleStatusChange);
+
+    return () => {
+      // Cleanup listener when component unmounts
+      chatApi.removeStatusListener(userId, handleStatusChange);
+    };
+  }, [userId, userName]);
 
   const initializeChat = async () => {
     try {

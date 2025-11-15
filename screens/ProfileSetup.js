@@ -11,6 +11,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
@@ -41,6 +42,13 @@ const ProfileSetupScreen = ({ navigation, route }) => {
   // Input states for adding new items
   const [newTopic, setNewTopic] = useState('');
   const [newSkill, setNewSkill] = useState('');
+
+  // Date picker states
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [currentDateField, setCurrentDateField] = useState(null);
+  const [currentItemIndex, setCurrentItemIndex] = useState(null);
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
 
   const { showLoader, hideLoader } = useLoader();
   const { showSuccess, showError } = useNotification();
@@ -154,6 +162,101 @@ const ProfileSetupScreen = ({ navigation, route }) => {
     setEducation(education.filter((_, i) => i !== index));
   };
 
+  // Date utility functions
+  const formatDateForDisplay = (dateString) => {
+    if (!dateString) return '';
+    
+    // Check if it's already in MM/YYYY format
+    if (dateString.includes('/')) {
+      const [month, year] = dateString.split('/');
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      return `${monthNames[parseInt(month) - 1]} ${year}`;
+    }
+    
+    // Otherwise try to parse as a date
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return '';
+    return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short' });
+  };
+
+  const formatDateForAPI = (year, month) => {
+    if (!year || !month) return null;
+    const formattedMonth = String(month).padStart(2, '0');
+    return `${formattedMonth}/${year}`;
+  };
+
+  const openDatePicker = (type, itemIndex, field) => {
+    // Get current date from the field if it exists
+    let currentDate = null;
+    if (type === 'experience') {
+      currentDate = experiences[itemIndex]?.[field];
+    } else if (type === 'education') {
+      currentDate = education[itemIndex]?.[field];
+    }
+
+    if (currentDate) {
+      // Check if it's in MM/YYYY format
+      if (currentDate.includes('/')) {
+        const [month, year] = currentDate.split('/');
+        setSelectedYear(parseInt(year));
+        setSelectedMonth(parseInt(month));
+      } else {
+        // Try parsing as a date
+        const date = new Date(currentDate);
+        setSelectedYear(date.getFullYear());
+        setSelectedMonth(date.getMonth() + 1);
+      }
+    } else {
+      setSelectedYear(new Date().getFullYear());
+      setSelectedMonth(new Date().getMonth() + 1);
+    }
+
+    setCurrentDateField(`${type}_${itemIndex}_${field}`);
+    setCurrentItemIndex(itemIndex);
+    setShowDatePicker(true);
+  };
+
+  const handleDateConfirm = () => {
+    if (currentDateField) {
+      const [type, itemIndex, field] = currentDateField.split('_');
+      const formattedDate = formatDateForAPI(selectedYear, selectedMonth);
+
+      if (type === 'experience') {
+        updateExperience(parseInt(itemIndex), field, formattedDate);
+      } else if (type === 'education') {
+        updateEducation(parseInt(itemIndex), field, formattedDate);
+      }
+    }
+
+    setShowDatePicker(false);
+    setCurrentDateField(null);
+    setCurrentItemIndex(null);
+  };
+
+  const handleDateCancel = () => {
+    setShowDatePicker(false);
+    setCurrentDateField(null);
+    setCurrentItemIndex(null);
+  };
+
+  // Generate years and months for picker
+  const currentYear = new Date().getFullYear();
+  const years = Array.from({ length: 50 }, (_, i) => currentYear - i);
+  const months = [
+    { value: 1, label: 'January' },
+    { value: 2, label: 'February' },
+    { value: 3, label: 'March' },
+    { value: 4, label: 'April' },
+    { value: 5, label: 'May' },
+    { value: 6, label: 'June' },
+    { value: 7, label: 'July' },
+    { value: 8, label: 'August' },
+    { value: 9, label: 'September' },
+    { value: 10, label: 'October' },
+    { value: 11, label: 'November' },
+    { value: 12, label: 'December' },
+  ];
+
   const pickImage = async () => {
     try {
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -227,22 +330,25 @@ const ProfileSetupScreen = ({ navigation, route }) => {
       const result = await authManager.completeProfileSetup(profileData, photoUri);
 
       if (result.success) {
+        // Hide loader first
+        setIsLoading(false);
+        hideLoader();
+        
+        // Show success message
         showSuccess('Your profile has been created successfully!');
-
-        // Immediate navigation after success - go directly to app
-        navigation.reset({
-          index: 0,
-          routes: [{ name: 'App' }],
-        });
-        return; // Prevent any further logic that can cause delays
+        
+        // The AuthNavigator will automatically redirect to the app
+        // once it detects the profile is complete
+        console.log('✅ Profile setup complete, AuthNavigator should redirect to app');
       } else {
+        setIsLoading(false);
+        hideLoader();
         showError(result.message || 'Failed to save profile. Please try again.');
       }
     } catch (error) {
-      showError('An unexpected error occurred. Please try again.');
-    } finally {
       setIsLoading(false);
       hideLoader();
+      showError('An unexpected error occurred. Please try again.');
     }
   };
 
@@ -470,23 +576,37 @@ const ProfileSetupScreen = ({ navigation, route }) => {
                     maxLength={100}
                   />
                   <View style={styles.dateContainer}>
-                    <TextInput
-                      style={[styles.input, styles.dateInput]}
-                      placeholder="Start Date (MM/YYYY)"
-                      value={experience.startDate}
-                      onChangeText={(text) => updateExperience(index, 'startDate', text)}
-                      placeholderTextColor="rgba(255,255,255,0.5)"
-                      maxLength={7}
-                    />
-                    <TextInput
-                      style={[styles.input, styles.dateInput]}
-                      placeholder="End Date (MM/YYYY)"
-                      value={experience.endDate}
-                      onChangeText={(text) => updateExperience(index, 'endDate', text)}
-                      placeholderTextColor="rgba(255,255,255,0.5)"
-                      maxLength={7}
-                      editable={!experience.current}
-                    />
+                    <TouchableOpacity
+                      style={[styles.input, styles.dateInput, styles.datePickerButton]}
+                      onPress={() => openDatePicker('experience', index, 'startDate')}
+                    >
+                      <Text style={styles.datePickerText}>
+                        {formatDateForDisplay(experience.startDate) || 'Start Date'}
+                      </Text>
+                      <Icon name="calendar" size={20} color="rgba(255,255,255,0.5)" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
+                        styles.input,
+                        styles.dateInput,
+                        styles.datePickerButton,
+                        experience.current && styles.disabledInput
+                      ]}
+                      onPress={() => !experience.current && openDatePicker('experience', index, 'endDate')}
+                      disabled={experience.current}
+                    >
+                      <Text style={[
+                        styles.datePickerText,
+                        experience.current && styles.disabledText
+                      ]}>
+                        {experience.current ? 'Present' : (formatDateForDisplay(experience.endDate) || 'End Date')}
+                      </Text>
+                      <Icon
+                        name="calendar"
+                        size={20}
+                        color={experience.current ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.5)'}
+                      />
+                    </TouchableOpacity>
                   </View>
                   <View style={styles.checkboxContainer}>
                     <TouchableOpacity
@@ -558,23 +678,37 @@ const ProfileSetupScreen = ({ navigation, route }) => {
                     maxLength={100}
                   />
                   <View style={styles.dateContainer}>
-                    <TextInput
-                      style={[styles.input, styles.dateInput]}
-                      placeholder="Start Date (MM/YYYY)"
-                      value={edu.startDate}
-                      onChangeText={(text) => updateEducation(index, 'startDate', text)}
-                      placeholderTextColor="rgba(255,255,255,0.5)"
-                      maxLength={7}
-                    />
-                    <TextInput
-                      style={[styles.input, styles.dateInput]}
-                      placeholder="End Date (MM/YYYY)"
-                      value={edu.endDate}
-                      onChangeText={(text) => updateEducation(index, 'endDate', text)}
-                      placeholderTextColor="rgba(255,255,255,0.5)"
-                      maxLength={7}
-                      editable={!edu.current}
-                    />
+                    <TouchableOpacity
+                      style={[styles.input, styles.dateInput, styles.datePickerButton]}
+                      onPress={() => openDatePicker('education', index, 'startDate')}
+                    >
+                      <Text style={styles.datePickerText}>
+                        {formatDateForDisplay(edu.startDate) || 'Start Date'}
+                      </Text>
+                      <Icon name="calendar" size={20} color="rgba(255,255,255,0.5)" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
+                        styles.input,
+                        styles.dateInput,
+                        styles.datePickerButton,
+                        edu.current && styles.disabledInput
+                      ]}
+                      onPress={() => !edu.current && openDatePicker('education', index, 'endDate')}
+                      disabled={edu.current}
+                    >
+                      <Text style={[
+                        styles.datePickerText,
+                        edu.current && styles.disabledText
+                      ]}>
+                        {edu.current ? 'Present' : (formatDateForDisplay(edu.endDate) || 'End Date')}
+                      </Text>
+                      <Icon
+                        name="calendar"
+                        size={20}
+                        color={edu.current ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.5)'}
+                      />
+                    </TouchableOpacity>
                   </View>
                   <View style={styles.checkboxContainer}>
                     <TouchableOpacity
@@ -628,6 +762,107 @@ const ProfileSetupScreen = ({ navigation, route }) => {
               Profile completion is required to continue
             </Text>
           </View>
+
+          {/* Custom Date Picker Modal */}
+          <Modal
+            visible={showDatePicker}
+            transparent={true}
+            animationType="fade"
+            onRequestClose={handleDateCancel}
+          >
+            <View style={styles.modalOverlay}>
+              <View style={styles.datePickerModal}>
+                <View style={styles.datePickerHeader}>
+                  <Text style={styles.datePickerTitle}>Select Date</Text>
+                  <TouchableOpacity 
+                    style={styles.modalCloseButton}
+                    onPress={handleDateCancel}
+                  >
+                    <Icon name="close" size={24} color="white" />
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.datePickerContent}>
+                  {/* Month Picker Section */}
+                  <View style={styles.pickerSection}>
+                    <Text style={styles.pickerSectionLabel}>Month</Text>
+                    <ScrollView 
+                      style={styles.pickerScrollView}
+                      showsVerticalScrollIndicator={false}
+                      contentContainerStyle={styles.pickerScrollContent}
+                    >
+                      {months.map((month) => (
+                        <TouchableOpacity
+                          key={month.value}
+                          style={[
+                            styles.pickerItem,
+                            month.value === selectedMonth && styles.pickerItemSelected
+                          ]}
+                          onPress={() => setSelectedMonth(month.value)}
+                        >
+                          <Text style={[
+                            styles.pickerItemText,
+                            month.value === selectedMonth && styles.pickerItemTextSelected
+                          ]}>
+                            {month.label}
+                          </Text>
+                          {month.value === selectedMonth && (
+                            <Icon name="check" size={20} color="#8a2be2" />
+                          )}
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </View>
+
+                  {/* Year Picker Section */}
+                  <View style={styles.pickerSection}>
+                    <Text style={styles.pickerSectionLabel}>Year</Text>
+                    <ScrollView 
+                      style={styles.pickerScrollView}
+                      showsVerticalScrollIndicator={false}
+                      contentContainerStyle={styles.pickerScrollContent}
+                    >
+                      {years.map((year) => (
+                        <TouchableOpacity
+                          key={year}
+                          style={[
+                            styles.pickerItem,
+                            year === selectedYear && styles.pickerItemSelected
+                          ]}
+                          onPress={() => setSelectedYear(year)}
+                        >
+                          <Text style={[
+                            styles.pickerItemText,
+                            year === selectedYear && styles.pickerItemTextSelected
+                          ]}>
+                            {year}
+                          </Text>
+                          {year === selectedYear && (
+                            <Icon name="check" size={20} color="#8a2be2" />
+                          )}
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </View>
+                </View>
+
+                <View style={styles.datePickerActions}>
+                  <TouchableOpacity
+                    style={[styles.dateActionButton, styles.cancelButton]}
+                    onPress={handleDateCancel}
+                  >
+                    <Text style={styles.cancelButtonText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.dateActionButton, styles.confirmButton]}
+                    onPress={handleDateConfirm}
+                  >
+                    <Text style={styles.confirmButtonText}>Confirm</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </Modal>
         </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
@@ -911,6 +1146,152 @@ const styles = StyleSheet.create({
   },
   cardInput: {
     marginBottom: 12,
+  },
+  datePickerButton: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  datePickerText: {
+    color: 'white',
+    fontSize: 16,
+    flex: 1,
+  },
+  disabledInput: {
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    opacity: 0.6,
+  },
+  disabledText: {
+    color: 'rgba(255,255,255,0.4)',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  datePickerModal: {
+    backgroundColor: '#1a1a1a',
+    borderRadius: 24,
+    width: '100%',
+    maxWidth: 420,
+    maxHeight: '80%',
+    borderWidth: 2,
+    borderColor: '#8a2be2',
+    overflow: 'hidden',
+    shadowColor: '#8a2be2',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  datePickerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 2,
+    borderBottomColor: 'rgba(138, 43, 226, 0.3)',
+    backgroundColor: 'rgba(138, 43, 226, 0.15)',
+  },
+  modalCloseButton: {
+    position: 'absolute',
+    right: 16,
+    top: 16,
+    padding: 4,
+  },
+  datePickerTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: 'white',
+    textAlign: 'center',
+  },
+  datePickerContent: {
+    flexDirection: 'row',
+    padding: 16,
+    gap: 12,
+  },
+  pickerSection: {
+    flex: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(138, 43, 226, 0.2)',
+    overflow: 'hidden',
+  },
+  pickerSectionLabel: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: 'white',
+    textAlign: 'center',
+    paddingVertical: 12,
+    backgroundColor: 'rgba(138, 43, 226, 0.2)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(138, 43, 226, 0.3)',
+  },
+  pickerScrollView: {
+    maxHeight: 280,
+  },
+  pickerScrollContent: {
+    padding: 8,
+  },
+  pickerItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 14,
+    marginVertical: 4,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  pickerItemSelected: {
+    backgroundColor: 'rgba(138, 43, 226, 0.25)',
+    borderColor: '#8a2be2',
+    borderWidth: 2,
+  },
+  pickerItemText: {
+    fontSize: 16,
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontWeight: '500',
+  },
+  pickerItemTextSelected: {
+    color: 'white',
+    fontWeight: '700',
+  },
+  datePickerActions: {
+    flexDirection: 'row',
+    borderTopWidth: 2,
+    borderTopColor: 'rgba(138, 43, 226, 0.3)',
+  },
+  dateActionButton: {
+    flex: 1,
+    padding: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelButton: {
+    borderRightWidth: 1,
+    borderRightColor: 'rgba(138, 43, 226, 0.3)',
+    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+  },
+  confirmButton: {
+    backgroundColor: '#8a2be2',
+  },
+  cancelButtonText: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: 'rgba(255, 255, 255, 0.6)',
+  },
+  confirmButtonText: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: 'white',
   },
 });
 

@@ -1,6 +1,6 @@
 // screens/EditProfileScreen.js
 import React, { useState, useEffect } from 'react';
-import { View, TextInput, StyleSheet, Image, TouchableOpacity, Text, ScrollView, KeyboardAvoidingView, Platform, Modal, FlatList } from 'react-native';
+import { View, TextInput, StyleSheet, Image, TouchableOpacity, Text, ScrollView, KeyboardAvoidingView, Platform, Modal } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Container from '../components/Container';
@@ -33,8 +33,6 @@ const EditProfileScreen = ({ navigation }) => {
   const [currentItemIndex, setCurrentItemIndex] = useState(null);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
-  const [showYearPicker, setShowYearPicker] = useState(false);
-  const [showMonthPicker, setShowMonthPicker] = useState(false);
 
   const { showLoader, hideLoader } = useLoader();
   const { showError, showSuccess } = useNotification();
@@ -126,6 +124,15 @@ const EditProfileScreen = ({ navigation }) => {
   // Date utility functions
   const formatDateForDisplay = (dateString) => {
     if (!dateString) return '';
+    
+    // Check if it's already in MM/YYYY format
+    if (dateString.includes('/')) {
+      const [month, year] = dateString.split('/');
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      return `${monthNames[parseInt(month) - 1]} ${year}`;
+    }
+    
+    // Otherwise try to parse as a date
     const date = new Date(dateString);
     if (isNaN(date.getTime())) return '';
     return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short' });
@@ -134,7 +141,7 @@ const EditProfileScreen = ({ navigation }) => {
   const formatDateForAPI = (year, month) => {
     if (!year || !month) return null;
     const formattedMonth = String(month).padStart(2, '0');
-    return `${year}-${formattedMonth}-01`;
+    return `${formattedMonth}/${year}`;
   };
 
   const openDatePicker = (type, itemIndex, field) => {
@@ -147,9 +154,17 @@ const EditProfileScreen = ({ navigation }) => {
     }
 
     if (currentDate) {
-      const date = new Date(currentDate);
-      setSelectedYear(date.getFullYear());
-      setSelectedMonth(date.getMonth() + 1);
+      // Check if it's in MM/YYYY format
+      if (currentDate.includes('/')) {
+        const [month, year] = currentDate.split('/');
+        setSelectedYear(parseInt(year));
+        setSelectedMonth(parseInt(month));
+      } else {
+        // Try parsing as a date
+        const date = new Date(currentDate);
+        setSelectedYear(date.getFullYear());
+        setSelectedMonth(date.getMonth() + 1);
+      }
     } else {
       setSelectedYear(new Date().getFullYear());
       setSelectedMonth(new Date().getMonth() + 1);
@@ -179,8 +194,6 @@ const EditProfileScreen = ({ navigation }) => {
 
   const handleDateCancel = () => {
     setShowDatePicker(false);
-    setShowMonthPicker(false);
-    setShowYearPicker(false);
     setCurrentDateField(null);
     setCurrentItemIndex(null);
   };
@@ -614,112 +627,94 @@ const EditProfileScreen = ({ navigation }) => {
         <Modal
           visible={showDatePicker}
           transparent={true}
-          animationType="slide"
+          animationType="fade"
           onRequestClose={handleDateCancel}
         >
           <View style={styles.modalOverlay}>
             <View style={styles.datePickerModal}>
               <View style={styles.datePickerHeader}>
                 <Text style={styles.datePickerTitle}>Select Date</Text>
+                <TouchableOpacity 
+                  style={styles.modalCloseButton}
+                  onPress={handleDateCancel}
+                >
+                  <Icon name="close" size={24} color="white" />
+                </TouchableOpacity>
               </View>
 
               <View style={styles.datePickerContent}>
-                <View style={styles.pickerContainer}>
-                  <View style={styles.pickerColumn}>
-                    <Text style={styles.pickerLabel}>Month</Text>
-                    <TouchableOpacity
-                      style={styles.dateSelector}
-                      onPress={() => setShowMonthPicker(!showMonthPicker)}
-                    >
-                      <Text style={styles.dateSelectorText}>
-                        {months.find(m => m.value === selectedMonth)?.label || 'Select Month'}
-                      </Text>
-                      <Icon name="chevron-down" size={20} color={colors.textSecondary} />
-                    </TouchableOpacity>
-                    {showMonthPicker && (
-                      <View style={styles.dropdownContainer}>
-                        <FlatList
-                          data={months}
-                          keyExtractor={(item) => item.value.toString()}
-                          renderItem={({ item }) => (
-                            <TouchableOpacity
-                              style={[
-                                styles.dropdownItem,
-                                item.value === selectedMonth && styles.selectedDropdownItem
-                              ]}
-                              onPress={() => {
-                                setSelectedMonth(item.value);
-                                setShowMonthPicker(false);
-                              }}
-                            >
-                              <Text style={[
-                                styles.dropdownItemText,
-                                item.value === selectedMonth && styles.selectedDropdownItemText
-                              ]}>
-                                {item.label}
-                              </Text>
-                            </TouchableOpacity>
-                          )}
-                          style={styles.dropdown}
-                          showsVerticalScrollIndicator={false}
-                        />
-                      </View>
-                    )}
-                  </View>
+                {/* Month Picker Section */}
+                <View style={styles.pickerSection}>
+                  <Text style={styles.pickerSectionLabel}>Month</Text>
+                  <ScrollView 
+                    style={styles.pickerScrollView}
+                    showsVerticalScrollIndicator={false}
+                    contentContainerStyle={styles.pickerScrollContent}
+                  >
+                    {months.map((month) => (
+                      <TouchableOpacity
+                        key={month.value}
+                        style={[
+                          styles.pickerItem,
+                          month.value === selectedMonth && styles.pickerItemSelected
+                        ]}
+                        onPress={() => setSelectedMonth(month.value)}
+                      >
+                        <Text style={[
+                          styles.pickerItemText,
+                          month.value === selectedMonth && styles.pickerItemTextSelected
+                        ]}>
+                          {month.label}
+                        </Text>
+                        {month.value === selectedMonth && (
+                          <Icon name="check" size={20} color={colors.button} />
+                        )}
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
 
-                  <View style={styles.pickerColumn}>
-                    <Text style={styles.pickerLabel}>Year</Text>
-                    <TouchableOpacity
-                      style={styles.dateSelector}
-                      onPress={() => setShowYearPicker(!showYearPicker)}
-                    >
-                      <Text style={styles.dateSelectorText}>
-                        {selectedYear}
-                      </Text>
-                      <Icon name="chevron-down" size={20} color={colors.textSecondary} />
-                    </TouchableOpacity>
-                    {showYearPicker && (
-                      <View style={styles.dropdownContainer}>
-                        <FlatList
-                          data={years}
-                          keyExtractor={(item) => item.toString()}
-                          renderItem={({ item }) => (
-                            <TouchableOpacity
-                              style={[
-                                styles.dropdownItem,
-                                item === selectedYear && styles.selectedDropdownItem
-                              ]}
-                              onPress={() => {
-                                setSelectedYear(item);
-                                setShowYearPicker(false);
-                              }}
-                            >
-                              <Text style={[
-                                styles.dropdownItemText,
-                                item === selectedYear && styles.selectedDropdownItemText
-                              ]}>
-                                {item}
-                              </Text>
-                            </TouchableOpacity>
-                          )}
-                          style={styles.dropdown}
-                          showsVerticalScrollIndicator={false}
-                        />
-                      </View>
-                    )}
-                  </View>
+                {/* Year Picker Section */}
+                <View style={styles.pickerSection}>
+                  <Text style={styles.pickerSectionLabel}>Year</Text>
+                  <ScrollView 
+                    style={styles.pickerScrollView}
+                    showsVerticalScrollIndicator={false}
+                    contentContainerStyle={styles.pickerScrollContent}
+                  >
+                    {years.map((year) => (
+                      <TouchableOpacity
+                        key={year}
+                        style={[
+                          styles.pickerItem,
+                          year === selectedYear && styles.pickerItemSelected
+                        ]}
+                        onPress={() => setSelectedYear(year)}
+                      >
+                        <Text style={[
+                          styles.pickerItemText,
+                          year === selectedYear && styles.pickerItemTextSelected
+                        ]}>
+                          {year}
+                        </Text>
+                        {year === selectedYear && (
+                          <Icon name="check" size={20} color={colors.button} />
+                        )}
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
                 </View>
               </View>
 
               <View style={styles.datePickerActions}>
                 <TouchableOpacity
-                  style={[styles.datePickerButton, styles.cancelButton]}
+                  style={[styles.dateActionButton, styles.cancelButton]}
                   onPress={handleDateCancel}
                 >
                   <Text style={styles.cancelButtonText}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.datePickerButton, styles.confirmButton]}
+                  style={[styles.dateActionButton, styles.confirmButton]}
                   onPress={handleDateConfirm}
                 >
                   <Text style={styles.confirmButtonText}>Confirm</Text>
@@ -927,119 +922,129 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
     justifyContent: 'center',
     alignItems: 'center',
+    padding: 20,
   },
   datePickerModal: {
     backgroundColor: colors.backgroundElevated,
-    borderRadius: 16,
-    width: '90%',
-    maxWidth: 400,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderRadius: 24,
+    width: '100%',
+    maxWidth: 420,
+    maxHeight: '80%',
+    borderWidth: 2,
+    borderColor: colors.button,
+    overflow: 'hidden',
+    shadowColor: colors.button,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 10,
   },
   datePickerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    paddingBottom: 16,
+    borderBottomWidth: 2,
+    borderBottomColor: 'rgba(138, 43, 226, 0.3)',
+    backgroundColor: 'rgba(138, 43, 226, 0.15)',
+  },
+  modalCloseButton: {
+    position: 'absolute',
+    right: 16,
+    top: 16,
+    padding: 4,
   },
   datePickerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 22,
+    fontWeight: '700',
     color: colors.white,
     textAlign: 'center',
   },
   datePickerContent: {
-    padding: 20,
-  },
-  pickerContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    padding: 16,
+    gap: 12,
   },
-  pickerColumn: {
+  pickerSection: {
     flex: 1,
-    marginHorizontal: 10,
-  },
-  pickerLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.white,
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  dateSelector: {
-    backgroundColor: colors.backgroundSecondary,
-    borderRadius: 8,
-    padding: 12,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: 'rgba(138, 43, 226, 0.2)',
+    overflow: 'hidden',
   },
-  dateSelectorText: {
-    color: colors.white,
+  pickerSectionLabel: {
     fontSize: 16,
-    flex: 1,
-  },
-  dropdownContainer: {
-    position: 'absolute',
-    top: 50,
-    left: 0,
-    right: 0,
-    zIndex: 1000,
-    backgroundColor: colors.backgroundElevated,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
-    maxHeight: 200,
-  },
-  dropdown: {
-    maxHeight: 200,
-  },
-  dropdownItem: {
-    padding: 12,
+    fontWeight: '700',
+    color: colors.white,
+    textAlign: 'center',
+    paddingVertical: 12,
+    backgroundColor: 'rgba(138, 43, 226, 0.2)',
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: 'rgba(138, 43, 226, 0.3)',
   },
-  dropdownItemText: {
-    color: colors.white,
+  pickerScrollView: {
+    maxHeight: 280,
+  },
+  pickerScrollContent: {
+    padding: 8,
+  },
+  pickerItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 14,
+    marginVertical: 4,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  pickerItemSelected: {
+    backgroundColor: 'rgba(138, 43, 226, 0.25)',
+    borderColor: colors.button,
+    borderWidth: 2,
+  },
+  pickerItemText: {
     fontSize: 16,
-    textAlign: 'center',
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontWeight: '500',
   },
-  selectedDropdownItem: {
-    backgroundColor: colors.button,
-  },
-  selectedDropdownItemText: {
+  pickerItemTextSelected: {
     color: colors.white,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   datePickerActions: {
     flexDirection: 'row',
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+    borderTopWidth: 2,
+    borderTopColor: 'rgba(138, 43, 226, 0.3)',
   },
-  datePickerButton: {
+  dateActionButton: {
     flex: 1,
-    padding: 16,
+    padding: 18,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   cancelButton: {
     borderRightWidth: 1,
-    borderRightColor: colors.border,
+    borderRightColor: 'rgba(138, 43, 226, 0.3)',
+    backgroundColor: 'rgba(255, 255, 255, 0.02)',
   },
   confirmButton: {
     backgroundColor: colors.button,
   },
   cancelButtonText: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '600',
-    color: colors.textSecondary,
+    color: 'rgba(255, 255, 255, 0.6)',
   },
   confirmButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 17,
+    fontWeight: '700',
     color: colors.white,
   },
 });

@@ -18,6 +18,7 @@ class ChatApiService {
     this.isConnected = false;
     this.messageListeners = new Map();
     this.typingListeners = new Map();
+    this.statusListeners = new Map(); // Add status listeners
     console.log('ChatApi: Initialized with baseUrl:', this.baseUrl);
   }
 
@@ -287,7 +288,12 @@ class ChatApiService {
   // Handle user status events
   handleUserStatusEvent(statusData) {
     console.log('User status changed:', statusData);
-    // You can add listeners for user status if needed
+    const userId = statusData.userId;
+    const listeners = this.statusListeners.get(userId);
+    
+    if (listeners) {
+      listeners.forEach(callback => callback(statusData));
+    }
   }
 
   // Handle notification events
@@ -359,6 +365,39 @@ class ChatApiService {
       }
     } else {
       console.log(`🗑️ No typing listeners found for room ${roomId}`);
+    }
+  }
+
+  // Add status listener for a specific user
+  addStatusListener(userId, callback) {
+    if (!this.statusListeners.has(userId)) {
+      this.statusListeners.set(userId, new Set());
+    }
+
+    const listeners = this.statusListeners.get(userId);
+
+    // Remove any existing identical callback to prevent duplicates
+    listeners.delete(callback);
+
+    // Add the callback
+    listeners.add(callback);
+
+    console.log(`👤 Added status listener for user ${userId}. Total listeners: ${listeners.size}`);
+  }
+
+  // Remove status listener for a specific user
+  removeStatusListener(userId, callback) {
+    const listeners = this.statusListeners.get(userId);
+    if (listeners) {
+      const removed = listeners.delete(callback);
+      console.log(`🗑️ Removed status listener for user ${userId}. Success: ${removed}. Remaining: ${listeners.size}`);
+
+      if (listeners.size === 0) {
+        this.statusListeners.delete(userId);
+        console.log(`🗑️ Removed all status listeners for user ${userId}`);
+      }
+    } else {
+      console.log(`🗑️ No status listeners found for user ${userId}`);
     }
   }
 
