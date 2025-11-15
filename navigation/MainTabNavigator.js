@@ -57,13 +57,19 @@ const MainTabNavigator = () => {
           position: 'absolute',
         },
         tabBarBackground: () => (
-          <BlurView intensity={20} tint="dark" style={StyleSheet.absoluteFill}>
-            <LinearGradient
-              colors={['rgba(10, 19, 24, 1)', 'rgba(102, 124, 137, 1)']}
-              style={StyleSheet.absoluteFill}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 10, y: 0 }}
-            />
+          <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill}>
+            <View style={{
+              ...StyleSheet.absoluteFillObject,
+              borderTopWidth: 0.5,
+              borderTopColor: 'rgba(255, 255, 255, 0.1)',
+            }}>
+              <LinearGradient
+                colors={['rgba(20, 37, 45, 0.6)', 'rgba(102, 124, 137, 0.4)']}
+                style={StyleSheet.absoluteFill}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 10, y: 0 }}
+              />
+            </View>
           </BlurView>
         ),
         tabBarActiveTintColor: colors.white,

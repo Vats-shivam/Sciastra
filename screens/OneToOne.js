@@ -659,7 +659,7 @@ const OneToOneChatScreen = ({ route, navigation }) => {
             <Icon
               name="check-all"
               size={16}
-              color={item.read ? colors.primary : colors.textMuted}
+              color={item.read ? colors.success : 'rgba(255, 255, 255, 0.5)'}
               style={styles.readIcon}
             />
           )}
@@ -678,7 +678,7 @@ const OneToOneChatScreen = ({ route, navigation }) => {
           style={styles.backButton}
           onPress={() => navigation.goBack()}
         >
-          <Icon name="arrow-left" size={24} color={colors.primary} />
+          <Icon name="arrow-left" size={24} color={colors.white} />
         </TouchableOpacity>
         
         <View style={styles.userInfo}>
@@ -690,7 +690,7 @@ const OneToOneChatScreen = ({ route, navigation }) => {
         </View>
         
         <TouchableOpacity style={styles.headerButton}>
-          <Icon name="dots-vertical" size={24} color={colors.primary} />
+          <Icon name="dots-vertical" size={24} color={colors.white} />
         </TouchableOpacity>
       </View>
 
@@ -737,10 +737,10 @@ const OneToOneChatScreen = ({ route, navigation }) => {
               blurOnSubmit={false}
             />
             <TouchableOpacity style={styles.attachmentButton} onPress={selectAndSendImage}>
-              <Icon name="paperclip" size={24} color={colors.primary} />
+              <Icon name="paperclip" size={22} color={colors.button} />
             </TouchableOpacity>
             <TouchableOpacity style={styles.cameraButton} onPress={takeAndSendPhoto}>
-              <Icon name="camera" size={24} color={colors.primary} />
+              <Icon name="camera" size={22} color={colors.button} />
             </TouchableOpacity>
           </View>
           <TouchableOpacity 
@@ -748,7 +748,7 @@ const OneToOneChatScreen = ({ route, navigation }) => {
             onPress={handleSend}
             disabled={!input.trim()}
           >
-            <Icon name="send" size={24} color={colors.textInverse} />
+            <Icon name="send" size={24} color={colors.white} />
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -819,22 +819,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 12,
     backgroundColor: colors.backgroundSecondary,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
   backButton: {
-    padding: 8,
+    padding: 4,
   },
   userInfo: {
     flex: 1,
-    marginLeft: 12,
+    marginLeft: 16,
   },
   userName: {
     fontSize: 18,
-    fontWeight: '600',
+    fontFamily: 'Gilroy-Bold',
     color: colors.textPrimary,
   },
   statusContainer: {
@@ -850,6 +851,7 @@ const styles = StyleSheet.create({
   },
   statusText: {
     fontSize: 12,
+    fontFamily: 'Gilroy-Medium',
     color: colors.textMuted,
   },
   headerButton: {
@@ -863,10 +865,11 @@ const styles = StyleSheet.create({
   },
   messagesList: {
     padding: 16,
+    paddingBottom: 20,
   },
   messageContainer: {
     flexDirection: 'row',
-    marginBottom: 12,
+    marginBottom: 16,
     alignItems: 'flex-end',
   },
   sentMessage: {
@@ -876,32 +879,37 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
   },
   avatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     marginRight: 8,
     backgroundColor: colors.backgroundElevated,
+    borderWidth: 2,
+    borderColor: colors.border,
   },
   messageBubble: {
     maxWidth: '80%',
-    borderRadius: 16,
-    padding: 12,
+    borderRadius: 18,
+    padding: 14,
     position: 'relative',
   },
   sentBubble: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.button,
     borderBottomRightRadius: 4,
   },
   receivedBubble: {
-    backgroundColor: colors.button, // Using the app's primary purple
+    backgroundColor: colors.card,
     borderBottomLeftRadius: 4,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   messageText: {
-    fontSize: 16,
+    fontSize: 15,
+    fontFamily: 'Gilroy-Medium',
     lineHeight: 22,
   },
   sentText: {
-    color: colors.textInverse,
+    color: colors.white,
   },
   receivedText: {
     color: colors.textPrimary,
@@ -914,14 +922,15 @@ const styles = StyleSheet.create({
   },
   messageTime: {
     fontSize: 11,
-    color: 'rgba(255, 255, 255, 0.6)',
+    fontFamily: 'Gilroy-Medium',
+    color: 'rgba(255, 255, 255, 0.7)',
   },
   readIcon: {
     marginLeft: 4,
   },
   inputContainer: {
     flexDirection: 'row',
-    padding: 12,
+    padding: 16,
     backgroundColor: colors.backgroundSecondary,
     borderTopWidth: 1,
     borderTopColor: colors.border,
@@ -931,16 +940,21 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     backgroundColor: colors.card,
-    borderRadius: 24,
-    paddingHorizontal: 12,
+    borderRadius: 28,
+    paddingHorizontal: 16,
+    paddingVertical: 4,
     alignItems: 'center',
-    marginRight: 8,
+    marginRight: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   input: {
     flex: 1,
     color: colors.textPrimary,
+    fontFamily: 'Gilroy-Medium',
+    fontSize: 15,
     maxHeight: 120,
-    paddingVertical: 8,
+    paddingVertical: 10,
   },
   attachmentButton: {
     marginLeft: 8,
@@ -951,10 +965,10 @@ const styles = StyleSheet.create({
     padding: 6,
   },
   sendButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: colors.primary,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: colors.button,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -968,23 +982,24 @@ const styles = StyleSheet.create({
   },
   typingText: {
     fontSize: 12,
+    fontFamily: 'Gilroy-Medium',
     color: colors.textMuted,
     fontStyle: 'italic',
   },
   // Media message styles
   mediaBubble: {
-    padding: 4,
+    padding: 6,
     minWidth: 200,
   },
   mediaContainer: {
-    borderRadius: 12,
+    borderRadius: 16,
     overflow: 'hidden',
     marginBottom: 4,
   },
   messageImage: {
-    width: 200,
-    height: 150,
-    borderRadius: 8,
+    width: 220,
+    height: 160,
+    borderRadius: 12,
   },
   videoContainer: {
     position: 'relative',
@@ -1015,6 +1030,7 @@ const styles = StyleSheet.create({
   uploadingText: {
     color: 'white',
     fontSize: 12,
+    fontFamily: 'Gilroy-Medium',
     marginTop: 4,
   },
   mediaMessageText: {

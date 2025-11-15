@@ -106,6 +106,7 @@ const MyNetworkScreen = ({ navigation }) => {
         keyExtractor={item => item.id}
         refreshing={refreshing}
         onRefresh={handleRefresh}
+        contentContainerStyle={{ paddingBottom: 120, flexGrow: 1 }}
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <Icon name="account-multiple-outline" size={48} color={colors.textSecondary} />
@@ -151,7 +152,7 @@ const styles = StyleSheet.create({
   },
   name: {
     fontSize: 18,
-    fontWeight: '600',
+    fontFamily: 'Gilroy-SemiBold',
     color: colors.primary,
   },
   profession: {

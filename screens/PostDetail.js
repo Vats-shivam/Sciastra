@@ -51,7 +51,6 @@ const PostDetailScreen = ({ route, navigation }) => {
   const [commentsLoading, setCommentsLoading] = useState(false);
   const [reactionsLoading, setReactionsLoading] = useState(false);
   const [showReactionsList, setShowReactionsList] = useState(false);
-  const [activeTab, setActiveTab] = useState('comments'); // 'comments' or 'reactions'
 
   useEffect(() => {
     loadPostDetails();
@@ -164,21 +163,41 @@ const PostDetailScreen = ({ route, navigation }) => {
     return { uri: mediaItem.uri || mediaItem.url || mediaItem.displayUrl };
   };
 
-  const renderComment = ({ item: comment }) => (
-    <View style={styles.commentItem}>
-      <Image
-        source={{
-          uri: comment.user?.profile?.profilePic
-            ? postApi.getImageSource(comment.user.profile.profilePic, authApi.getAccessToken()).uri
-            : 'https://randomuser.me/api/portraits/men/1.jpg'
-        }}
-        style={styles.commentAvatar}
-      />
+  const renderComment = ({ item: comment }) => {
+    // Get profile picture - use user's profilePic if available, otherwise use default icon
+    const profilePic = comment.user?.profile?.profilePic;
+    const imageSource = profilePic
+      ? { uri: profilePic }
+      : require('../assets/icon.png');
+    
+    const userId = comment.user?.id || comment.userId;
+    const currentUserId = authApi.getCurrentUserId();
+    
+    const handleUserPress = () => {
+      if (!userId) return;
+      
+      if (userId === currentUserId || userId === '1') {
+        navigation.navigate('ProfileTab');
+      } else {
+        navigation.navigate('UserProfile', { userId: userId });
+      }
+    };
+
+    return (
+      <View style={styles.commentItem}>
+        <TouchableOpacity onPress={handleUserPress}>
+          <Image
+            source={imageSource}
+            style={styles.commentAvatar}
+          />
+        </TouchableOpacity>
       <View style={styles.commentContent}>
         <View style={styles.commentHeader}>
-          <Text style={styles.commentAuthor}>
-            {comment.user?.profile?.name || 'Unknown User'}
-          </Text>
+          <TouchableOpacity onPress={handleUserPress}>
+            <Text style={styles.commentAuthor}>
+              {comment.user?.profile?.name || 'Unknown User'}
+            </Text>
+          </TouchableOpacity>
           <Text style={styles.commentTime}>
             {new Date(comment.createdAt).toLocaleDateString()}
           </Text>
@@ -194,25 +213,45 @@ const PostDetailScreen = ({ route, navigation }) => {
         )}
       </View>
     </View>
-  );
+    );
+  };
 
   const renderReaction = ({ item: reaction }) => {
     const reactionConfig = REACTIONS.find(r => r.type === reaction.type);
+    
+    // Get profile picture - use user's profilePic if available, otherwise use default icon
+    const profilePic = reaction.user?.profile?.profilePic;
+    const imageSource = profilePic
+      ? { uri: profilePic }
+      : require('../assets/icon.png');
+    
+    const userId = reaction.user?.id || reaction.userId;
+    const currentUserId = authApi.getCurrentUserId();
+    
+    const handleUserPress = () => {
+      if (!userId) return;
+      
+      if (userId === currentUserId || userId === '1') {
+        navigation.navigate('ProfileTab');
+      } else {
+        navigation.navigate('UserProfile', { userId: userId });
+      }
+    };
 
     return (
       <View style={styles.reactionItem}>
-        <Image
-          source={{
-            uri: reaction.user?.profile?.profilePic
-              ? postApi.getImageSource(reaction.user.profile.profilePic, authApi.getAccessToken()).uri
-              : 'https://randomuser.me/api/portraits/men/1.jpg'
-          }}
-          style={styles.reactionAvatar}
-        />
+        <TouchableOpacity onPress={handleUserPress}>
+          <Image
+            source={imageSource}
+            style={styles.reactionAvatar}
+          />
+        </TouchableOpacity>
         <View style={styles.reactionContent}>
-          <Text style={styles.reactionAuthor}>
-            {reaction.user?.profile?.name || 'Unknown User'}
-          </Text>
+          <TouchableOpacity onPress={handleUserPress}>
+            <Text style={styles.reactionAuthor}>
+              {reaction.user?.profile?.name || 'Unknown User'}
+            </Text>
+          </TouchableOpacity>
           <View style={styles.reactionType}>
             <Text style={styles.reactionIcon}>{reactionConfig?.icon || '👍'}</Text>
             <Text style={styles.reactionLabel}>{reactionConfig?.label || 'Like'}</Text>
@@ -227,13 +266,13 @@ const PostDetailScreen = ({ route, navigation }) => {
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Icon name="arrow-left" size={24} color={colors.primary} />
+            <Icon name="arrow-left" size={24} color={colors.white} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Post</Text>
           <View style={{ width: 24 }} />
         </View>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
+          <ActivityIndicator size="large" color={colors.button} />
           <Text style={styles.loadingText}>Loading post...</Text>
         </View>
       </SafeAreaView>
@@ -245,7 +284,7 @@ const PostDetailScreen = ({ route, navigation }) => {
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Icon name="arrow-left" size={24} color={colors.primary} />
+            <Icon name="arrow-left" size={24} color={colors.white} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Post</Text>
           <View style={{ width: 24 }} />
@@ -268,11 +307,11 @@ const PostDetailScreen = ({ route, navigation }) => {
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top || 0 }] }>
         <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Icon name="arrow-left" size={24} color={colors.primary} />
+          <Icon name="arrow-left" size={24} color={colors.white} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Post</Text>
         <TouchableOpacity>
-          <Icon name="dots-vertical" size={24} color={colors.primary} />
+          <Icon name="dots-vertical" size={24} color={colors.white} />
         </TouchableOpacity>
       </View>
 
@@ -330,84 +369,40 @@ const PostDetailScreen = ({ route, navigation }) => {
 
             {/* Engagement Stats */}
             <View style={styles.engagementStats}>
-              <TouchableOpacity
-                style={styles.statButton}
-                onPress={() => setActiveTab('reactions')}
-              >
+              <View style={styles.statButton}>
                 <Text style={styles.statText}>
                   {totalReactions} {totalReactions === 1 ? 'reaction' : 'reactions'}
                 </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.statButton}
-                onPress={() => setActiveTab('comments')}
-              >
+              </View>
+              <View style={styles.statButton}>
                 <Text style={styles.statText}>
                   {totalComments} {totalComments === 1 ? 'comment' : 'comments'}
                 </Text>
-              </TouchableOpacity>
+              </View>
             </View>
           </View>
 
-          {/* Tabs */}
-          <View style={styles.tabContainer}>
-            <TouchableOpacity
-              style={[styles.tab, activeTab === 'comments' && styles.activeTab]}
-              onPress={() => setActiveTab('comments')}
-            >
-              <Text style={[styles.tabText, activeTab === 'comments' && styles.activeTabText]}>
-                Comments ({totalComments})
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.tab, activeTab === 'reactions' && styles.activeTab]}
-              onPress={() => setActiveTab('reactions')}
-            >
-              <Text style={[styles.tabText, activeTab === 'reactions' && styles.activeTabText]}>
-                Reactions ({totalReactions})
-              </Text>
-            </TouchableOpacity>
+          {/* Comments Section */}
+          <View style={styles.commentsSection}>
+            {comments.length > 0 ? (
+              <FlatList
+                data={comments}
+                keyExtractor={(item) => item.id.toString()}
+                renderItem={renderComment}
+                scrollEnabled={false}
+              />
+            ) : (
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyText}>No comments yet</Text>
+                <Text style={styles.emptySubtext}>Be the first to comment!</Text>
+              </View>
+            )}
           </View>
-
-          {/* Content based on active tab */}
-          {activeTab === 'comments' ? (
-            <View style={styles.commentsSection}>
-              {comments.length > 0 ? (
-                <FlatList
-                  data={comments}
-                  keyExtractor={(item) => item.id.toString()}
-                  renderItem={renderComment}
-                  scrollEnabled={false}
-                />
-              ) : (
-                <View style={styles.emptyContainer}>
-                  <Text style={styles.emptyText}>No comments yet</Text>
-                  <Text style={styles.emptySubtext}>Be the first to comment!</Text>
-                </View>
-              )}
-            </View>
-          ) : (
-            <View style={styles.reactionsSection}>
-              {reactions.length > 0 ? (
-                <FlatList
-                  data={reactions}
-                  keyExtractor={(item) => `${item.userId}_${item.type}`}
-                  renderItem={renderReaction}
-                  scrollEnabled={false}
-                />
-              ) : (
-                <View style={styles.emptyContainer}>
-                  <Text style={styles.emptyText}>No reactions yet</Text>
-                  <Text style={styles.emptySubtext}>Be the first to react!</Text>
-                </View>
-              )}
-            </View>
-          )}
         </ScrollView>
 
         {/* Comment Input */}
-        {activeTab === 'comments' && (
-          <View style={[styles.commentInputContainer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+        <View style={[styles.commentInputWrapper, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+          <View style={styles.commentInputContainer}>
             <TextInput
               style={styles.commentInput}
               placeholder="Write a comment..."
@@ -424,10 +419,10 @@ const PostDetailScreen = ({ route, navigation }) => {
               onPress={addComment}
               disabled={!newComment.trim()}
             >
-              <Icon name="send" size={20} color={colors.textInverse} />
+              <Icon name="send" size={24} color={colors.white} />
             </TouchableOpacity>
           </View>
-        )}
+        </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -450,7 +445,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 18,
-    fontWeight: '600',
+    fontFamily: 'Gilroy-Bold',
     color: colors.textPrimary,
   },
   keyboardAvoidingView: {
@@ -460,7 +455,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 100, // Extra padding to ensure content is scrollable above keyboard
+    paddingBottom: 120, // Extra padding to ensure content is scrollable above floating comment box
   },
   loadingContainer: {
     flex: 1,
@@ -470,6 +465,7 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 16,
     fontSize: 16,
+    fontFamily: 'Gilroy-Medium',
     color: colors.textSecondary,
   },
   errorContainer: {
@@ -480,28 +476,28 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontSize: 18,
+    fontFamily: 'Gilroy-Bold',
     color: colors.textPrimary,
     marginBottom: 16,
   },
   retryButton: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.button,
     paddingHorizontal: 24,
     paddingVertical: 12,
-    borderRadius: 8,
+    borderRadius: 12,
   },
   retryText: {
-    color: colors.textInverse,
-    fontWeight: '600',
+    color: colors.white,
+    fontFamily: 'Gilroy-Bold',
   },
 
   // Post Card Styles
   postCard: {
     backgroundColor: colors.card,
     margin: 16,
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 0,
   },
   postHeader: {
     flexDirection: 'row',
@@ -519,16 +515,18 @@ const styles = StyleSheet.create({
   },
   authorName: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: 'Gilroy-Bold',
     color: colors.textPrimary,
   },
   postTime: {
     fontSize: 12,
+    fontFamily: 'Gilroy-Medium',
     color: colors.textMuted,
     marginTop: 2,
   },
   postContent: {
     fontSize: 16,
+    fontFamily: 'Gilroy-Medium',
     lineHeight: 24,
     color: colors.textPrimary,
     marginBottom: 12,
@@ -539,22 +537,30 @@ const styles = StyleSheet.create({
   postImage: {
     width: '100%',
     height: 200,
-    borderRadius: 8,
+    borderRadius: 12,
     marginBottom: 8,
   },
   engagementStats: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingTop: 12,
+    justifyContent: 'space-around',
+    paddingTop: 16,
+    marginTop: 16,
     borderTopWidth: 1,
     borderTopColor: colors.border,
+    gap: 12,
   },
   statButton: {
     flex: 1,
+    backgroundColor: colors.backgroundElevated,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    alignItems: 'center',
   },
   statText: {
     fontSize: 14,
-    color: colors.textSecondary,
+    fontFamily: 'Gilroy-SemiBold',
+    color: colors.textPrimary,
     textAlign: 'center',
   },
 
@@ -590,13 +596,18 @@ const styles = StyleSheet.create({
   },
   commentItem: {
     flexDirection: 'row',
-    marginBottom: 16,
+    marginBottom: 12,
+    backgroundColor: colors.card,
+    padding: 16,
+    borderRadius: 16,
   },
   commentAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     marginRight: 12,
+    borderWidth: 2,
+    borderColor: colors.border,
   },
   commentContent: {
     flex: 1,
@@ -605,29 +616,36 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 6,
   },
   commentAuthor: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 15,
+    fontFamily: 'Gilroy-Bold',
     color: colors.textPrimary,
   },
   commentTime: {
-    fontSize: 12,
+    fontSize: 11,
+    fontFamily: 'Gilroy-Medium',
     color: colors.textMuted,
   },
   commentText: {
     fontSize: 14,
+    fontFamily: 'Gilroy-Medium',
     lineHeight: 20,
-    color: colors.textPrimary,
+    color: colors.textSecondary,
   },
   repliesButton: {
     marginTop: 8,
+    backgroundColor: colors.backgroundElevated,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
   },
   repliesText: {
     fontSize: 12,
-    color: colors.primary,
-    fontWeight: '500',
+    fontFamily: 'Gilroy-SemiBold',
+    color: colors.button,
   },
 
   // Reactions
@@ -670,31 +688,40 @@ const styles = StyleSheet.create({
   },
 
   // Comment Input
+  commentInputWrapper: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+  },
   commentInputContainer: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: colors.backgroundSecondary,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderRadius: 28,
+    paddingLeft: 20,
+    paddingRight: 6,
+    paddingVertical: 6,
+    minHeight: 56,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   commentInput: {
     flex: 1,
-    backgroundColor: colors.card,
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    maxHeight: 100,
-    fontSize: 14,
+    fontSize: 16,
+    fontFamily: 'Gilroy-Medium',
     color: colors.textPrimary,
-    marginRight: 12,
+    maxHeight: 120,
+    paddingVertical: 12,
+    paddingRight: 12,
   },
   sendButton: {
-    backgroundColor: colors.primary,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    backgroundColor: colors.button,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -705,16 +732,20 @@ const styles = StyleSheet.create({
   // Empty States
   emptyContainer: {
     alignItems: 'center',
-    paddingVertical: 32,
+    paddingVertical: 48,
+    backgroundColor: colors.card,
+    borderRadius: 16,
+    marginHorizontal: 16,
   },
   emptyText: {
     fontSize: 16,
-    fontWeight: '500',
-    color: colors.textSecondary,
+    fontFamily: 'Gilroy-Bold',
+    color: colors.textPrimary,
     marginBottom: 8,
   },
   emptySubtext: {
     fontSize: 14,
+    fontFamily: 'Gilroy-Medium',
     color: colors.textMuted,
   },
 });

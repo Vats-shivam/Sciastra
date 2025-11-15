@@ -43,10 +43,10 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginBottom: 8,
   },
-  commentAuthor: { fontWeight: 'bold', fontSize: 14, color: colors.primary },
+  commentAuthor: { fontFamily: 'Gilroy-Bold', fontSize: 14, color: colors.primary },
   commentText: { marginVertical: 6, color: colors.textPrimary },
   commentActions: { flexDirection: 'row', justifyContent: 'space-between' },
-  actionText: { color: colors.accent, fontWeight: '600' },
+  actionText: { color: colors.accent, fontFamily: 'Gilroy-SemiBold' },
 });
 
 export default CommentItem;

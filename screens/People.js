@@ -321,7 +321,7 @@ const ConnectionsScreen = () => {
                 tintColor={colors.primary}
               />
             }
-            contentContainerStyle={{ paddingBottom: 40, flexGrow: 1 }}
+            contentContainerStyle={{ paddingTop: 10, paddingBottom: 120 }}
             ListEmptyComponent={
               <View style={styles.emptyContainer}>
                 <Icon name="account-clock" size={48} color={colors.textSecondary} />
@@ -361,6 +361,7 @@ const ConnectionsScreen = () => {
                 tintColor={colors.primary}
               />
             }
+            contentContainerStyle={{ paddingTop: 4, paddingBottom: 120 }}
             ListEmptyComponent={
               <View style={styles.emptyContainer}>
                 <Icon name="account-group" size={48} color={colors.textSecondary} />
@@ -424,7 +425,6 @@ export default ConnectionsScreen;
 
 const styles = StyleSheet.create({
   container: {
-    flex: 0,
     backgroundColor: colors.background,
     padding: 16,
   },
@@ -440,7 +440,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: "700",
+    fontFamily: 'Gilroy-Bold',
     marginBottom: 8,
     marginTop: 12,
     color: colors.textPrimary,
@@ -466,7 +466,7 @@ const styles = StyleSheet.create({
   },
   name: {
     fontSize: 16,
-    fontWeight: "600",
+    fontFamily: 'Gilroy-SemiBold',
     color: colors.textPrimary,
   },
   designation: {
@@ -485,7 +485,7 @@ const styles = StyleSheet.create({
   },
   actionBtnText: {
     color: colors.textInverse,
-    fontWeight: "600",
+    fontFamily: 'Gilroy-SemiBold',
   },
   acceptBtn: {
     backgroundColor: colors.success,
@@ -496,7 +496,7 @@ const styles = StyleSheet.create({
   },
   acceptText: {
     color: colors.textInverse,
-    fontWeight: "600",
+    fontFamily: 'Gilroy-SemiBold',
   },
   ignoreBtn: {
     backgroundColor: colors.backgroundElevated,
@@ -508,7 +508,7 @@ const styles = StyleSheet.create({
   },
   ignoreText: {
     color: colors.textMuted,
-    fontWeight: "600",
+    fontFamily: 'Gilroy-SemiBold',
   },
   showMoreBtn: {
     alignItems: "center",
@@ -516,7 +516,7 @@ const styles = StyleSheet.create({
   },
   showMoreText: {
     color: colors.secondary, // softer cyan for "show more"
-    fontWeight: "600",
+    fontFamily: 'Gilroy-SemiBold',
   },
   catChip: {
     flexDirection: "row",

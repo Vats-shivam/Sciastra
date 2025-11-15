@@ -21,7 +21,7 @@ const styles = StyleSheet.create({
   label: {
     color: colors.textPrimary,
     marginBottom: 6,
-    fontWeight: '600',
+    fontFamily: 'Gilroy-SemiBold',
   },
   input: {
     borderWidth: 1,
@@ -29,6 +29,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 12,
     fontSize: 15,
+    fontFamily: 'Gilroy-Regular',
     color: colors.textPrimary,
     backgroundColor: colors.white,
   },

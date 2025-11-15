@@ -47,9 +47,9 @@ const styles = StyleSheet.create({
   },
   text: {
     color: colors.white,
-    fontWeight: '700',
+    fontWeight: '600',
     fontSize: 16,
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Gilroy-SemiBold',
     letterSpacing: 0.5,
   },
 });

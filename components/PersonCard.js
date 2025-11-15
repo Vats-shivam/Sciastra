@@ -41,8 +41,8 @@ const styles = StyleSheet.create({
   },
   avatar: { width: 48, height: 48, borderRadius: 24 },
   infoContainer: { flex: 1, marginLeft: 12 },
-  name: { fontWeight: '700', color: colors.primary, fontSize: 16 },
-  designation: { color: colors.secondary, fontSize: 14 },
+  name: { fontFamily: 'Gilroy-Bold', color: colors.primary, fontSize: 16 },
+  designation: { fontFamily: 'Gilroy-Regular', color: colors.secondary, fontSize: 14 },
   actions: { flexDirection: 'row', alignItems: 'center' },
 });
 

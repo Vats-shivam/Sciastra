@@ -148,7 +148,7 @@ const styles = StyleSheet.create({
   chipText: {
     color: "#DDD",
     fontSize: 10,
-    fontWeight: "500",
+    fontFamily: 'Gilroy-Medium',
   },
   content: {
     paddingHorizontal: 12,
@@ -158,11 +158,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 16,
     color: "#9CA6AB",
-    fontWeight: "500",
+    fontFamily: 'Gilroy-Medium',
   },
   title: {
     fontSize: 16,
-    fontWeight: "700",
+    fontFamily: 'Gilroy-Bold',
     color: colors.white,
     marginVertical: 4,
     lineHeight: 20,
@@ -171,13 +171,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 16,
     color: "#9CA6AB",
-    fontWeight: "500",
+    fontFamily: 'Gilroy-Medium',
   },
   price: {
     fontSize: 12,
     lineHeight: 16,
     color: "#9CA6AB",
-    fontWeight: "500",
+    fontFamily: 'Gilroy-Medium',
   },
 });
 

@@ -372,6 +372,7 @@ const ProfileScreen = ({ navigation }) => {
       
       <ScrollView 
         style={{ flex: 1 }}
+        contentContainerStyle={{ paddingBottom: 120 }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -442,25 +443,28 @@ const ProfileScreen = ({ navigation }) => {
         {/* Tab Content */}
         {activeTab === 'About' ? (
           <View style={styles.aboutSection}>
-            <Text style={styles.aboutText}>{user.bio}</Text>
-            
-            {/* Connections Count */}
-            <View style={styles.connectionsContainer}>
-              <Text style={styles.connectionsCount}>
-                {user.connectionsCount} Connection{user.connectionsCount !== 1 ? 's' : ''}
-              </Text>
+            {/* About Box */}
+            <View style={styles.aboutBox}>
+              <Text style={styles.aboutLabel}>About</Text>
+              <Text style={styles.aboutText}>{user.bio}</Text>
             </View>
 
             {/* Topics Section */}
             {user.topics && user.topics.length > 0 && (
               <View style={styles.sectionContainer}>
                 <View style={styles.sectionHeader}>
-                  <Icon name="tag-outline" size={24} color={colors.primary} />
+                  <Icon name="tag-outline" size={22} color={colors.white} />
                   <Text style={styles.sectionTitle}>Topics of Interest</Text>
+                  <TouchableOpacity style={styles.headerIcon} onPress={handleEditProfile}>
+                    <Icon name="pencil" size={20} color={colors.white} />
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.headerIcon}>
+                    <Icon name="plus" size={22} color={colors.white} />
+                  </TouchableOpacity>
                 </View>
                 <View style={styles.skillsContainer}>
                   {user.topics.map((topic, index) => (
-                    <View key={index} style={styles.skillChip}>
+                    <View key={index} style={styles.skillPill}>
                       <Text style={styles.skillText}>{topic}</Text>
                     </View>
                   ))}
@@ -471,26 +475,22 @@ const ProfileScreen = ({ navigation }) => {
             {/* Skills Section */}
             <View style={styles.sectionContainer}>
               <View style={styles.sectionHeader}>
-                <Icon name="lightbulb-outline" size={24} color={colors.primary} />
+                <Icon name="lightbulb-outline" size={22} color={colors.white} />
                 <Text style={styles.sectionTitle}>Skills</Text>
-                {/* <TouchableOpacity style={styles.editIcon} onPress={handleEditProfile}>
-                  <Icon name="pencil" size={20} color={colors.textSecondary} />
+                <TouchableOpacity style={styles.headerIcon} onPress={handleEditProfile}>
+                  <Icon name="pencil" size={20} color={colors.white} />
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.addIcon} onPress={handleAddSkill}>
-                  <Icon name="plus" size={20} color={colors.textSecondary} />
-                </TouchableOpacity> */}
+                <TouchableOpacity style={styles.headerIcon} onPress={handleAddSkill}>
+                  <Icon name="plus" size={22} color={colors.white} />
+                </TouchableOpacity>
               </View>
               <View style={styles.skillsContainer}>
                 {user.skills?.length > 0 ? user.skills.map((skill, index) => (
-                  <TouchableOpacity 
-                    key={index} 
-                    style={styles.skillChip}
-                    onLongPress={() => handleRemoveSkill(skill)}
-                  >
+                  <View key={index} style={styles.skillPill}>
                     <Text style={styles.skillText}>{skill}</Text>
-                  </TouchableOpacity>
+                  </View>
                 )) : (
-                  <Text style={styles.emptyText}>No skills added yet. Tap + to add skills.</Text>
+                  <Text style={styles.emptyText}>No skills added yet.</Text>
                 )}
               </View>
             </View>
@@ -498,66 +498,59 @@ const ProfileScreen = ({ navigation }) => {
             {/* Work Experience Section */}
             <View style={styles.sectionContainer}>
               <View style={styles.sectionHeader}>
-                <Icon name="briefcase-outline" size={24} color={colors.primary} />
+                <Icon name="briefcase-outline" size={22} color={colors.white} />
                 <Text style={styles.sectionTitle}>Work Experience</Text>
-                {/* <TouchableOpacity style={styles.editIcon} onPress={handleEditProfile}>
-                  <Icon name="pencil" size={20} color={colors.textSecondary} />
+                <TouchableOpacity style={styles.headerIcon} onPress={handleEditProfile}>
+                  <Icon name="pencil" size={20} color={colors.white} />
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.addIcon} onPress={handleAddExperience}>
-                  <Icon name="plus" size={20} color={colors.textSecondary} />
-                </TouchableOpacity> */}
+                <TouchableOpacity style={styles.headerIcon} onPress={handleAddExperience}>
+                  <Icon name="plus" size={22} color={colors.white} />
+                </TouchableOpacity>
               </View>
               {user.workExperience?.length > 0 ? user.workExperience.map((work) => (
-                <TouchableOpacity 
-                  key={work.id} 
-                  style={styles.experienceItem}
-                  onPress={() => handleEditExperience(work)}
-                >
-                  <View style={styles.experienceHeader}>
-                    <Icon name="domain" size={40} color={colors.primary} />
-                    <View style={styles.experienceDetails}>
-                      <Text style={styles.experienceCompany}>{work.company}</Text>
-                      <Text style={styles.experiencePosition}>{work.position}</Text>
-                      <Text style={styles.experienceDuration}>{work.duration}</Text>
-                      {work.description && (
-                        <Text style={styles.experienceDescription}>{work.description}</Text>
-                      )}
-                    </View>
-                    {/* <Icon name="chevron-right" size={20} color={colors.textSecondary} /> */}
+                <View key={work.id} style={styles.experienceCard}>
+                  <View style={styles.companyIconContainer}>
+                    <Icon name="domain" size={24} color={colors.white} />
                   </View>
-                </TouchableOpacity>
+                  <View style={styles.experienceCardContent}>
+                    <View style={styles.companyPill}>
+                      <Text style={styles.companyPillText}>{work.company}</Text>
+                    </View>
+                    <Text style={styles.experiencePosition}>{work.position}</Text>
+                    <Text style={styles.experienceDuration}>{work.duration}</Text>
+                  </View>
+                </View>
               )) : (
-                <Text style={styles.emptyText}>No work experience added yet. Tap + to add experience.</Text>
+                <Text style={styles.emptyText}>No work experience added yet.</Text>
               )}
             </View>
 
             {/* Education Section */}
             <View style={styles.sectionContainer}>
               <View style={styles.sectionHeader}>
-                <Icon name="school-outline" size={24} color={colors.primary} />
+                <Icon name="school-outline" size={22} color={colors.white} />
                 <Text style={styles.sectionTitle}>Education</Text>
-                {/* <TouchableOpacity style={styles.editIcon} onPress={handleEditProfile}>
-                  <Icon name="pencil" size={20} color={colors.textSecondary} />
+                <TouchableOpacity style={styles.headerIcon} onPress={handleEditProfile}>
+                  <Icon name="pencil" size={20} color={colors.white} />
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.addIcon} onPress={handleAddEducation}>
-                  <Icon name="plus" size={20} color={colors.textSecondary} />
-                </TouchableOpacity> */}
+                <TouchableOpacity style={styles.headerIcon} onPress={handleAddEducation}>
+                  <Icon name="plus" size={22} color={colors.white} />
+                </TouchableOpacity>
               </View>
-{user.education?.length > 0 ? user.education.map((edu) => (
-                <View key={edu.id} style={styles.experienceItem}>
-                  <View style={styles.experienceHeader}>
-                    <Icon name="school" size={40} color={colors.primary} />
-                    <View style={styles.experienceDetails}>
-                      <Text style={styles.experienceCompany}>{edu.institution}</Text>
-                      <Text style={styles.experiencePosition}>
-                        {edu.degree}
-                        {edu.fieldOfStudy && ` in ${edu.fieldOfStudy}`}
-                      </Text>
-                      <Text style={styles.experienceDuration}>{edu.duration}</Text>
-                      {edu.grade && (
-                        <Text style={styles.experienceDescription}>Grade: {edu.grade}</Text>
-                      )}
+              {user.education?.length > 0 ? user.education.map((edu) => (
+                <View key={edu.id} style={styles.experienceCard}>
+                  <View style={styles.companyIconContainer}>
+                    <Icon name="school" size={24} color={colors.white} />
+                  </View>
+                  <View style={styles.experienceCardContent}>
+                    <View style={styles.companyPill}>
+                      <Text style={styles.companyPillText}>{edu.institution}</Text>
                     </View>
+                    <Text style={styles.experiencePosition}>
+                      {edu.degree}
+                      {edu.fieldOfStudy && ` in ${edu.fieldOfStudy}`}
+                    </Text>
+                    <Text style={styles.experienceDuration}>{edu.duration}</Text>
                   </View>
                 </View>
               )) : (
@@ -767,7 +760,7 @@ const styles = StyleSheet.create({
   menuText: {
     color: colors.textPrimary,
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: 'Gilroy-SemiBold',
   },
   profileHeader: {
     alignItems: 'center',
@@ -782,7 +775,7 @@ const styles = StyleSheet.create({
   },
   name: { 
     fontSize: 24, 
-    fontWeight: '700', 
+    fontFamily: 'Gilroy-Bold', 
     color: colors.primary,
     marginBottom: 4,
   },
@@ -804,7 +797,7 @@ const styles = StyleSheet.create({
   editProfileText: {
     color: colors.white,
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: 'Gilroy-SemiBold',
   },
   tabContainer: {
     flexDirection: 'row',
@@ -825,7 +818,7 @@ const styles = StyleSheet.create({
   },
   tabText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: 'Gilroy-SemiBold',
     color: colors.textSecondary,
   },
   activeTabText: {
@@ -834,25 +827,28 @@ const styles = StyleSheet.create({
   aboutSection: {
     paddingHorizontal: 15,
   },
-  aboutText: {
-    fontSize: 16,
-    color: colors.textPrimary,
-    lineHeight: 24,
-    marginBottom: 16,
-  },
-  connectionsContainer: {
+  aboutBox: {
+    backgroundColor: colors.card,
+    borderRadius: 16,
+    padding: 20,
     marginBottom: 20,
   },
-  connectionsCount: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.primary,
+  aboutLabel: {
+    fontSize: 18,
+    fontFamily: 'Gilroy-Bold',
+    color: colors.white,
+    marginBottom: 12,
+  },
+  aboutText: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    lineHeight: 22,
   },
   sectionContainer: {
-    marginBottom: 24,
+    marginBottom: 20,
     backgroundColor: colors.card,
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 16,
+    padding: 20,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -861,73 +857,80 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: '700',
-    color: colors.primary,
+    fontFamily: 'Gilroy-Bold',
+    color: colors.white,
     flex: 1,
-    marginLeft: 12,
+    marginLeft: 10,
   },
-  editIcon: {
+  headerIcon: {
     padding: 4,
-    marginRight: 8,
-  },
-  addIcon: {
-    padding: 4,
+    marginLeft: 8,
   },
   skillsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
   },
-  skillChip: {
-    backgroundColor: colors.lightGray,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+  skillPill: {
+    backgroundColor: colors.backgroundElevated,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     borderRadius: 20,
-    marginRight: 8,
-    marginBottom: 8,
   },
   skillText: {
     fontSize: 14,
     color: colors.textPrimary,
+    fontFamily: 'Gilroy-Medium',
+  },
+  experienceCard: {
+    backgroundColor: colors.backgroundElevated,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  companyIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.button,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  experienceCardContent: {
+    flex: 1,
+  },
+  companyPill: {
+    backgroundColor: colors.card,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    alignSelf: 'flex-start',
+    marginBottom: 8,
+  },
+  companyPillText: {
+    fontSize: 14,
+    fontFamily: 'Gilroy-SemiBold',
+    color: colors.white,
+  },
+  experiencePosition: {
+    fontSize: 14,
+    color: colors.textPrimary,
+    fontFamily: 'Gilroy-Medium',
+    marginBottom: 4,
+  },
+  experienceDuration: {
+    fontSize: 12,
+    color: colors.textSecondary,
   },
   emptyText: {
     fontSize: 14,
     color: colors.textSecondary,
     fontStyle: 'italic',
     textAlign: 'center',
-    marginVertical: 20,
-  },
-  experienceDescription: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginTop: 4,
-    lineHeight: 16,
-  },
-  experienceItem: {
-    marginBottom: 16,
-  },
-  experienceHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  experienceDetails: {
-    flex: 1,
-    marginLeft: 12,
-  },
-  experienceCompany: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.primary,
-    marginBottom: 2,
-  },
-  experiencePosition: {
-    fontSize: 14,
-    color: colors.textPrimary,
-    marginBottom: 2,
-  },
-  experienceDuration: {
-    fontSize: 12,
-    color: colors.textSecondary,
+    marginVertical: 12,
   },
   postsContainer: {
     paddingHorizontal: 15,
@@ -965,7 +968,7 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     fontSize: 22,
-    fontWeight: 'bold',
+    fontFamily: 'Gilroy-Bold',
     color: colors.textPrimary,
   },
   modalScrollView: {
@@ -1001,7 +1004,7 @@ const styles = StyleSheet.create({
     marginLeft: 12,
     fontSize: 16,
     color: colors.textPrimary,
-    fontWeight: '500',
+    fontFamily: 'Gilroy-Medium',
   },
   modalButtons: {
     flexDirection: 'row',
@@ -1029,26 +1032,14 @@ const styles = StyleSheet.create({
   cancelButtonText: {
     fontSize: 16,
     color: colors.textPrimary,
-    fontWeight: '600',
+    fontFamily: 'Gilroy-SemiBold',
   },
   saveButtonText: {
     fontSize: 16,
     color: colors.white,
-    fontWeight: '600',
-  },
-  emptyText: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    fontStyle: 'italic',
-    textAlign: 'center',
-    marginVertical: 20,
-  },
-  experienceDescription: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginTop: 4,
-    lineHeight: 16,
+    fontFamily: 'Gilroy-SemiBold',
   },
 });
 
 export default ProfileScreen;
+

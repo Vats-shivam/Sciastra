@@ -229,10 +229,10 @@ const ProfileSetupScreen = ({ navigation, route }) => {
       if (result.success) {
         showSuccess('Your profile has been created successfully!');
 
-        // Immediate navigation after success
+        // Immediate navigation after success - go directly to app
         navigation.reset({
           index: 0,
-          routes: [{ name: 'SuggestedConnections' }],
+          routes: [{ name: 'App' }],
         });
         return; // Prevent any further logic that can cause delays
       } else {

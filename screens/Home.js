@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   StatusBar,
+  ActivityIndicator,
 } from "react-native";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { useNavigation } from "@react-navigation/native";
@@ -21,6 +22,7 @@ import { useLoader } from "../context/LoaderContext";
 import useScreenApiLogger from "../hooks/useScreenApiLogger";
 
 const trendingSearches = ["React Native", "AI", "Blockchain", "Jobs", "Events"];
+const POSTS_PER_PAGE = 15;
 
 const HomeScreen = () => {
   const navigation = useNavigation();
@@ -30,12 +32,22 @@ const HomeScreen = () => {
   const [feedPosts, setFeedPosts] = useState([]);
   const [searchResultsPosts, setSearchResultsPosts] = useState([]);
   const [searchResultsPeople, setSearchResultsPeople] = useState([]);
+  const [nextCursor, setNextCursor] = useState(null);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const loadingMoreRef = useRef(false);
+  const lastCursorRef = useRef(null);
+  const seenPostIdsRef = useRef(new Set());
 
   useScreenApiLogger("Home");
 
   useEffect(() => {
     loadFeedPosts();
   }, []);
+
+  useEffect(() => {
+    console.log(`[Feed] Total posts rendered: ${feedPosts.length}`);
+  }, [feedPosts]);
 
   // Debounced search effect
   useEffect(() => {
@@ -50,22 +62,114 @@ const HomeScreen = () => {
     };
   }, [searchText, searching]);
 
-  const loadFeedPosts = async () => {
-    showLoader();
+  const loadFeedPosts = async (cursor = null) => {
+    const isLoadMore = Boolean(cursor);
+
+    if (isLoadMore) {
+      console.log(`[Feed] Load-more requested with lastPostId=${cursor}`);
+      if (loadingMoreRef.current || loadingMore || !hasMore) {
+        console.log("[Feed] Skipping load-more (already loading or no more data)");
+        return;
+      }
+      if (cursor === lastCursorRef.current) {
+        console.log(`[Feed] Skipping load-more, cursor ${cursor} already processed`);
+        return;
+      }
+      loadingMoreRef.current = true;
+      setLoadingMore(true);
+      lastCursorRef.current = cursor;
+    } else {
+      console.log("[Feed] Initial feed load");
+      // Reset bookkeeping for a fresh load
+      seenPostIdsRef.current = new Set();
+      lastCursorRef.current = null;
+      showLoader();
+    }
+
     try {
-      const result = await postApi.getFeedPosts(null, 15);
+      console.log(`[Feed] Fetching posts (${isLoadMore ? `cursor=${cursor}` : "initial"})`);
+      const result = await postApi.getFeedPosts(cursor, POSTS_PER_PAGE);
       if (result.success) {
-        setFeedPosts(result.data.posts || []);
+        const posts = result.data.posts || [];
+        console.log(
+          `[Feed] API returned ${posts.length} post(s) for ${isLoadMore ? "load-more" : "initial"}:`,
+          posts.map((p) => p.id)
+        );
+        const pagination = result.data.pagination || {};
+        let appendedCount = posts.length;
+
+        if (isLoadMore) {
+          const uniqueNew = [];
+          posts.forEach((post) => {
+            const postId = post?.id;
+            if (postId && seenPostIdsRef.current.has(postId)) {
+              return;
+            }
+            if (postId) {
+              seenPostIdsRef.current.add(postId);
+            }
+            uniqueNew.push(post);
+          });
+          appendedCount = uniqueNew.length;
+          console.log(
+            "[Feed] Unique new post IDs (after dedup):",
+            uniqueNew.map((p) => p.id)
+          );
+          setFeedPosts((prev) =>
+            uniqueNew.length ? [...prev, ...uniqueNew] : prev
+          );
+        } else {
+          // Seed the seen set so subsequent pages can deduplicate reliably
+          seenPostIdsRef.current = new Set(
+            posts.filter((p) => p?.id).map((p) => p.id)
+          );
+          setFeedPosts(posts);
+        }
+
+        const newCursor = pagination.nextCursor || null;
+        setNextCursor(newCursor);
+        console.log(
+          `[Feed] Updated next cursor: ${newCursor ?? "null"}`
+        );
+
+        let nextHasMore = pagination.hasMore;
+        if (nextHasMore === undefined) {
+          nextHasMore = newCursor !== null;
+        }
+
+        if (posts.length === 0 || (isLoadMore && appendedCount === 0)) {
+          nextHasMore = false;
+        }
+
+        setHasMore(Boolean(nextHasMore));
       } else {
-        console.error('Failed to load feed posts:', result.message);
-        setFeedPosts([]);
+        console.error("Failed to load feed posts:", result.message);
+        if (!isLoadMore) {
+          setFeedPosts([]);
+        }
+        setHasMore(false);
       }
     } catch (error) {
-      console.error('Error loading feed posts:', error);
-      setFeedPosts([]);
+      console.error("Error loading feed posts:", error);
+      if (!isLoadMore) {
+        setFeedPosts([]);
+      }
+      setHasMore(false);
     } finally {
-      hideLoader();
+      if (isLoadMore) {
+        loadingMoreRef.current = false;
+        setLoadingMore(false);
+      } else {
+        hideLoader();
+      }
     }
+  };
+
+  const handleLoadMore = () => {
+    if (loadingMore || !hasMore || !nextCursor) {
+      return;
+    }
+    loadFeedPosts(nextCursor);
   };
 
   const performSearch = async (query) => {
@@ -154,6 +258,15 @@ const HomeScreen = () => {
       )}
       showsVerticalScrollIndicator={false}
       contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 100 }}
+      onEndReached={handleLoadMore}
+      onEndReachedThreshold={0.5}
+      ListFooterComponent={() =>
+        loadingMore ? (
+          <View style={styles.footerLoader}>
+            <ActivityIndicator size="small" color={colors.primary} />
+          </View>
+        ) : null
+      }
     />
   );
 
@@ -334,12 +447,12 @@ const styles = StyleSheet.create({
   },
   crumbText: {
     color: colors.textPrimary,
-    fontWeight: "600",
+    fontFamily: 'Gilroy-SemiBold',
     fontSize: 14,
   },
 
   sectionHeader: {
-    fontWeight: "700",
+    fontFamily: 'Gilroy-Bold',
     fontSize: 18,
     marginVertical: 8,
     paddingLeft: 16,
@@ -360,8 +473,13 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   avatarSmall: { width: 42, height: 42, borderRadius: 21 },
-  personName: { fontWeight: "600", fontSize: 15, color: colors.primary },
+  personName: { fontFamily: 'Gilroy-SemiBold', fontSize: 15, color: colors.primary },
   subTitle: { fontSize: 12, color: colors.textSecondary },
+  footerLoader: {
+    paddingVertical: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
 });
 
 export default HomeScreen;

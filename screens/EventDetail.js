@@ -498,7 +498,7 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontSize: 18,
-    fontWeight: '600',
+    fontFamily: 'Gilroy-SemiBold',
     color: colors.textPrimary,
     marginTop: 16,
     textAlign: 'center',
@@ -530,7 +530,7 @@ const styles = StyleSheet.create({
   statusText: {
     color: colors.white,
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: 'Gilroy-SemiBold',
   },
   onlineBadge: {
     backgroundColor: colors.secondary,
@@ -541,12 +541,12 @@ const styles = StyleSheet.create({
   onlineText: {
     color: colors.white,
     fontSize: 10,
-    fontWeight: '700',
+    fontFamily: 'Gilroy-Bold',
     textTransform: 'uppercase',
   },
   title: {
     fontSize: 24,
-    fontWeight: '700',
+    fontFamily: 'Gilroy-Bold',
     color: colors.textPrimary,
     marginBottom: 16,
   },
@@ -576,13 +576,13 @@ const styles = StyleSheet.create({
   dateText: {
     fontSize: 16,
     color: colors.textPrimary,
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: 'Gilroy-SemiBold',
     marginBottom: 2,
   },
   timeText: {
     fontSize: 14,
     color: colors.textSecondary,
-    fontFamily: 'Inter-Regular',
+    fontFamily: 'Gilroy-Regular',
   },
   locationContainer: {
     flexDirection: 'row',
@@ -596,14 +596,14 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 16,
     color: '#9CA6AB',
-    fontWeight: '500',
+    fontFamily: 'Gilroy-Medium',
   },
   section: {
     marginBottom: 24,
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: '600',
+    fontFamily: 'Gilroy-SemiBold',
     color: colors.textPrimary,
     marginBottom: 12,
   },
@@ -669,7 +669,7 @@ const styles = StyleSheet.create({
   registerButtonText: {
     color: 'white',
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: 'Gilroy-SemiBold',
     textAlign: 'center',
   },
 
@@ -696,7 +696,7 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     fontSize: 20,
-    fontWeight: '700',
+    fontFamily: 'Gilroy-Bold',
     color: colors.textPrimary,
     marginTop: 16,
     marginBottom: 12,
@@ -720,7 +720,7 @@ const styles = StyleSheet.create({
   modalButtonText: {
     color: colors.white,
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: 'Gilroy-SemiBold',
   },
 
   modalActions: {
@@ -739,7 +739,7 @@ const styles = StyleSheet.create({
   },
   modalActionText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: 'Gilroy-SemiBold',
   },
   modalSecondaryButton: {
     backgroundColor: colors.card,
@@ -787,7 +787,7 @@ const styles = StyleSheet.create({
   },
   retryButtonText: {
     color: colors.white,
-    fontWeight: '600',
+    fontFamily: 'Gilroy-SemiBold',
   },
 });
 

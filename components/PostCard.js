@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -42,9 +42,12 @@ const PostCard = ({ post }) => {
   const [showFullDescription, setShowFullDescription] = useState(false);
   const [userReaction, setUserReaction] = useState(post.userReaction || null); // Track the current user's reaction
   const [showReactionPicker, setShowReactionPicker] = useState(false);
-  const [reactions, setReactions] = useState(post.counts?.reactions || {}); // Use reactions from the counts object with fallback
+  // reactions state is for tracking reaction types (e.g., {LIKE: 4, CELEBRATE: 2})
+  // post.counts.reactions is a number representing total reactions count
+  const [reactions, setReactions] = useState({}); // For tracking reaction types if available
   const [reactionLoading, setReactionLoading] = useState(false);
   const [imageLoading, setImageLoading] = useState({});
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
   // Fullscreen image modal
   const [selectedImage, setSelectedImage] = useState(null);
@@ -158,18 +161,33 @@ const PostCard = ({ post }) => {
     }
   };
 
-  const totalReactions = Object.values(reactions).reduce(
-    (sum, count) => sum + count,
-    0
-  );
+  // Get total reactions count directly from post.counts.reactions (it's a number)
+  const totalReactions = post.counts?.reactions || 0;
+  
+  // For displaying reaction types, use reactions state if available
   const usedReactions = Object.keys(reactions).filter(
     (key) => reactions[key] > 0
   );
+  
+  // Determine which reaction icon to show:
+  // 1. If user has reacted, show their reaction type
+  // 2. If we have reaction types in state, show the first one
+  // 3. Otherwise, show default thumbs up (LIKE) if there are reactions
+  const displayReactionType = userReaction 
+    ? userReaction 
+    : (usedReactions.length > 0 
+      ? usedReactions[0] 
+      : (totalReactions > 0 ? 'LIKE' : null));
 
   // Handle multiple images using chat service pattern (simplified)
   const images = Array.isArray(post.media)
     ? post.media.filter((item) => (item.mediaType === "image" || item.type === "image" || (!item.type && !item.mediaType)))
     : [];
+
+  // Reset image index when post or images change
+  useEffect(() => {
+    setCurrentImageIndex(0);
+  }, [post.id, images.length]);
 
   const timeAgo = (date) => {
     const seconds = Math.floor((new Date() - new Date(date)) / 1000);
@@ -281,6 +299,17 @@ const PostCard = ({ post }) => {
             pagingEnabled
             showsHorizontalScrollIndicator={false}
             style={styles.carousel}
+            onMomentumScrollEnd={(event) => {
+              const imageWidth = screenWidth - 32;
+              const index = Math.round(
+                event.nativeEvent.contentOffset.x / imageWidth
+              );
+              setCurrentImageIndex(Math.min(index, images.length - 1));
+            }}
+            onScrollToIndexFailed={(info) => {
+              // Handle scroll to index failure gracefully
+              console.log('Scroll to index failed:', info);
+            }}
             renderItem={({ item, index }) => {
               const imageSource = getImageSource(item);
               const imageKey = `${post.id}_${index}`;
@@ -315,7 +344,7 @@ const PostCard = ({ post }) => {
           {/* Media count indicator */}
           {images.length > 1 && (
             <View style={styles.mediaCountIndicator}>
-              <Text style={styles.mediaCountText}>1 / {images.length}</Text>
+              <Text style={styles.mediaCountText}>{currentImageIndex + 1} / {images.length}</Text>
             </View>
           )}
         </View>
@@ -332,7 +361,7 @@ const PostCard = ({ post }) => {
             style={styles.modalClose}
             onPress={() => setSelectedImage(null)}
           >
-            <Text style={{ color: colors.white, fontSize: 30, fontWeight: 'bold' }}>×</Text>
+            <Text style={{ color: colors.white, fontSize: 30, fontFamily: 'Gilroy-Bold' }}>×</Text>
           </TouchableOpacity>
           <Image
             source={{ uri: selectedImage }}
@@ -344,30 +373,37 @@ const PostCard = ({ post }) => {
 
       {/* Stats */}
       <View style={styles.stats}>
-        {totalReactions > 0 || userReaction ? (
+        {totalReactions > 0 ? (
           <View style={styles.reactionWrapper}>
-            <View
-              style={[
-                styles.reactionsContainer,
-                { width: usedReactions.length * 16 + 8 },
-              ]}
-            >
-              {usedReactions.map((r, index) => (
-                <View
-                  key={r}
-                  style={[
-                    styles.reactionBubble,
-                    { left: index * 16, zIndex: usedReactions.length - index },
-                  ]}
-                >
+            {displayReactionType && (
+              <View
+                style={[
+                  styles.reactionsContainer,
+                  { width: usedReactions.length > 1 ? usedReactions.length * 16 + 8 : 22 },
+                ]}
+              >
+                <View style={styles.reactionBubble}>
                   <Text style={styles.reactionText}>
-                    {REACTIONS.find((x) => x.type === r)?.icon}
+                    {REACTIONS.find((x) => x.type === displayReactionType)?.icon || '👍'}
                   </Text>
                 </View>
-              ))}
-            </View>
+                {usedReactions.length > 1 && usedReactions.slice(1).map((r, index) => (
+                  <View
+                    key={r}
+                    style={[
+                      styles.reactionBubble,
+                      { left: (index + 1) * 16, zIndex: usedReactions.length - index },
+                    ]}
+                  >
+                    <Text style={styles.reactionText}>
+                      {REACTIONS.find((x) => x.type === r)?.icon}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            )}
             <Text style={styles.reactionCount}>
-              {totalReactions > 0 ? `${totalReactions} Reacted` : userReaction ? "You reacted" : ""}
+              {totalReactions} {totalReactions === 1 ? 'Reaction' : 'Reactions'}
             </Text>
           </View>
         ) : (
@@ -394,12 +430,20 @@ const PostCard = ({ post }) => {
             <ActivityIndicator size="small" color={colors.primary} />
           ) : (
             <View style={styles.actionContent}>
-              <PostIcon
-                name="like"
-                size={20}
-                color={colors.textSecondary}
-              />
-              <Text style={styles.actionText}>Like</Text>
+              {userReaction ? (
+                <Text style={styles.reactionEmoji}>
+                  {REACTIONS.find((x) => x.type === userReaction)?.icon || '👍'}
+                </Text>
+              ) : (
+                <PostIcon
+                  name="like"
+                  size={20}
+                  color={colors.textSecondary}
+                />
+              )}
+              <Text style={styles.actionText}>
+                {userReaction ? REACTIONS.find((x) => x.type === userReaction)?.label || 'Like' : 'Like'}
+              </Text>
             </View>
           )}
         </Pressable>
@@ -446,7 +490,7 @@ const PostCard = ({ post }) => {
             style={styles.reactionPickerClose}
             onPress={() => setShowReactionPicker(false)}
           >
-            <Text style={{ color: colors.textMuted, fontSize: 16, fontWeight: 'bold' }}>×</Text>
+                <Text style={{ color: colors.textMuted, fontSize: 16, fontFamily: 'Gilroy-Bold' }}>×</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -483,11 +527,11 @@ const styles = StyleSheet.create({
   },
   header: { flexDirection: "row", alignItems: "center" },
   avatar: { width: 48, height: 48, borderRadius: 24 },
-  author: { fontWeight: "600", fontSize: 15, color: colors.textPrimary },
-  subTitle: { fontSize: 13, color: colors.textMuted, marginTop: 2 },
-  timestamp: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
-  description: { color: colors.textSecondary, fontSize: 14, lineHeight: 20 },
-  showMore: { color: colors.textMuted, fontWeight: "400", marginTop: 4 },
+  author: { fontFamily: 'Gilroy-SemiBold', fontSize: 15, color: colors.textPrimary },
+  subTitle: { fontFamily: 'Gilroy-Regular', fontSize: 13, color: colors.textMuted, marginTop: 2 },
+  timestamp: { fontFamily: 'Gilroy-Regular', fontSize: 12, color: colors.textMuted, marginTop: 2 },
+  description: { fontFamily: 'Gilroy-Regular', color: colors.textSecondary, fontSize: 14, lineHeight: 20 },
+  showMore: { fontFamily: 'Gilroy-Regular', color: colors.textMuted, marginTop: 4 },
 
   // Media Container
   mediaContainer: {
@@ -537,7 +581,7 @@ const styles = StyleSheet.create({
   mediaCountText: {
     color: colors.white,
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: 'Gilroy-SemiBold',
   },
 
   // Fullscreen Modal
@@ -590,7 +634,7 @@ const styles = StyleSheet.create({
   actionText: {
     color: colors.textSecondary,
     fontSize: 14,
-    fontWeight: "500",
+    fontFamily: 'Gilroy-Medium',
   },
   reactionWrapper: { flexDirection: "row", alignItems: "center" },
   reactionsContainer: {
@@ -672,8 +716,8 @@ const styles = StyleSheet.create({
 
   // Action button with reaction emoji
   reactionEmoji: {
-    fontSize: 16,
-    marginLeft: 6,
+    fontSize: 20,
+    marginRight: 6,
   },
 
   // Overlay to close reaction picker

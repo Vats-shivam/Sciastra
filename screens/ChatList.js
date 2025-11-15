@@ -25,6 +25,7 @@ const ChatListScreen = ({ navigation }) => {
   const [chats, setChats] = useState([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   useScreenApiLogger('ChatList');
   
@@ -122,9 +123,9 @@ const ChatListScreen = ({ navigation }) => {
   const getOtherParticipantAvatar = (room) => {
     if (!room.isGroup && room.members) {
       const otherMember = room.members.find(member => member.user.id !== chatApi.getCurrentUserId?.());
-      return otherMember?.user?.profile?.profilePic || 'https://randomuser.me/api/portraits/men/1.jpg';
+      return otherMember?.user?.profile?.profilePic || null;
     }
-    return 'https://randomuser.me/api/portraits/men/1.jpg';
+    return null;
   };
 
   const onRefresh = async () => {
@@ -132,6 +133,11 @@ const ChatListScreen = ({ navigation }) => {
     await loadChatRooms();
     setRefreshing(false);
   };
+
+  // Filter chats based on search query
+  const filteredChats = chats.filter(chat => 
+    chat.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   return (
     <View style={styles.container}>
@@ -154,16 +160,26 @@ const ChatListScreen = ({ navigation }) => {
         <View style={styles.searchInputContainer}>
           <Icon name="magnify" size={20} color={colors.textMuted} style={styles.searchIcon} />
           <TextInput
-            placeholder="Search messages"
+            placeholder="Search by name"
             placeholderTextColor={colors.textMuted}
             style={styles.searchInput}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
           />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity 
+              onPress={() => setSearchQuery('')}
+              style={styles.clearButton}
+            >
+              <Icon name="close-circle" size={20} color={colors.textMuted} />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
       {/* Chat List */}
       <FlatList
-        data={chats}
+        data={filteredChats}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
         renderItem={({ item }) => (
@@ -173,7 +189,7 @@ const ChatListScreen = ({ navigation }) => {
           >
             <View style={styles.avatarContainer}>
               <Image 
-                source={{ uri: item.avatar }} 
+                source={item.avatar ? { uri: item.avatar } : require('../assets/icon.png')} 
                 style={styles.avatar} 
               />
               {item.isOnline && <View style={styles.onlineIndicator} />}
@@ -247,7 +263,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
+    fontFamily: 'Gilroy-Bold',
     color: colors.textPrimary,
   },
   backButton: {
@@ -281,6 +297,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.textPrimary,
   },
+  clearButton: {
+    padding: 4,
+    marginLeft: 8,
+  },
   listContent: {
     paddingBottom: 16,
     backgroundColor: colors.background,
@@ -290,12 +310,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: colors.card,
+    backgroundColor: colors.background,
     marginHorizontal: 8,
     marginVertical: 4,
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
   },
   avatarContainer: {
     position: 'relative',
@@ -330,7 +348,7 @@ const styles = StyleSheet.create({
   },
   name: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: 'Gilroy-SemiBold',
     color: colors.textPrimary,
     flex: 1,
     marginRight: 8,
@@ -351,7 +369,7 @@ const styles = StyleSheet.create({
   },
   unreadMessage: {
     color: colors.textPrimary,
-    fontWeight: '500',
+    fontFamily: 'Gilroy-Medium',
   },
   unreadBadge: {
     backgroundColor: colors.accent,
@@ -364,7 +382,7 @@ const styles = StyleSheet.create({
   unreadCount: {
     color: colors.textInverse,
     fontSize: 12,
-    fontWeight: 'bold',
+    fontFamily: 'Gilroy-Bold',
   },
   loadingContainer: {
     flex: 1,
@@ -385,7 +403,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontFamily: 'Gilroy-Bold',
     color: colors.textPrimary,
     marginBottom: 8,
   },

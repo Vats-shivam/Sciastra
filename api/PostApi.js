@@ -367,7 +367,8 @@ class PostApiService {
 
       let url = `${this.baseUrl}/post/posts/feed?limit=${limit}`;
       if (cursor) {
-        url += `&cursor=${cursor}`;
+        // Backend expects the last fetched post id in `lastPostId`
+        url += `&lastPostId=${encodeURIComponent(cursor)}`;
       }
 
       console.log('📰 Fetching feed from:', url);

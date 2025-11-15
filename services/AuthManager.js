@@ -405,10 +405,6 @@ class AuthManager {
       return 'ProfileSetup';
     }
 
-    if (this.needsOnboarding()) {
-      return 'SuggestedConnections';
-    }
-
     return 'MainTabs';
   }
 

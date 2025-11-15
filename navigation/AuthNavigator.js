@@ -9,7 +9,6 @@ import WelcomeScreen from '../screens/Welcome';
 import LoginScreen from '../screens/Login';
 import OtpVerificationScreen from '../screens/OTPVerification';
 import ProfileSetupScreen from '../screens/ProfileSetup';
-import SuggestedConnectionsScreen from '../screens/SuggestedConnection';
 import AppNavigator from './AppNavigator';
 
 const Stack = createStackNavigator();
@@ -60,31 +59,27 @@ const AuthNavigator = () => {
   }
 
   const needsProfile = authState.isAuthenticated && authManager.needsProfileSetup();
-  const needsOnboarding = authState.isAuthenticated && authManager.needsOnboarding();
 
   console.log('🧭 AuthNavigator: RENDER at', new Date().toLocaleTimeString(), {
     renderCount: Math.random().toFixed(4), // Unique render ID
     isAuthenticated: authState.isAuthenticated,
     isLoading: authState.isLoading,
     needsProfile: needsProfile,
-    needsOnboarding: needsOnboarding,
     hasUser: !!authState.user,
     userName: authState.user?.name,
     userKeys: authState.user ? Object.keys(authState.user) : [],
     finalDestination: !authState.isAuthenticated ? 'Auth Flow' :
-                     needsProfile ? 'ProfileSetup' :
-                     needsOnboarding ? 'SuggestedConnections' : 'App'
+                     needsProfile ? 'ProfileSetup' : 'App'
   });
 
   // Add debugging for the actual rendered component
   const currentScreen = !authState.isAuthenticated ? 'Auth Flow' :
-                       needsProfile ? 'ProfileSetup' :
-                       needsOnboarding ? 'SuggestedConnections' : 'App';
+                       needsProfile ? 'ProfileSetup' : 'App';
 
   console.log('🧭 AuthNavigator: Will render screen:', currentScreen);
 
   // Create a unique key based on the navigation decision to force re-mount when needed
-  const navigatorKey = `${authState.isAuthenticated ? 'auth' : 'unauth'}-${needsProfile ? 'profile' : ''}-${needsOnboarding ? 'onboard' : ''}-${authState.user?.name || 'noname'}`;
+  const navigatorKey = `${authState.isAuthenticated ? 'auth' : 'unauth'}-${needsProfile ? 'profile' : ''}-${authState.user?.name || 'noname'}`;
 
   console.log('🧭 AuthNavigator: Navigator key:', navigatorKey);
 
@@ -114,14 +109,8 @@ const AuthNavigator = () => {
             <Stack.Screen name="OtpVerification" component={OtpVerificationScreen} />
           </>
         ) : needsProfile ? (
-          // Profile setup flow - include both ProfileSetup and SuggestedConnections
-          <>
-            <Stack.Screen name="ProfileSetup" component={ProfileSetupScreen} />
-            <Stack.Screen name="SuggestedConnections" component={SuggestedConnectionsScreen} />
-          </>
-        ) : needsOnboarding ? (
-          // Onboarding flow
-          <Stack.Screen name="SuggestedConnections" component={SuggestedConnectionsScreen} />
+          // Profile setup flow
+          <Stack.Screen name="ProfileSetup" component={ProfileSetupScreen} />
         ) : (
           // Main app flow
           <Stack.Screen name="App" component={AppNavigator} />
