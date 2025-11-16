@@ -3,10 +3,9 @@ const getBaseUrl = (port) => {
   // Environment detection
   const isProduction = !__DEV__;
 
-  // Production API URL - Temporarily use HTTP due to self-signed SSL certificate
-  // const PRODUCTION_URL = "https://Xcience.in";
+  // Production API URL - Temporarily use HTTP due to self-signed SSL certificate const PRODUCTION_URL = "https://Xcience.in";
   const PRODUCTION_URL = "https://4261b2bf4cc6.ngrok-free.app";
-
+  // const PRODUCTION_URL = "https://Xcience.in";
   // Development URLs
   const DEVELOPMENT_URL = "http://Xcience.in"; // Use HTTP for both environments
 

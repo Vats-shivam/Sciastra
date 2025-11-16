@@ -1404,6 +1404,44 @@ class PostApiService {
     }
   }
 
+  // Delete a comment
+  async deleteComment(commentId) {
+    try {
+      const userId = authApi.getCurrentUserId();
+      if (!userId) {
+        throw new Error(ERROR_MESSAGES.UNAUTHORIZED);
+      }
+
+      if (!commentId) {
+        throw new Error('Comment ID is required');
+      }
+
+      console.log('🗑️ Deleting comment:', commentId);
+
+      const response = await this.makeRequest(`${this.baseUrl}/post/posts/comments`, {
+        method: 'DELETE',
+        body: JSON.stringify({ commentId })
+      });
+
+      if (response.success) {
+        console.log('✅ Comment deleted successfully:', response.data);
+        return {
+          success: true,
+          data: response.data,
+          message: 'Comment deleted successfully'
+        };
+      } else {
+        throw new Error(response.message || 'Failed to delete comment');
+      }
+    } catch (error) {
+      console.error('❌ Delete Comment Error:', error);
+      return {
+        success: false,
+        message: error.message || 'Failed to delete comment. Please try again.'
+      };
+    }
+  }
+
   // Get post reactions/likes
   async getPostReactions(postId, page = 1, limit = 20) {
     try {

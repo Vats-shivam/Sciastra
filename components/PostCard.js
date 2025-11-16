@@ -14,6 +14,7 @@ import {
 import colors from "../config/colors";
 import { useNavigation } from "@react-navigation/native";
 import postApi from "../api/PostApi";
+import profileApi from "../api/ProfileApi";
 import authApi from "../api/AuthApi";
 import { useNotification } from "../contexts/NotificationContext";
 import PostIcon from "./PostIcon";
@@ -231,11 +232,7 @@ const PostCard = ({ post }) => {
           }}
         >
           <Image
-            source={
-              post.author?.profile?.profilePic
-                ? { uri: post.author.profile.profilePic }
-                : require("../assets/icon.png")
-            }
+            source={profileApi.getImageSource(post.author?.profile?.profilePic, authApi.getAccessToken())}
             style={styles.avatar}
           />
         </TouchableOpacity>

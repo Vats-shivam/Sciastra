@@ -1,9 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { View, Text, Image, StyleSheet, ScrollView, TouchableOpacity, Modal, ActivityIndicator, Linking } from "react-native";
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Container from "../components/Container";
-import Button from "../components/Button";
-import Card from "../components/Card";
 import colors from "../config/colors";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import Header from "../components/Header";
@@ -265,13 +262,14 @@ const EventDetailScreen = ({ route, navigation }) => {
   if (!event) {
     return (
       <View style={styles.errorContainer}>
-        <Icon name="alert-circle-outline" size={48} color={colors.danger} />
+        <Icon name="alert-circle-outline" size={48} color={colors.error} />
         <Text style={styles.errorText}>Event not found</Text>
-        <Button
-          title="Go Back"
+        <TouchableOpacity
+          style={styles.retryButton}
           onPress={() => navigation.goBack()}
-          style={{ marginTop: 20 }}
-        />
+        >
+          <Text style={styles.retryButtonText}>Go Back</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -347,6 +345,149 @@ const EventDetailScreen = ({ route, navigation }) => {
             </Text>
           </View>
 
+          {/* Meet Link - Only show for online events */}
+          {isOnlineEvent && event.meetLink && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Join Event</Text>
+              <TouchableOpacity 
+                style={styles.meetLinkCard}
+                onPress={() => {
+                  if (registrationStatus?.is_registered) {
+                    Linking.openURL(event.meetLink).catch(err => 
+                      showError('Unable to open meeting link')
+                    );
+                  } else {
+                    showError('Please register for the event to access the meeting link');
+                  }
+                }}
+              >
+                <View style={styles.meetLinkIconContainer}>
+                  <Icon name="video" size={24} color="#8B5CF6" />
+                </View>
+                <View style={styles.meetLinkContent}>
+                  <Text style={styles.meetLinkTitle}>
+                    {registrationStatus?.is_registered ? 'Join Meeting' : 'Meeting Link Available After Registration'}
+                  </Text>
+                  <Text style={styles.meetLinkUrl} numberOfLines={1}>
+                    {registrationStatus?.is_registered ? event.meetLink : 'Register to view'}
+                  </Text>
+                </View>
+                <Icon name="chevron-right" size={24} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Speakers Section */}
+          {event.speakers && event.speakers.length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Speakers</Text>
+              {event.speakers.map((speaker, index) => (
+                <View key={speaker.id || index} style={styles.speakerCard}>
+                  <Image
+                    source={
+                      speaker.profileImage || speaker.photoUrl
+                        ? { uri: speaker.profileImage || speaker.photoUrl }
+                        : require('../assets/icon.png')
+                    }
+                    style={styles.speakerImage}
+                  />
+                  <View style={styles.speakerInfo}>
+                    <Text style={styles.speakerName}>{speaker.name}</Text>
+                    {speaker.title && (
+                      <Text style={styles.speakerTitle}>{speaker.title}</Text>
+                    )}
+                    {speaker.company && (
+                      <Text style={styles.speakerCompany}>{speaker.company}</Text>
+                    )}
+                    {speaker.bio && (
+                      <Text style={styles.speakerBio} numberOfLines={3}>
+                        {speaker.bio}
+                      </Text>
+                    )}
+                    {speaker.socialLinks && (
+                      <View style={styles.socialLinks}>
+                        {speaker.socialLinks.linkedin && (
+                          <TouchableOpacity
+                            onPress={() => Linking.openURL(speaker.socialLinks.linkedin)}
+                            style={styles.socialButton}
+                          >
+                            <Icon name="linkedin" size={20} color="#0077B5" />
+                          </TouchableOpacity>
+                        )}
+                        {speaker.socialLinks.twitter && (
+                          <TouchableOpacity
+                            onPress={() => Linking.openURL(speaker.socialLinks.twitter)}
+                            style={styles.socialButton}
+                          >
+                            <Icon name="twitter" size={20} color="#1DA1F2" />
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    )}
+                  </View>
+                </View>
+              ))}
+            </View>
+          )}
+
+          {/* Agenda Section */}
+          {event.agenda && event.agenda.length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Event Agenda</Text>
+              {event.agenda.map((item, index) => (
+                <View key={item.id || index} style={styles.agendaItem}>
+                  <View style={styles.agendaTimeContainer}>
+                    <Icon name="clock-outline" size={16} color="#8B5CF6" />
+                    <Text style={styles.agendaTime}>
+                      {new Date(item.startTime).toLocaleTimeString('en-IN', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        hour12: true
+                      })}
+                      {' - '}
+                      {new Date(item.endTime).toLocaleTimeString('en-IN', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        hour12: true
+                      })}
+                    </Text>
+                  </View>
+                  <View style={styles.agendaContent}>
+                    <View style={styles.agendaHeader}>
+                      <Text style={styles.agendaTitle}>{item.title}</Text>
+                      {item.sessionType && (
+                        <View style={styles.sessionTypeBadge}>
+                          <Text style={styles.sessionTypeText}>
+                            {item.sessionType}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                    {item.description && (
+                      <Text style={styles.agendaDescription}>
+                        {item.description}
+                      </Text>
+                    )}
+                    {(item.speakerName || item.speaker) && (
+                      <View style={styles.agendaSpeaker}>
+                        {item.speaker?.profileImage && (
+                          <Image
+                            source={{ uri: item.speaker.profileImage }}
+                            style={styles.agendaSpeakerImage}
+                          />
+                        )}
+                        <Icon name="account" size={14} color={colors.textMuted} />
+                        <Text style={styles.agendaSpeakerName}>
+                          {item.speaker?.name || item.speakerName}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+              ))}
+            </View>
+          )}
+
           {/* Event Instructions */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Instructions</Text>
@@ -374,37 +515,25 @@ const EventDetailScreen = ({ route, navigation }) => {
       </ScrollView>
 
       {/* Register Button */}
-      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
-        <Button
-          title={getButtonText()}
-          onPress={handleRegister}
-          disabled={isButtonDisabled()}
+      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+        <TouchableOpacity 
           style={[
             styles.registerButton,
-            (registrationStatus?.is_registered || event?.status === 'COMPLETED' || eventStarted) && 
-              { backgroundColor: colors.gray }
+            isButtonDisabled() && styles.registerButtonDisabled
           ]}
-        />
-      </View>
-      {!isRegistrationOpen && (
-        <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
-          <TouchableOpacity 
-            style={[
-              styles.registerButton,
-              { 
-                backgroundColor: eventStarted ? '#6B7280' : '#8B5CF6',
-                opacity: 0.9,
-              }
-            ]}
-            disabled={true}
-            activeOpacity={0.8}
-          >
+          onPress={handleRegister}
+          disabled={isButtonDisabled()}
+          activeOpacity={0.8}
+        >
+          {registering ? (
+            <ActivityIndicator size="small" color={colors.white} />
+          ) : (
             <Text style={styles.registerButtonText}>
-              {eventStarted ? 'Event has already started' : 'Registration is closed'}
+              {getButtonText()}
             </Text>
-          </TouchableOpacity>
-        </View>
-      )}
+          )}
+        </TouchableOpacity>
+      </View>
 
       {/* Event Started Modal */}
       <Modal
@@ -643,34 +772,215 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     marginLeft: 12,
   },
+
+  // Meet Link Styles
+  meetLinkCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  meetLinkIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  meetLinkContent: {
+    flex: 1,
+  },
+  meetLinkTitle: {
+    fontSize: 15,
+    fontFamily: 'Gilroy-SemiBold',
+    color: colors.textPrimary,
+    marginBottom: 4,
+  },
+  meetLinkUrl: {
+    fontSize: 13,
+    fontFamily: 'Gilroy-Regular',
+    color: colors.textMuted,
+  },
+
+  // Speaker Styles
+  speakerCard: {
+    flexDirection: 'row',
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  speakerImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: colors.backgroundElevated,
+    marginRight: 16,
+  },
+  speakerInfo: {
+    flex: 1,
+  },
+  speakerName: {
+    fontSize: 17,
+    fontFamily: 'Gilroy-Bold',
+    color: colors.textPrimary,
+    marginBottom: 4,
+  },
+  speakerTitle: {
+    fontSize: 14,
+    fontFamily: 'Gilroy-SemiBold',
+    color: '#8B5CF6',
+    marginBottom: 2,
+  },
+  speakerCompany: {
+    fontSize: 13,
+    fontFamily: 'Gilroy-Medium',
+    color: colors.textSecondary,
+    marginBottom: 8,
+  },
+  speakerBio: {
+    fontSize: 13,
+    fontFamily: 'Gilroy-Regular',
+    color: colors.textSecondary,
+    lineHeight: 18,
+    marginBottom: 8,
+  },
+  socialLinks: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  socialButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.backgroundElevated,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  // Agenda Styles
+  agendaItem: {
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  agendaTimeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  agendaTime: {
+    fontSize: 13,
+    fontFamily: 'Gilroy-SemiBold',
+    color: '#8B5CF6',
+    marginLeft: 8,
+  },
+  agendaContent: {
+    flex: 1,
+  },
+  agendaHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  agendaTitle: {
+    flex: 1,
+    fontSize: 16,
+    fontFamily: 'Gilroy-Bold',
+    color: colors.textPrimary,
+    marginRight: 8,
+  },
+  sessionTypeBadge: {
+    backgroundColor: 'rgba(139, 92, 246, 0.15)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  sessionTypeText: {
+    fontSize: 10,
+    fontFamily: 'Gilroy-Bold',
+    color: '#8B5CF6',
+    textTransform: 'uppercase',
+  },
+  agendaDescription: {
+    fontSize: 14,
+    fontFamily: 'Gilroy-Regular',
+    color: colors.textSecondary,
+    lineHeight: 20,
+    marginBottom: 8,
+  },
+  agendaSpeaker: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  agendaSpeakerImage: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    marginRight: 6,
+  },
+  agendaSpeakerName: {
+    fontSize: 13,
+    fontFamily: 'Gilroy-Medium',
+    color: colors.textMuted,
+    marginLeft: 4,
+  },
   footer: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
     backgroundColor: colors.background,
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingTop: 16,
     borderTopWidth: 1,
     borderTopColor: colors.border,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 8,
   },
   registerButton: {
     width: '100%',
     height: 56,
-    borderRadius: 8,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#8B5CF6',
+    shadowColor: '#8B5CF6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  registerButtonDisabled: {
+    backgroundColor: '#6B7280',
+    opacity: 0.7,
+    shadowOpacity: 0,
+    elevation: 0,
   },
   registerButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontFamily: 'Gilroy-SemiBold',
+    color: colors.white,
+    fontSize: 17,
+    fontFamily: 'Gilroy-Bold',
     textAlign: 'center',
+    letterSpacing: 0.5,
   },
 
   // Modal Styles

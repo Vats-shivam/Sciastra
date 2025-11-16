@@ -26,9 +26,35 @@ const ChatListScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [onlineUsers, setOnlineUsers] = useState(new Set()); // Track online users
 
   useScreenApiLogger('ChatList');
   
+  // Helper functions - defined before useEffect
+  const getOtherParticipantId = (room) => {
+    if (!room.isGroup && room.members) {
+      const otherMember = room.members.find(member => member.user.id !== chatApi.getCurrentUserId?.());
+      return otherMember?.user?.id || null;
+    }
+    return null;
+  };
+
+  const getOtherParticipantName = (room) => {
+    if (!room.isGroup && room.members) {
+      const otherMember = room.members.find(member => member.user.id !== chatApi.getCurrentUserId?.());
+      return otherMember?.user?.profile?.name || 'Unknown User';
+    }
+    return room.name || 'Chat Room';
+  };
+
+  const getOtherParticipantAvatar = (room) => {
+    if (!room.isGroup && room.members) {
+      const otherMember = room.members.find(member => member.user.id !== chatApi.getCurrentUserId?.());
+      return otherMember?.user?.profile?.profilePic || null;
+    }
+    return null;
+  };
+
   const handleChatPress = (chat) => {
     const participantId = getOtherParticipantId(chat.room);
 
@@ -49,6 +75,56 @@ const ChatListScreen = ({ navigation }) => {
     loadChatRooms();
     initializeChat();
   }, []);
+
+  // Set up status listeners for all chat participants
+  useEffect(() => {
+    if (chats.length === 0) return;
+
+    const handleUserStatusChange = (statusData) => {
+      console.log('📡 ChatList: User status changed:', statusData);
+      const { userId, status } = statusData;
+      
+      setOnlineUsers(prev => {
+        const newSet = new Set(prev);
+        if (status === 'online') {
+          newSet.add(userId);
+        } else {
+          newSet.delete(userId);
+        }
+        return newSet;
+      });
+
+      // Update the specific chat item
+      setChats(prevChats => 
+        prevChats.map(chat => {
+          const participantId = getOtherParticipantId(chat.room);
+          if (participantId === userId) {
+            return { ...chat, isOnline: status === 'online' };
+          }
+          return chat;
+        })
+      );
+    };
+
+    // Add status listener for each chat participant
+    const participantIds = chats
+      .map(chat => getOtherParticipantId(chat.room))
+      .filter(Boolean);
+
+    participantIds.forEach(participantId => {
+      chatApi.addStatusListener(participantId, handleUserStatusChange);
+    });
+
+    console.log('📡 ChatList: Set up status listeners for:', participantIds);
+
+    // Cleanup listeners on unmount or when chats change
+    return () => {
+      participantIds.forEach(participantId => {
+        chatApi.removeStatusListener(participantId, handleUserStatusChange);
+      });
+      console.log('🧹 ChatList: Cleaned up status listeners');
+    };
+  }, [chats.map(c => c.id).join(',')]); // Only re-run when chat IDs change
 
   const initializeChat = async () => {
     try {
@@ -78,18 +154,21 @@ const ChatListScreen = ({ navigation }) => {
           return;
         }
 
-        const formattedChats = rooms.map(room => ({
-          id: room.id,
-          name: getOtherParticipantName(room),
-          lastMessage: room.messages?.[0]?.content || room.lastMessage?.content || 'No messages yet',
-          time: room.messages?.[0] 
-            ? new Date(room.messages[0].createdAt).toLocaleDateString() 
-            : (room.lastMessage?.createdAt ? new Date(room.lastMessage.createdAt).toLocaleDateString() : ''),
-          unread: room.unreadCount || 0,
-          avatar: getOtherParticipantAvatar(room),
-          isOnline: true, // Default to online since we don't have real-time status
-          room: room,
-        }));
+        const formattedChats = rooms.map(room => {
+          const participantId = getOtherParticipantId(room);
+          return {
+            id: room.id,
+            name: getOtherParticipantName(room),
+            lastMessage: room.messages?.[0]?.content || room.lastMessage?.content || 'No messages yet',
+            time: room.messages?.[0] 
+              ? new Date(room.messages[0].createdAt).toLocaleDateString() 
+              : (room.lastMessage?.createdAt ? new Date(room.lastMessage.createdAt).toLocaleDateString() : ''),
+            unread: room.unreadCount || 0,
+            avatar: getOtherParticipantAvatar(room),
+            isOnline: onlineUsers.has(participantId), // Use actual online status
+            room: room,
+          };
+        });
 
         console.log('ChatList: Formatted chats:', formattedChats);
         setChats(formattedChats);
@@ -103,29 +182,6 @@ const ChatListScreen = ({ navigation }) => {
     } finally {
       setLoading(false);
     }
-  };
-  const getOtherParticipantId = (room) => {
-    if (!room.isGroup && room.members) {
-      const otherMember = room.members.find(member => member.user.id !== chatApi.getCurrentUserId?.());
-      return otherMember?.user?.id || null;
-    }
-    return null;
-  }
-
-  const getOtherParticipantName = (room) => {
-    if (!room.isGroup && room.members) {
-      const otherMember = room.members.find(member => member.user.id !== chatApi.getCurrentUserId?.());
-      return otherMember?.user?.profile?.name || 'Unknown User';
-    }
-    return room.name || 'Chat Room';
-  };
-
-  const getOtherParticipantAvatar = (room) => {
-    if (!room.isGroup && room.members) {
-      const otherMember = room.members.find(member => member.user.id !== chatApi.getCurrentUserId?.());
-      return otherMember?.user?.profile?.profilePic || null;
-    }
-    return null;
   };
 
   const onRefresh = async () => {

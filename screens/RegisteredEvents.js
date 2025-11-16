@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, StyleSheet, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity, Image, Pressable } from "react-native";
+import { View, Text, StyleSheet, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity, Image, Pressable, Linking } from "react-native";
 import Container from "../components/Container";
 import colors from "../config/colors";
 import Header from "../components/Header";
@@ -98,9 +98,22 @@ const RegisteredEvents = ({ navigation }) => {
   const [registeredEvents, setRegisteredEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const { showError } = useNotification();
+  const [expandedCards, setExpandedCards] = useState(new Set());
+  const { showError, showSuccess } = useNotification();
 
   useScreenApiLogger("RegisteredEvents");
+
+  const toggleCard = (registrationId) => {
+    setExpandedCards(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(registrationId)) {
+        newSet.delete(registrationId);
+      } else {
+        newSet.add(registrationId);
+      }
+      return newSet;
+    });
+  };
 
   useEffect(() => {
     loadRegisteredEvents();
@@ -195,15 +208,12 @@ const RegisteredEvents = ({ navigation }) => {
               
               const venueInfo = getVenueInfo(event);
               const isOnline = event.venueType === 'ONLINE';
+              const isExpanded = expandedCards.has(registration.id);
               
               return (
-                <Pressable 
-                key={registration.id} 
-                onPress={() => handleEventPress(registration)}
-                  style={{ width: "100%" }}
-              >
-                  <Card style={styles.card}>
-                    {/* Image Container */}
+                <Card key={registration.id} style={styles.card}>
+                  {/* Image Container */}
+                  <TouchableOpacity onPress={() => toggleCard(registration.id)} activeOpacity={0.9}>
                     <View style={styles.imageContainer}>
                       <Image
                         source={event.featuredImage ? { uri: event.featuredImage } : DEFAULT_EVENT_BANNER_URL}
@@ -221,9 +231,11 @@ const RegisteredEvents = ({ navigation }) => {
                         </View>
                       )}
                     </View>
-                    
-                    {/* Content */}
-                    <View style={styles.content}>
+                  </TouchableOpacity>
+                  
+                  {/* Content */}
+                  <View style={styles.content}>
+                    <TouchableOpacity onPress={() => toggleCard(registration.id)} activeOpacity={0.9}>
                       <Text style={styles.date}>{getDisplayDate(event)}</Text>
                       <Text style={styles.title} numberOfLines={2}>{event.title || 'Event Title'}</Text>
                       
@@ -239,8 +251,8 @@ const RegisteredEvents = ({ navigation }) => {
                           {venueInfo.type === 'link' ? venueInfo.value : 
                            venueInfo.type === 'address' ? venueInfo.value : 
                            'Not available'}
-                  </Text>
-                </View>
+                        </Text>
+                      </View>
                       
                       {/* Payment Status */}
                       <View style={styles.paymentContainer}>
@@ -252,24 +264,125 @@ const RegisteredEvents = ({ navigation }) => {
                               { color: registration.paymentStatus === 'PAID' ? colors.success : colors.warning }
                             ]}>
                               {registration.paymentStatus === 'PAID' ? 'Paid' : 'Pending'} - ₹{event.price}
-                  </Text>
+                            </Text>
                           </View>
                         ) : (
-                  <Text style={styles.freeEvent}>Free Event</Text>
-                )}
+                          <Text style={styles.freeEvent}>Free Event</Text>
+                        )}
                       </View>
-                      
-                      {/* Event Status */}
-                      {registration.eventStatus && (
-                        <View style={styles.eventStatusContainer}>
-                          <Text style={styles.eventStatusText}>
-                            Event Status: {registration.eventStatus}
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-                  </Card>
-                </Pressable>
+                    </TouchableOpacity>
+
+                    {/* Expanded Details */}
+                    {isExpanded && (
+                      <View style={styles.expandedSection}>
+                        {/* Meet Link */}
+                        {isOnline && event.meetLink && (
+                          <View style={styles.detailSection}>
+                            <Text style={styles.detailSectionTitle}>Join Event</Text>
+                            <TouchableOpacity 
+                              style={styles.meetLinkButton}
+                              onPress={() => {
+                                Linking.openURL(event.meetLink).catch(err => 
+                                  showError('Unable to open meeting link')
+                                );
+                              }}
+                            >
+                              <View style={styles.meetLinkIcon}>
+                                <Icon name="video" size={20} color="#8B5CF6" />
+                              </View>
+                              <View style={styles.meetLinkContent}>
+                                <Text style={styles.meetLinkTitle}>Join Meeting</Text>
+                                <Text style={styles.meetLinkUrl} numberOfLines={1}>
+                                  {event.meetLink}
+                                </Text>
+                              </View>
+                              <Icon name="open-in-new" size={20} color={colors.textMuted} />
+                            </TouchableOpacity>
+                          </View>
+                        )}
+
+                        {/* Speakers */}
+                        {event.speakers && event.speakers.length > 0 && (
+                          <View style={styles.detailSection}>
+                            <Text style={styles.detailSectionTitle}>Speakers</Text>
+                            {event.speakers.map((speaker, index) => (
+                              <View key={speaker.id || index} style={styles.speakerItem}>
+                                <Image
+                                  source={
+                                    speaker.profileImage || speaker.photoUrl
+                                      ? { uri: speaker.profileImage || speaker.photoUrl }
+                                      : require('../assets/icon.png')
+                                  }
+                                  style={styles.speakerAvatar}
+                                />
+                                <View style={styles.speakerInfo}>
+                                  <Text style={styles.speakerName}>{speaker.name}</Text>
+                                  {speaker.title && (
+                                    <Text style={styles.speakerTitle}>{speaker.title}</Text>
+                                  )}
+                                  {speaker.company && (
+                                    <Text style={styles.speakerCompany}>{speaker.company}</Text>
+                                  )}
+                                </View>
+                              </View>
+                            ))}
+                          </View>
+                        )}
+
+                        {/* Agenda */}
+                        {event.agenda && event.agenda.length > 0 && (
+                          <View style={styles.detailSection}>
+                            <Text style={styles.detailSectionTitle}>Agenda</Text>
+                            {event.agenda.map((item, index) => (
+                              <View key={item.id || index} style={styles.agendaItem}>
+                                <View style={styles.agendaTime}>
+                                  <Icon name="clock-outline" size={14} color="#8B5CF6" />
+                                  <Text style={styles.agendaTimeText}>
+                                    {new Date(item.startTime).toLocaleTimeString('en-IN', {
+                                      hour: '2-digit',
+                                      minute: '2-digit',
+                                      hour12: true
+                                    })}
+                                  </Text>
+                                </View>
+                                <Text style={styles.agendaTitle}>{item.title}</Text>
+                                {item.speakerName && (
+                                  <Text style={styles.agendaSpeaker}>
+                                    by {item.speaker?.name || item.speakerName}
+                                  </Text>
+                                )}
+                              </View>
+                            ))}
+                          </View>
+                        )}
+
+                        {/* View Full Details Button */}
+                        <TouchableOpacity
+                          style={styles.viewDetailsButton}
+                          onPress={() => handleEventPress(registration)}
+                        >
+                          <Text style={styles.viewDetailsText}>View Full Details</Text>
+                          <Icon name="arrow-right" size={18} color="#8B5CF6" />
+                        </TouchableOpacity>
+                      </View>
+                    )}
+
+                    {/* Expand/Collapse Button */}
+                    <TouchableOpacity 
+                      style={styles.expandButton}
+                      onPress={() => toggleCard(registration.id)}
+                    >
+                      <Text style={styles.expandButtonText}>
+                        {isExpanded ? 'Show Less' : 'Show More'}
+                      </Text>
+                      <Icon 
+                        name={isExpanded ? 'chevron-up' : 'chevron-down'} 
+                        size={20} 
+                        color="#8B5CF6" 
+                      />
+                    </TouchableOpacity>
+                  </View>
+                </Card>
               );
             })
           )}
@@ -435,6 +548,164 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontFamily: 'Gilroy-SemiBold',
     fontSize: 16,
+  },
+
+  // Expanded Section Styles
+  expandedSection: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  detailSection: {
+    marginBottom: 16,
+  },
+  detailSectionTitle: {
+    fontSize: 14,
+    fontFamily: 'Gilroy-Bold',
+    color: colors.textPrimary,
+    marginBottom: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+
+  // Meet Link Styles
+  meetLinkButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.backgroundElevated,
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  meetLinkIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(139, 92, 246, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  meetLinkContent: {
+    flex: 1,
+  },
+  meetLinkTitle: {
+    fontSize: 14,
+    fontFamily: 'Gilroy-SemiBold',
+    color: colors.textPrimary,
+    marginBottom: 2,
+  },
+  meetLinkUrl: {
+    fontSize: 12,
+    fontFamily: 'Gilroy-Regular',
+    color: colors.textMuted,
+  },
+
+  // Speaker Styles
+  speakerItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.backgroundElevated,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  speakerAvatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: colors.card,
+    marginRight: 12,
+  },
+  speakerInfo: {
+    flex: 1,
+  },
+  speakerName: {
+    fontSize: 14,
+    fontFamily: 'Gilroy-Bold',
+    color: colors.textPrimary,
+    marginBottom: 2,
+  },
+  speakerTitle: {
+    fontSize: 12,
+    fontFamily: 'Gilroy-SemiBold',
+    color: '#8B5CF6',
+    marginBottom: 2,
+  },
+  speakerCompany: {
+    fontSize: 11,
+    fontFamily: 'Gilroy-Regular',
+    color: colors.textSecondary,
+  },
+
+  // Agenda Styles
+  agendaItem: {
+    backgroundColor: colors.backgroundElevated,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  agendaTime: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  agendaTimeText: {
+    fontSize: 11,
+    fontFamily: 'Gilroy-SemiBold',
+    color: '#8B5CF6',
+    marginLeft: 6,
+  },
+  agendaTitle: {
+    fontSize: 13,
+    fontFamily: 'Gilroy-Bold',
+    color: colors.textPrimary,
+    marginBottom: 4,
+  },
+  agendaSpeaker: {
+    fontSize: 11,
+    fontFamily: 'Gilroy-Regular',
+    color: colors.textMuted,
+  },
+
+  // View Details Button
+  viewDetailsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+    borderRadius: 10,
+    padding: 12,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.3)',
+  },
+  viewDetailsText: {
+    fontSize: 14,
+    fontFamily: 'Gilroy-SemiBold',
+    color: '#8B5CF6',
+    marginRight: 8,
+  },
+
+  // Expand Button
+  expandButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    marginTop: 8,
+  },
+  expandButtonText: {
+    fontSize: 13,
+    fontFamily: 'Gilroy-SemiBold',
+    color: '#8B5CF6',
+    marginRight: 4,
   },
 });
 

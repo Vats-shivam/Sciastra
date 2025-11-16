@@ -637,6 +637,32 @@ class ProfileApiService {
       errors,
     };
   }
+
+  // Get image source with auth headers for profile pictures
+  getImageSource(mediaKey, userToken) {
+    if (!mediaKey) {
+      return require('../assets/icon.png');
+    }
+    
+    // If it's already a full URL (presigned S3 URL), return it directly
+    if (mediaKey.startsWith('http')) {
+      return { uri: mediaKey };
+    }
+    
+    // Otherwise, use the profile service's media proxy
+    return {
+      uri: this.getMediaDisplayUrl(mediaKey),
+      headers: {
+        'Authorization': `Bearer ${userToken}`,
+      },
+    };
+  }
+
+  // Get media display URL for profile pictures
+  getMediaDisplayUrl(mediaKey) {
+    // Use the profile service's media proxy endpoint
+    return `${this.baseUrl}/profile/media/proxy?key=${encodeURIComponent(mediaKey)}`;
+  }
 }
 
 // Create and export singleton instance

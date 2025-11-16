@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import colors from '../config/colors';
 import postApi from '../api/PostApi';
+import profileApi from '../api/ProfileApi';
 import authApi from '../api/AuthApi';
 import { useLoader } from '../context/LoaderContext';
 import { useNotification } from '../contexts/NotificationContext';
@@ -51,6 +52,8 @@ const PostDetailScreen = ({ route, navigation }) => {
   const [commentsLoading, setCommentsLoading] = useState(false);
   const [reactionsLoading, setReactionsLoading] = useState(false);
   const [showReactionsList, setShowReactionsList] = useState(false);
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [commentToDelete, setCommentToDelete] = useState(null);
 
   useEffect(() => {
     loadPostDetails();
@@ -153,6 +156,46 @@ const PostDetailScreen = ({ route, navigation }) => {
     }
   };
 
+  const handleDeleteComment = async () => {
+    if (!commentToDelete) return;
+
+    try {
+      setDeleteModalVisible(false);
+      showLoader('Deleting comment...');
+
+      const result = await postApi.deleteComment(commentToDelete.id);
+
+      if (result.success) {
+        // Remove the comment from the list
+        setComments(prev => prev.filter(c => c.id !== commentToDelete.id));
+
+        // Update post comment count if available
+        if (post) {
+          const deletedCount = 1 + (result.data?.repliesDeleted || 0);
+          setPost(prev => ({
+            ...prev,
+            counts: {
+              ...prev.counts,
+              comments: Math.max(0, (prev.counts?.comments || 0) - deletedCount)
+            }
+          }));
+        }
+
+        showSuccess(result.data?.repliesDeleted > 0 
+          ? `Comment and ${result.data.repliesDeleted} ${result.data.repliesDeleted === 1 ? 'reply' : 'replies'} deleted`
+          : 'Comment deleted successfully'
+        );
+      } else {
+        showError(result.message || 'Failed to delete comment');
+      }
+    } catch (error) {
+      showError('Failed to delete comment');
+    } finally {
+      hideLoader();
+      setCommentToDelete(null);
+    }
+  };
+
   const getImageSource = (mediaItem) => {
     const userToken = authApi.getAccessToken();
 
@@ -166,12 +209,21 @@ const PostDetailScreen = ({ route, navigation }) => {
   const renderComment = ({ item: comment }) => {
     // Get profile picture - use user's profilePic if available, otherwise use default icon
     const profilePic = comment.user?.profile?.profilePic;
-    const imageSource = profilePic
-      ? { uri: profilePic }
-      : require('../assets/icon.png');
+    const userToken = authApi.getAccessToken();
+    
+    // Debug log
+    console.log('Comment profilePic:', profilePic);
+    console.log('Comment user:', comment.user?.profile?.name);
+    
+    // Use profileApi for profile pictures (they come from profile service, not post service)
+    const imageSource = profileApi.getImageSource(profilePic, userToken);
     
     const userId = comment.user?.id || comment.userId;
     const currentUserId = authApi.getCurrentUserId();
+    const postAuthorId = post?.author?.id || post?.userId;
+    
+    // User can delete if they are the comment author OR the post owner
+    const canDelete = userId === currentUserId || postAuthorId === currentUserId;
     
     const handleUserPress = () => {
       if (!userId) return;
@@ -183,12 +235,23 @@ const PostDetailScreen = ({ route, navigation }) => {
       }
     };
 
+    const handleDeletePress = () => {
+      setCommentToDelete(comment);
+      setDeleteModalVisible(true);
+    };
+
     return (
       <View style={styles.commentItem}>
         <TouchableOpacity onPress={handleUserPress}>
           <Image
             source={imageSource}
             style={styles.commentAvatar}
+            resizeMode="cover"
+            defaultSource={require('../assets/icon.png')}
+            onError={(error) => {
+              console.log('Comment avatar load error:', error.nativeEvent?.error);
+              console.log('Failed to load:', profilePic);
+            }}
           />
         </TouchableOpacity>
       <View style={styles.commentContent}>
@@ -198,9 +261,19 @@ const PostDetailScreen = ({ route, navigation }) => {
               {comment.user?.profile?.name || 'Unknown User'}
             </Text>
           </TouchableOpacity>
-          <Text style={styles.commentTime}>
-            {new Date(comment.createdAt).toLocaleDateString()}
-          </Text>
+          <View style={styles.commentHeaderRight}>
+            <Text style={styles.commentTime}>
+              {new Date(comment.createdAt).toLocaleDateString()}
+            </Text>
+            {canDelete && (
+              <TouchableOpacity 
+                onPress={handleDeletePress}
+                style={styles.deleteButton}
+              >
+                <Icon name="delete-outline" size={18} color={colors.error} />
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
         <Text style={styles.commentText}>{comment.content}</Text>
 
@@ -221,9 +294,13 @@ const PostDetailScreen = ({ route, navigation }) => {
     
     // Get profile picture - use user's profilePic if available, otherwise use default icon
     const profilePic = reaction.user?.profile?.profilePic;
-    const imageSource = profilePic
-      ? { uri: profilePic }
-      : require('../assets/icon.png');
+    const userToken = authApi.getAccessToken();
+    
+    // Debug log
+    console.log('Reaction profilePic:', profilePic);
+    
+    // Use profileApi for profile pictures (they come from profile service, not post service)
+    const imageSource = profileApi.getImageSource(profilePic, userToken);
     
     const userId = reaction.user?.id || reaction.userId;
     const currentUserId = authApi.getCurrentUserId();
@@ -244,6 +321,12 @@ const PostDetailScreen = ({ route, navigation }) => {
           <Image
             source={imageSource}
             style={styles.reactionAvatar}
+            resizeMode="cover"
+            defaultSource={require('../assets/icon.png')}
+            onError={(error) => {
+              console.log('Reaction avatar load error:', error.nativeEvent?.error);
+              console.log('Failed to load:', profilePic);
+            }}
           />
         </TouchableOpacity>
         <View style={styles.reactionContent}>
@@ -424,6 +507,53 @@ const PostDetailScreen = ({ route, navigation }) => {
           </View>
         </View>
       </KeyboardAvoidingView>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        visible={deleteModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setDeleteModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            {/* Icon */}
+            <View style={styles.modalIconContainer}>
+              <Icon name="delete-alert" size={48} color={colors.error} />
+            </View>
+
+            {/* Title */}
+            <Text style={styles.modalTitle}>Delete Comment</Text>
+
+            {/* Message */}
+            <Text style={styles.modalMessage}>
+              {commentToDelete?._count?.replies > 0
+                ? `Are you sure you want to delete this comment and ${commentToDelete._count.replies} ${commentToDelete._count.replies === 1 ? 'reply' : 'replies'}? This action cannot be undone.`
+                : 'Are you sure you want to delete this comment? This action cannot be undone.'}
+            </Text>
+
+            {/* Buttons */}
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => {
+                  setDeleteModalVisible(false);
+                  setCommentToDelete(null);
+                }}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.modalButton, styles.deleteButtonModal]}
+                onPress={handleDeleteComment}
+              >
+                <Text style={styles.deleteButtonText}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -608,6 +738,7 @@ const styles = StyleSheet.create({
     marginRight: 12,
     borderWidth: 2,
     borderColor: colors.border,
+    backgroundColor: colors.backgroundElevated,
   },
   commentContent: {
     flex: 1,
@@ -618,6 +749,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 6,
   },
+  commentHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   commentAuthor: {
     fontSize: 15,
     fontFamily: 'Gilroy-Bold',
@@ -627,6 +763,10 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: 'Gilroy-Medium',
     color: colors.textMuted,
+  },
+  deleteButton: {
+    padding: 4,
+    marginLeft: 4,
   },
   commentText: {
     fontSize: 14,
@@ -662,6 +802,9 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: 20,
     marginRight: 12,
+    backgroundColor: colors.backgroundElevated,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   reactionContent: {
     flex: 1,
@@ -747,6 +890,87 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: 'Gilroy-Medium',
     color: colors.textMuted,
+  },
+
+  // Delete Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContainer: {
+    backgroundColor: colors.backgroundElevated,
+    borderRadius: 20,
+    padding: 24,
+    width: '90%',
+    maxWidth: 380,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  modalIconContainer: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontFamily: 'Gilroy-Bold',
+    color: colors.textPrimary,
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  modalMessage: {
+    fontSize: 15,
+    fontFamily: 'Gilroy-Medium',
+    color: colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+    gap: 12,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 50,
+  },
+  cancelButton: {
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontFamily: 'Gilroy-SemiBold',
+    color: colors.textPrimary,
+  },
+  deleteButtonModal: {
+    backgroundColor: colors.error,
+  },
+  deleteButtonText: {
+    fontSize: 16,
+    fontFamily: 'Gilroy-SemiBold',
+    color: colors.white,
   },
 });
 
