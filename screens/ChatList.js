@@ -19,6 +19,7 @@ import colors from '../config/colors';
 import chatApi from '../api/ChatApi';
 import { useLoader } from '../context/LoaderContext';
 import useScreenApiLogger from '../hooks/useScreenApiLogger';
+import { getProfileImageSource } from '../utils/profileImage';
 
 const ChatListScreen = ({ navigation }) => {
   const { showLoader, hideLoader } = useLoader();
@@ -27,6 +28,7 @@ const ChatListScreen = ({ navigation }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [onlineUsers, setOnlineUsers] = useState(new Set()); // Track online users
+  const [avatarErrors, setAvatarErrors] = useState({});
 
   useScreenApiLogger('ChatList');
   
@@ -156,6 +158,9 @@ const ChatListScreen = ({ navigation }) => {
 
         const formattedChats = rooms.map(room => {
           const participantId = getOtherParticipantId(room);
+          const participant = !room.isGroup && room.members
+            ? room.members.find(member => member.user.id !== chatApi.getCurrentUserId?.())
+            : null;
           return {
             id: room.id,
             name: getOtherParticipantName(room),
@@ -167,6 +172,7 @@ const ChatListScreen = ({ navigation }) => {
             avatar: getOtherParticipantAvatar(room),
             isOnline: onlineUsers.has(participantId), // Use actual online status
             room: room,
+            participant: participant?.user,
           };
         });
 
@@ -245,8 +251,15 @@ const ChatListScreen = ({ navigation }) => {
           >
             <View style={styles.avatarContainer}>
               <Image 
-                source={item.avatar ? { uri: item.avatar } : require('../assets/icon.png')} 
-                style={styles.avatar} 
+                source={
+                  avatarErrors[item.id]
+                    ? require('../assets/icon.png')
+                    : getProfileImageSource(item.participant, { fallbackKey: item.avatar })
+                }
+                style={styles.avatar}
+                resizeMode="cover"
+                defaultSource={require('../assets/icon.png')}
+                onError={() => setAvatarErrors(prev => ({ ...prev, [item.id]: true }))}
               />
               {item.isOnline && <View style={styles.onlineIndicator} />}
             </View>

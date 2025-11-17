@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect } from "react";
+import React, { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -13,13 +13,14 @@ import {
 } from "react-native";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import colors from "../config/colors";
-import Container from "../components/Container";
 import Header from "../components/Header";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import ConnectionApi from "../api/ConnectionApi";
 import chatApi from "../api/ChatApi";
+import postApi from "../api/PostApi";
 import { useLoader } from "../context/LoaderContext";
 import useScreenApiLogger from "../hooks/useScreenApiLogger";
+import { getProfileImageSource } from "../utils/profileImage";
 
 
 const PEOPLE_CATEGORIES = [
@@ -38,8 +39,12 @@ const ConnectionsScreen = () => {
   // Real data from API
   const [connections, setConnections] = useState([]);
   const [receivedRequests, setReceivedRequests] = useState([]);
+  const [searchResults, setSearchResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const [profileImageErrors, setProfileImageErrors] = useState({});
+  const searchTimeout = useRef(null);
 
   useScreenApiLogger("People");
 
@@ -67,6 +72,7 @@ const ConnectionsScreen = () => {
           profilePic: conn.user.profilePic,
           mutualConnections: 0, // API doesn't provide this yet
           connectionId: conn.id,
+          user: conn.user,
         })) || [];
         setConnections(transformedConnections);
       } else {
@@ -83,6 +89,7 @@ const ConnectionsScreen = () => {
           profilePic: req.user.profilePic,
           connectionId: req.id,
           status: req.status,
+          user: req.user,
         })) || [];
         setReceivedRequests(transformedRequests);
       } else {
@@ -105,25 +112,90 @@ const ConnectionsScreen = () => {
     setRefreshing(false);
   };
 
-  const filteredConnections = useMemo(
-    () =>
-      connections.filter(
-        (item) =>
-          item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          item.designation.toLowerCase().includes(searchQuery.toLowerCase())
-      ),
-    [connections, searchQuery]
-  );
+  // Server-side search for users
+  const handleSearch = useCallback((query) => {
+    setSearchQuery(query);
+    
+    // Clear existing timeout
+    if (searchTimeout.current) {
+      clearTimeout(searchTimeout.current);
+    }
 
-  const filteredInvites = useMemo(
-    () =>
-      receivedRequests.filter(
+    // If query is empty, clear search results
+    if (!query.trim()) {
+      setSearching(false);
+      setSearchResults([]);
+      return;
+    }
+
+    // Debounce search with 500ms delay
+    searchTimeout.current = setTimeout(async () => {
+      try {
+        setSearching(true);
+        console.log('Searching users for:', query);
+        
+        // Use PostApi to search users
+        const result = await postApi.search(query, 'users', 1, 50);
+        
+        if (result.success) {
+          // Transform search results to match our component structure
+          const users = result.data?.users || result.data || [];
+          const transformedUsers = users.map(user => ({
+            id: user.userId || user.id,
+            name: user.name || 'Unknown',
+            designation: user.profession || user.designation || 'No designation',
+            profilePic: user.profilePic,
+            mutualConnections: user.mutualConnections || 0,
+            user,
+          }));
+          
+          console.log('User search results:', transformedUsers.length, 'users');
+          setSearchResults(transformedUsers);
+        } else {
+          console.error('User search failed:', result.message);
+          setSearchResults([]);
+        }
+      } catch (error) {
+        console.error('User search error:', error);
+        setSearchResults([]);
+      } finally {
+        setSearching(false);
+      }
+    }, 500);
+  }, []);
+
+  // Use search results if available, otherwise use local filtering
+  const filteredConnections = useMemo(() => {
+    if (searchQuery.trim() && searchResults.length > 0) {
+      return searchResults;
+    }
+    if (searchQuery.trim() && !searching) {
+      // Client-side fallback if server search returns empty
+      return connections.filter(
         (item) =>
           item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
           item.designation.toLowerCase().includes(searchQuery.toLowerCase())
-      ),
-    [receivedRequests, searchQuery]
-  );
+      );
+    }
+    return connections;
+  }, [connections, searchQuery, searchResults, searching]);
+
+  const filteredInvites = useMemo(() => {
+    if (searchQuery.trim() && searchResults.length > 0) {
+      return searchResults.filter(result => 
+        receivedRequests.some(req => req.id === result.id)
+      );
+    }
+    if (searchQuery.trim() && !searching) {
+      // Client-side fallback
+      return receivedRequests.filter(
+        (item) =>
+          item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          item.designation.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
+    return receivedRequests;
+  }, [receivedRequests, searchQuery, searchResults, searching]);
 
   const handleMessagePress = async (connection) => {
     try {
@@ -156,7 +228,29 @@ const ConnectionsScreen = () => {
     }
   };
 
+  const handleSendConnectionRequest = async (userId, userName) => {
+    try {
+      showLoader();
+      const result = await ConnectionApi.sendConnectionRequest(userId);
+      if (result.success) {
+        Alert.alert('Success', `Connection request sent to ${userName}!`);
+        // Refresh data to update the lists
+        await loadData();
+      } else {
+        Alert.alert('Error', result.error || 'Failed to send connection request');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to send connection request');
+    } finally {
+      hideLoader();
+    }
+  };
+
   const renderConnection = useCallback(({ item }) => {
+    // Check if this user is already a connection
+    const isConnection = connections.some(conn => conn.id === item.id);
+    const hasRequestPending = receivedRequests.some(req => req.id === item.id);
+    
     return (
       <TouchableOpacity 
         style={styles.card}
@@ -171,11 +265,16 @@ const ConnectionsScreen = () => {
       >
         <Image
           source={
-            item.profilePic
-              ? { uri: item.profilePic }
-              : require("../assets/icon.png")
+            profileImageErrors[item.id]
+              ? require("../assets/icon.png")
+              : getProfileImageSource(item.user || { profilePic: item.profilePic }, { fallbackKey: item.profilePic })
           }
           style={styles.avatar}
+          resizeMode="cover"
+          defaultSource={require("../assets/icon.png")}
+          onError={() =>
+            setProfileImageErrors((prev) => ({ ...prev, [item.id]: true }))
+          }
         />
         <View style={{ flex: 1 }}>
           <Text style={styles.name}>{item.name}</Text>
@@ -184,15 +283,28 @@ const ConnectionsScreen = () => {
             {item.mutualConnections} mutual connections
           </Text>
         </View>
-        <TouchableOpacity
-          style={styles.actionBtn}
-          onPress={() => handleMessagePress(item)}
-        >
-          <Text style={styles.actionBtnText}>Message</Text>
-        </TouchableOpacity>
+        {isConnection ? (
+          <TouchableOpacity
+            style={styles.actionBtn}
+            onPress={() => handleMessagePress(item)}
+          >
+            <Text style={styles.actionBtnText}>Message</Text>
+          </TouchableOpacity>
+        ) : hasRequestPending ? (
+          <View style={styles.pendingBtn}>
+            <Text style={styles.pendingText}>Pending</Text>
+          </View>
+        ) : (
+          <TouchableOpacity
+            style={styles.connectBtn}
+            onPress={() => handleSendConnectionRequest(item.id, item.name)}
+          >
+            <Icon name="account-plus" size={18} color={colors.white} />
+          </TouchableOpacity>
+        )}
       </TouchableOpacity>
     );
-  }, []);
+  }, [connections, receivedRequests]);
 
   const handleAcceptRequest = async (connectionId, userName) => {
     try {
@@ -245,11 +357,16 @@ const ConnectionsScreen = () => {
       >
         <Image
           source={
-            item.profilePic
-              ? { uri: item.profilePic }
-              : require("../assets/icon.png")
+            profileImageErrors[item.id]
+              ? require("../assets/icon.png")
+              : getProfileImageSource(item.user || { profilePic: item.profilePic }, { fallbackKey: item.profilePic })
           }
           style={styles.avatar}
+          resizeMode="cover"
+          defaultSource={require("../assets/icon.png")}
+          onError={() =>
+            setProfileImageErrors((prev) => ({ ...prev, [item.id]: true }))
+          }
         />
         <View style={{ flex: 1 }}>
           <Text style={styles.name}>{item.name}</Text>
@@ -273,12 +390,35 @@ const ConnectionsScreen = () => {
     );
   }, []);
 
+  const renderSearchBar = () => (
+    <View style={styles.searchBarContainer}>
+      <Icon name="magnify" size={22} color={colors.textMuted} style={styles.searchIcon} />
+      <TextInput
+        style={styles.searchBar}
+        placeholder="Search connections & people..."
+        placeholderTextColor={colors.textMuted}
+        value={searchQuery}
+        onChangeText={handleSearch}
+        returnKeyType="search"
+        autoCorrect={false}
+      />
+      {searching && (
+        <Icon name="loading" size={20} color={colors.primary} style={styles.searchActionIcon} />
+      )}
+      {searchQuery.length > 0 && !searching && (
+        <TouchableOpacity onPress={() => handleSearch('')}>
+          <Icon name="close-circle" size={20} color={colors.textMuted} style={styles.searchActionIcon} />
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+
   const renderCategoryTabs = () => (
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
       contentContainerStyle={{ paddingHorizontal: 12 }}
-      style={{ marginTop: 10 }}
+      style={{ marginTop: 4 }}
     >
       {PEOPLE_CATEGORIES.map((cat) => (
         <TouchableOpacity
@@ -303,120 +443,77 @@ const ConnectionsScreen = () => {
     </ScrollView>
   );
 
-  const renderContent = () => {
-    if (activeCategory === "invites") {
-      return (
-        <>
-          <FlatList
-            data={
-              showMoreInvites ? filteredInvites : filteredInvites.slice(0, 5)
-            }
-            keyExtractor={(item) => item.id}
-            renderItem={renderInvite}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={onRefresh}
-                colors={[colors.primary]}
-                tintColor={colors.primary}
-              />
-            }
-            contentContainerStyle={{ paddingTop: 10, paddingBottom: 120 }}
-            ListEmptyComponent={
-              <View style={styles.emptyContainer}>
-                <Icon name="account-clock" size={48} color={colors.textSecondary} />
-                <Text style={styles.emptyText}>No connection requests</Text>
-                <Text style={styles.emptySubText}>New requests will appear here</Text>
-              </View>
-            }
+  const renderPeopleList = () => {
+    const isInvites = activeCategory === "invites";
+    const dataToShow = isInvites
+      ? (showMoreInvites ? filteredInvites : filteredInvites.slice(0, 5))
+      : (showMoreConnections ? filteredConnections : filteredConnections.slice(0, 10));
+
+    const hasMore = isInvites
+      ? filteredInvites.length > 5
+      : filteredConnections.length > 10;
+
+    const toggleShowMore = () => {
+      if (isInvites) {
+        setShowMoreInvites(prev => !prev);
+      } else {
+        setShowMoreConnections(prev => !prev);
+      }
+    };
+
+    const emptyIcon = isInvites ? "account-clock" : "account-group";
+    const emptyTitle = isInvites ? "No connection requests" : "No connections yet";
+    const emptySubtitle = isInvites
+      ? "New requests will appear here"
+      : "Connect with people to see them here";
+
+    return (
+      <FlatList
+        data={dataToShow}
+        keyExtractor={(item) => item.id}
+        renderItem={isInvites ? renderInvite : renderConnection}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[colors.primary]}
+            tintColor={colors.primary}
           />
-          {filteredInvites.length > 5 && (
-            <TouchableOpacity
-              onPress={() => setShowMoreInvites(!showMoreInvites)}
-              style={styles.showMoreBtn}
-            >
+        }
+        ListHeaderComponent={
+          <View style={styles.listHeader}>
+            {renderSearchBar()}
+            {renderCategoryTabs()}
+          </View>
+        }
+        ListFooterComponent={
+          hasMore ? (
+            <TouchableOpacity onPress={toggleShowMore} style={styles.showMoreBtn}>
               <Text style={styles.showMoreText}>
-                {showMoreInvites ? "Show less" : "Show more"}
+                {isInvites
+                  ? (showMoreInvites ? "Show less" : "Show more")
+                  : (showMoreConnections ? "Show less" : "Show more")}
               </Text>
             </TouchableOpacity>
-          )}
-        </>
-      );
-    } else {
-      return (
-        <>
-          <FlatList
-            data={
-              showMoreConnections
-                ? filteredConnections
-                : filteredConnections.slice(0, 10)
-            }
-            keyExtractor={(item) => item.id}
-            renderItem={renderConnection}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={onRefresh}
-                colors={[colors.primary]}
-                tintColor={colors.primary}
-              />
-            }
-            contentContainerStyle={{ paddingTop: 4, paddingBottom: 120 }}
-            ListEmptyComponent={
-              <View style={styles.emptyContainer}>
-                <Icon name="account-group" size={48} color={colors.textSecondary} />
-                <Text style={styles.emptyText}>No connections yet</Text>
-                <Text style={styles.emptySubText}>Connect with people to see them here</Text>
-              </View>
-            }
-          />
-          {filteredConnections.length > 10 && (
-            <TouchableOpacity
-              onPress={() => setShowMoreConnections(!showMoreConnections)}
-              style={styles.showMoreBtn}
-            >
-              <Text style={styles.showMoreText}>
-                {showMoreConnections ? "Show less" : "Show more"}
-              </Text>
-            </TouchableOpacity>
-          )}
-        </>
-      );
-    }
+          ) : <View style={styles.footerSpacer} />
+        }
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Icon name={emptyIcon} size={48} color={colors.textSecondary} />
+            <Text style={styles.emptyText}>{emptyTitle}</Text>
+            <Text style={styles.emptySubText}>{emptySubtitle}</Text>
+          </View>
+        }
+        contentContainerStyle={styles.listContentNew}
+        showsVerticalScrollIndicator={false}
+      />
+    );
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
-      {/* Header */}
+    <View style={styles.screen}>
       <Header title="PEOPLE" />
-      
-      <Container style={styles.container}>
-        {/* Header Actions */}
-        {/* <View style={styles.headerActions}>
-          <TouchableOpacity
-            style={styles.manageBtn}
-            onPress={() => navigation.navigate('ConnectionRequests')}
-          >
-            <Icon name="cog" size={20} color={colors.primary} />
-            <Text style={styles.manageBtnText}>Manage Requests</Text>
-          </TouchableOpacity>
-        </View> */}
-
-        {/* Search Bar */}
-        <TextInput
-          style={styles.searchBar}
-          placeholder="Search connections & invites..."
-          placeholderTextColor={colors.textMuted}
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-        />
-
-        {/* Category Tabs */}
-        {renderCategoryTabs()}
-
-        {/* Content based on selected category */}
-        {renderContent()}
-      </Container>
+      {renderPeopleList()}
     </View>
   );
 };
@@ -424,19 +521,40 @@ const ConnectionsScreen = () => {
 export default ConnectionsScreen;
 
 const styles = StyleSheet.create({
-  container: {
+  screen: {
+    flex: 1,
     backgroundColor: colors.background,
-    padding: 16,
   },
-  searchBar: {
+  searchBarContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: colors.backgroundElevated,
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    marginBottom: 16,
+    marginBottom: 8,
     borderWidth: 1,
     borderColor: colors.border,
+  },
+  listHeader: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 8,
+  },
+  listContentNew: {
+    paddingHorizontal: 16,
+    paddingBottom: 120,
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchBar: {
+    flex: 1,
     color: colors.white,
+    fontSize: 16,
+  },
+  searchActionIcon: {
+    marginLeft: 8,
   },
   sectionTitle: {
     fontSize: 18,
@@ -456,6 +574,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 3,
     elevation: 2,
+    width: '100%',
   },
   avatar: {
     width: 48,
@@ -486,6 +605,27 @@ const styles = StyleSheet.create({
   actionBtnText: {
     color: colors.textInverse,
     fontFamily: 'Gilroy-SemiBold',
+  },
+  connectBtn: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pendingBtn: {
+    backgroundColor: colors.backgroundElevated,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  pendingText: {
+    color: colors.textMuted,
+    fontFamily: 'Gilroy-SemiBold',
+    fontSize: 12,
   },
   acceptBtn: {
     backgroundColor: colors.success,
@@ -518,6 +658,9 @@ const styles = StyleSheet.create({
     color: colors.secondary, // softer cyan for "show more"
     fontFamily: 'Gilroy-SemiBold',
   },
+  footerSpacer: {
+    height: 32,
+  },
   catChip: {
     flexDirection: "row",
     alignItems: "center",
@@ -529,7 +672,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     marginRight: 10,
     height: 42,
-    marginBottom: 10,
+    marginBottom: 8,
   },
   catChipActive: { backgroundColor: colors.white },
   catText: { marginLeft: 8, color: colors.textPrimary, fontWeight: "600" },

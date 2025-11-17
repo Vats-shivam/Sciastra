@@ -335,11 +335,16 @@ const ProfileSetupScreen = ({ navigation, route }) => {
         hideLoader();
         
         // Show success message
-        showSuccess('Your profile has been created successfully!');
+        showSuccess('Your profile has been created successfully! Redirecting...');
         
-        // The AuthNavigator will automatically redirect to the app
-        // once it detects the profile is complete
-        console.log('✅ Profile setup complete, AuthNavigator should redirect to app');
+        console.log('✅ Profile setup complete, navigating to app');
+        
+        // Force navigation to app after a short delay to allow state updates
+        setTimeout(() => {
+          // The AuthNavigator will automatically switch to the app
+          // We just need to ensure the state has propagated
+          console.log('✅ Profile setup complete - state should now redirect to app');
+        }, 500);
       } else {
         setIsLoading(false);
         hideLoader();

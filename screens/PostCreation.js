@@ -6,11 +6,11 @@ import {
   StyleSheet,
   Image,
   TouchableOpacity,
-  Alert,
   ScrollView,
   ActivityIndicator,
   Dimensions,
   FlatList,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
@@ -25,6 +25,21 @@ import useScreenApiLogger from '../hooks/useScreenApiLogger';
 
 const { width } = Dimensions.get('window');
 
+const VISIBILITY_OPTIONS = [
+  {
+    id: 'public',
+    label: 'Public',
+    description: 'Anyone on SciAstra can see this post',
+    icon: 'earth',
+  },
+  {
+    id: 'connections',
+    label: 'Connections',
+    description: 'Only your connections can see this post',
+    icon: 'account-group',
+  },
+];
+
 const PostCreationScreen = ({ navigation }) => {
   const [text, setText] = useState('');
   const [images, setImages] = useState([]); // Changed to array for multiple images
@@ -33,6 +48,7 @@ const PostCreationScreen = ({ navigation }) => {
   const [uploadProgress, setUploadProgress] = useState('');
   const [textInputFocused, setTextInputFocused] = useState(false);
   const [userName, setUserName] = useState('You'); // Default fallback
+  const [showVisibilityPicker, setShowVisibilityPicker] = useState(false);
   const { showError, showSuccess, showWarning } = useNotification();
 
   useScreenApiLogger('PostCreation');
@@ -250,17 +266,7 @@ const PostCreationScreen = ({ navigation }) => {
               <Text style={styles.userName}>{userName}</Text>
               <TouchableOpacity
                 style={styles.visibilitySelector}
-                onPress={() => {
-                  Alert.alert(
-                    'Post Visibility',
-                    'Choose who can see your post',
-                    [
-                      { text: 'Public', onPress: () => setVisibility('public') },
-                      { text: 'Connections Only', onPress: () => setVisibility('connections') },
-                      { text: 'Cancel', style: 'cancel' },
-                    ]
-                  );
-                }}
+                onPress={() => setShowVisibilityPicker(true)}
               >
                 <Icon
                   name={visibility === 'public' ? 'earth' : 'account-group'}
@@ -331,6 +337,66 @@ const PostCreationScreen = ({ navigation }) => {
             </TouchableOpacity>
           </View>
         </ScrollView>
+
+        <Modal
+          visible={showVisibilityPicker}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowVisibilityPicker(false)}
+        >
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setShowVisibilityPicker(false)}
+          >
+            <View style={styles.visibilityModal}>
+              <Text style={styles.modalTitle}>Choose who can see your post</Text>
+              {VISIBILITY_OPTIONS.map(option => (
+                <TouchableOpacity
+                  key={option.id}
+                  style={[
+                    styles.visibilityOption,
+                    visibility === option.id && styles.visibilityOptionActive,
+                  ]}
+                  onPress={() => {
+                    setVisibility(option.id);
+                    setShowVisibilityPicker(false);
+                  }}
+                >
+                  <View style={styles.visibilityOptionLeft}>
+                    <View style={styles.visibilityOptionIcon}>
+                      <Icon
+                        name={option.icon}
+                        size={18}
+                        color={visibility === option.id ? colors.black : '#8a2be2'}
+                      />
+                    </View>
+                    <View>
+                      <Text
+                        style={[
+                          styles.visibilityOptionLabel,
+                          visibility === option.id && styles.visibilityOptionLabelActive,
+                        ]}
+                      >
+                        {option.label}
+                      </Text>
+                      <Text style={styles.visibilityOptionDesc}>{option.description}</Text>
+                    </View>
+                  </View>
+                  {visibility === option.id && (
+                    <Icon name="check-circle" size={22} color={colors.primary} />
+                  )}
+                </TouchableOpacity>
+              ))}
+              <TouchableOpacity
+                style={styles.visibilityCancelButton}
+                onPress={() => setShowVisibilityPicker(false)}
+              >
+                <Text style={styles.visibilityCancelText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </Modal>
     </View>
   );
 };
@@ -483,6 +549,77 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     marginLeft: 8,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'flex-end',
+    padding: 16,
+  },
+  visibilityModal: {
+    backgroundColor: colors.background,
+    borderRadius: 20,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  modalTitle: {
+    color: colors.white,
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 16,
+  },
+  visibilityOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    marginBottom: 10,
+  },
+  visibilityOptionActive: {
+    backgroundColor: 'rgba(138, 43, 226, 0.15)',
+    borderColor: '#8a2be2',
+  },
+  visibilityOptionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  visibilityOptionIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(138, 43, 226, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  visibilityOptionLabel: {
+    color: colors.white,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  visibilityOptionLabelActive: {
+    color: colors.primary,
+  },
+  visibilityOptionDesc: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    marginTop: 2,
+    maxWidth: width * 0.55,
+  },
+  visibilityCancelButton: {
+    marginTop: 8,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  visibilityCancelText: {
+    color: colors.textSecondary,
+    fontSize: 14,
   },
 });
 

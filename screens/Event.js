@@ -144,27 +144,8 @@ const EventScreen = ({ navigation }) => {
     }
   };
 
-  const handleSearch = async (query) => {
+  const handleSearch = (query) => {
     setSearchQuery(query);
-    if (!query.trim()) {
-      if (selectedCategory === 'ALL') {
-        await loadAllEvents();
-      } else {
-        await loadEventsByCategory(selectedCategory);
-      }
-      return;
-    }
-
-    try {
-      const result = await eventsApi.searchEvents(query, {}, 1, 20);
-      if (result.success) {
-        setEvents(result.data.events || result.data || []);
-      } else {
-        console.error('Search failed:', result.message);
-      }
-    } catch (error) {
-      console.error('Search error:', error);
-    }
   };
 
   const handleCategorySelect = (categoryId) => {
@@ -177,16 +158,37 @@ const EventScreen = ({ navigation }) => {
     }
   };
 
-  const renderAllEvents = () => {
-    const title = selectedCategory === 'ALL'
+  // Filter events by title based on search query
+  const filteredEvents = searchQuery.trim() 
+    ? events.filter(event => 
+        event.title?.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    : events;
+
+  const renderEvents = () => {
+    const title = searchQuery.trim()
+      ? `Search Results for "${searchQuery}"`
+      : selectedCategory === 'ALL'
       ? 'All Events'
       : `${categories.find(c => c.id === selectedCategory)?.label || selectedCategory} Events`;
+
+    const emptyIcon = searchQuery.trim() ? "magnify-remove" : "calendar-remove";
+    const emptyTitle = searchQuery.trim()
+      ? 'No events found for your search'
+      : selectedCategory === 'ALL' 
+        ? 'No events available at the moment' 
+        : 'No events found in this category';
+    const emptySubText = searchQuery.trim()
+      ? 'Try different keywords or browse all events'
+      : selectedCategory === 'ALL' 
+        ? 'Check back later for new events' 
+        : 'Try selecting a different category';
 
     return (
       <View style={{ paddingTop: 8, flex: 1 }}>
         <SectionHeader title={title} onSeeAll={() => {}} />
         <FlatList
-          data={events}
+          data={filteredEvents}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
             <View style={{ marginHorizontal: 8 }}>
@@ -197,45 +199,9 @@ const EventScreen = ({ navigation }) => {
           contentContainerStyle={{ paddingBottom: 20 }}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
-              <Icon name="calendar-remove" size={64} color={colors.textMuted} />
-              <Text style={styles.emptyText}>
-                {selectedCategory === 'ALL' 
-                  ? 'No events available at the moment' 
-                  : 'No events found in this category'}
-              </Text>
-              <Text style={styles.emptySubText}>
-                {selectedCategory === 'ALL' 
-                  ? 'Check back later for new events' 
-                  : 'Try selecting a different category'}
-              </Text>
-            </View>
-          }
-        />
-      </View>
-    );
-  };
-
-  const renderSearchResults = () => {
-    if (!searchQuery.trim()) return null;
-
-    return (
-      <View style={{ paddingTop: 8 }}>
-        <SectionHeader title={`Search Results for "${searchQuery}"`} onSeeAll={() => {}} />
-        <FlatList
-          data={events}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <View style={{ marginHorizontal: 8 }}>
-              <EventCard event={item} onPress={() => goDetail(item)} />
-            </View>
-          )}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 20 }}
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Icon name="magnify-remove" size={64} color={colors.textMuted} />
-              <Text style={styles.emptyText}>No events found for your search</Text>
-              <Text style={styles.emptySubText}>Try different keywords or browse all events</Text>
+              <Icon name={emptyIcon} size={64} color={colors.textMuted} />
+              <Text style={styles.emptyText}>{emptyTitle}</Text>
+              <Text style={styles.emptySubText}>{emptySubText}</Text>
             </View>
           }
         />
@@ -277,8 +243,8 @@ const EventScreen = ({ navigation }) => {
         onCategorySelect={handleCategorySelect}
       />
 
-      {/* Search Results or All Events */}
-      {searchQuery.trim() ? renderSearchResults() : renderAllEvents()}
+      {/* Events List */}
+      {renderEvents()}
 
       {/* Footer */}
       <View style={styles.footer}>

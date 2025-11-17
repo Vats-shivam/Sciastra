@@ -19,11 +19,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import colors from '../config/colors';
 import postApi from '../api/PostApi';
-import profileApi from '../api/ProfileApi';
 import authApi from '../api/AuthApi';
 import { useLoader } from '../context/LoaderContext';
 import { useNotification } from '../contexts/NotificationContext';
 import useScreenApiLogger from '../hooks/useScreenApiLogger';
+import { getProfileImageSource } from '../utils/profileImage';
 
 // Reaction types from backend enum
 const REACTIONS = [
@@ -54,6 +54,8 @@ const PostDetailScreen = ({ route, navigation }) => {
   const [showReactionsList, setShowReactionsList] = useState(false);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [commentToDelete, setCommentToDelete] = useState(null);
+  const [commentAvatarErrors, setCommentAvatarErrors] = useState({});
+  const [reactionAvatarErrors, setReactionAvatarErrors] = useState({});
 
   useEffect(() => {
     loadPostDetails();
@@ -207,16 +209,9 @@ const PostDetailScreen = ({ route, navigation }) => {
   };
 
   const renderComment = ({ item: comment }) => {
-    // Get profile picture - use user's profilePic if available, otherwise use default icon
-    const profilePic = comment.user?.profile?.profilePic;
-    const userToken = authApi.getAccessToken();
-    
-    // Debug log
-    console.log('Comment profilePic:', profilePic);
-    console.log('Comment user:', comment.user?.profile?.name);
-    
-    // Use profileApi for profile pictures (they come from profile service, not post service)
-    const imageSource = profileApi.getImageSource(profilePic, userToken);
+    const imageSource = commentAvatarErrors[comment.id]
+      ? require('../assets/icon.png')
+      : getProfileImageSource(comment.user, { fallbackKey: comment.profilePic });
     
     const userId = comment.user?.id || comment.userId;
     const currentUserId = authApi.getCurrentUserId();
@@ -248,9 +243,8 @@ const PostDetailScreen = ({ route, navigation }) => {
             style={styles.commentAvatar}
             resizeMode="cover"
             defaultSource={require('../assets/icon.png')}
-            onError={(error) => {
-              console.log('Comment avatar load error:', error.nativeEvent?.error);
-              console.log('Failed to load:', profilePic);
+            onError={() => {
+              setCommentAvatarErrors((prev) => ({ ...prev, [comment.id]: true }));
             }}
           />
         </TouchableOpacity>
@@ -293,14 +287,9 @@ const PostDetailScreen = ({ route, navigation }) => {
     const reactionConfig = REACTIONS.find(r => r.type === reaction.type);
     
     // Get profile picture - use user's profilePic if available, otherwise use default icon
-    const profilePic = reaction.user?.profile?.profilePic;
-    const userToken = authApi.getAccessToken();
-    
-    // Debug log
-    console.log('Reaction profilePic:', profilePic);
-    
-    // Use profileApi for profile pictures (they come from profile service, not post service)
-    const imageSource = profileApi.getImageSource(profilePic, userToken);
+    const imageSource = reactionAvatarErrors[reaction.id]
+      ? require('../assets/icon.png')
+      : getProfileImageSource(reaction.user, { fallbackKey: reaction.profilePic });
     
     const userId = reaction.user?.id || reaction.userId;
     const currentUserId = authApi.getCurrentUserId();
@@ -323,9 +312,8 @@ const PostDetailScreen = ({ route, navigation }) => {
             style={styles.reactionAvatar}
             resizeMode="cover"
             defaultSource={require('../assets/icon.png')}
-            onError={(error) => {
-              console.log('Reaction avatar load error:', error.nativeEvent?.error);
-              console.log('Failed to load:', profilePic);
+            onError={() => {
+              setReactionAvatarErrors((prev) => ({ ...prev, [reaction.id]: true }));
             }}
           />
         </TouchableOpacity>

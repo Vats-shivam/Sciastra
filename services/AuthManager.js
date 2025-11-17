@@ -130,22 +130,31 @@ class AuthManager {
       
       if (result.success) {
         // Update user state with the complete profile data
-        this.authState.user = result.data;
-        this.setLoading(false);
-
-        // Force a double notification to ensure AuthNavigator re-evaluates
-        this.notifyListeners();
+        this.authState = {
+          ...this.authState,
+          user: result.data,
+          isLoading: false,
+        };
 
         console.log('AuthManager: Profile setup completed, updated user:', this.authState.user);
         console.log('AuthManager: User name from result:', result.data?.name);
         console.log('AuthManager: needsProfileSetup after completion:', this.needsProfileSetup());
         console.log('AuthManager: needsOnboarding after completion:', this.needsOnboarding());
 
-        // Additional notification after a brief delay to ensure state propagation
+        // Force immediate notification
+        this.notifyListeners();
+
+        // Force a second notification after a brief delay to ensure state propagation
         setTimeout(() => {
           console.log('AuthManager: Second notification - needsProfileSetup:', this.needsProfileSetup());
           this.notifyListeners();
         }, 100);
+
+        // Force a third notification to be absolutely sure
+        setTimeout(() => {
+          console.log('AuthManager: Third notification - needsProfileSetup:', this.needsProfileSetup());
+          this.notifyListeners();
+        }, 300);
 
         return result;
       } else {

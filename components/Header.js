@@ -95,8 +95,8 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   logoSvg: {
-    width: 150,
-    height: 52,
+    width: 120,
+    height: 40,
   },
   iconButton: { 
     padding: 4,

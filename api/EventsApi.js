@@ -563,16 +563,40 @@ class EventsApiService {
         url += `&freeOnly=true`;
       }
 
+      console.log('EventsApi: Search URL:', url);
+
       const response = await this.makeRequest(url, {
         method: 'GET',
         skipAuth: true, // Public endpoint
       });
 
-      console.log('EventsApi: Search response:', response);
+      console.log('EventsApi: Raw search response:', JSON.stringify(response, null, 2));
+
+      // Handle different possible response structures
+      let events = [];
+      
+      if (response.events && Array.isArray(response.events)) {
+        events = response.events;
+      } else if (Array.isArray(response)) {
+        events = response;
+      } else if (response.data && Array.isArray(response.data)) {
+        events = response.data;
+      } else if (response.data && response.data.events && Array.isArray(response.data.events)) {
+        events = response.data.events;
+      } else if (response.data && response.data.data && Array.isArray(response.data.data)) {
+        events = response.data.data;
+      }
+
+      console.log('EventsApi: Processed search results:', events.length, 'events');
 
       return {
         success: true,
-        data: response.data || response,
+        data: {
+          events: events,
+          total: events.length,
+          page: page,
+          limit: limit
+        }
       };
     } catch (error) {
       console.error('Search Events Error:', error);

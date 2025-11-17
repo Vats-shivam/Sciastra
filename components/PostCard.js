@@ -49,6 +49,7 @@ const PostCard = ({ post }) => {
   const [reactionLoading, setReactionLoading] = useState(false);
   const [imageLoading, setImageLoading] = useState({});
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [totalReactions, setTotalReactions] = useState(post.counts?.reactions || 0);
 
   // Fullscreen image modal
   const [selectedImage, setSelectedImage] = useState(null);
@@ -77,6 +78,7 @@ const PostCard = ({ post }) => {
       // Optimistic update - update UI immediately
       const previousReaction = userReaction;
       const previousReactions = { ...reactions };
+      const previousTotalReactions = totalReactions;
 
       // Update UI optimistically
       setReactions((prev) => {
@@ -102,6 +104,9 @@ const PostCard = ({ post }) => {
 
       setUserReaction(type);
       setShowReactionPicker(false);
+      if (!previousReaction) {
+        setTotalReactions((prev) => prev + 1);
+      }
 
       // Make API call
       const result = await postApi.addReaction(post.id, type);
@@ -110,6 +115,7 @@ const PostCard = ({ post }) => {
         // API failed, revert optimistic update
         setReactions(previousReactions);
         setUserReaction(previousReaction);
+        setTotalReactions(previousTotalReactions);
         showError('Failed to add reaction. Please try again.');
       } else if (result.cancelled) {
         // Don't revert - the UI state represents the latest user intent
@@ -132,6 +138,7 @@ const PostCard = ({ post }) => {
       // Optimistic update
       const previousReaction = userReaction;
       const previousReactions = { ...reactions };
+      const previousTotalReactions = totalReactions;
 
       setReactions((prev) => {
         const newReactions = { ...prev };
@@ -145,6 +152,7 @@ const PostCard = ({ post }) => {
       });
 
       setUserReaction(null);
+      setTotalReactions((prev) => Math.max(0, prev - 1));
 
       // Make API call
       const result = await postApi.removeReaction(post.id);
@@ -153,6 +161,7 @@ const PostCard = ({ post }) => {
         // API failed, revert optimistic update
         setReactions(previousReactions);
         setUserReaction(previousReaction);
+        setTotalReactions(previousTotalReactions);
         showError('Failed to remove reaction. Please try again.');
       }
     } catch (error) {
@@ -162,9 +171,6 @@ const PostCard = ({ post }) => {
     }
   };
 
-  // Get total reactions count directly from post.counts.reactions (it's a number)
-  const totalReactions = post.counts?.reactions || 0;
-  
   // For displaying reaction types, use reactions state if available
   const usedReactions = Object.keys(reactions).filter(
     (key) => reactions[key] > 0
@@ -189,6 +195,10 @@ const PostCard = ({ post }) => {
   useEffect(() => {
     setCurrentImageIndex(0);
   }, [post.id, images.length]);
+
+  useEffect(() => {
+    setTotalReactions(post.counts?.reactions || 0);
+  }, [post.counts?.reactions]);
 
   const timeAgo = (date) => {
     const seconds = Math.floor((new Date() - new Date(date)) / 1000);

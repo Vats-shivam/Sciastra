@@ -17,7 +17,7 @@
     },
     "android": {
       "package": "com.xcience.scistracommunityapp",
-      "versionCode": 16,
+      "versionCode": 18,
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#ffffff"
