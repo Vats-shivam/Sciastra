@@ -186,6 +186,57 @@ class ProfileApiService {
 }
 
 
+  // Convert date from ISO format or other formats to MM/YYYY format
+  convertDateToMonthYear(dateValue) {
+    if (!dateValue) return null;
+    
+    // If already in MM/YYYY format, return as is
+    if (typeof dateValue === 'string' && dateValue.match(/^\d{2}\/\d{4}$/)) {
+      return dateValue;
+    }
+    
+    // Try to parse as ISO date or other date formats
+    try {
+      const date = new Date(dateValue);
+      if (isNaN(date.getTime())) {
+        console.warn('Invalid date format:', dateValue);
+        return null;
+      }
+      
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const year = date.getFullYear();
+      return `${month}/${year}`;
+    } catch (error) {
+      console.warn('Error converting date:', dateValue, error);
+      return null;
+    }
+  }
+
+  // Convert date fields in experiences and education to MM/YYYY format
+  formatProfileDates(profileData) {
+    const formattedData = { ...profileData };
+    
+    // Format experiences dates
+    if (formattedData.experiences && Array.isArray(formattedData.experiences)) {
+      formattedData.experiences = formattedData.experiences.map(exp => ({
+        ...exp,
+        startDate: this.convertDateToMonthYear(exp.startDate),
+        endDate: exp.isCurrentRole ? null : this.convertDateToMonthYear(exp.endDate),
+      }));
+    }
+    
+    // Format education dates
+    if (formattedData.education && Array.isArray(formattedData.education)) {
+      formattedData.education = formattedData.education.map(edu => ({
+        ...edu,
+        startDate: this.convertDateToMonthYear(edu.startDate),
+        endDate: edu.current || edu.isCurrent ? null : this.convertDateToMonthYear(edu.endDate),
+      }));
+    }
+    
+    return formattedData;
+  }
+
   // Create or update user profile
   async createOrUpdateProfile(profileData) {
     try {
@@ -194,6 +245,9 @@ class ProfileApiService {
         throw new Error(ERROR_MESSAGES.UNAUTHORIZED);
       }
 
+      // Format dates before processing
+      const formattedProfileData = this.formatProfileDates(profileData);
+
       // Check if we're in bypass mode (for demo)
       if (userId === 'bypass_user_1234567890') {
         console.log('Using bypass mode for profile creation');
@@ -201,16 +255,16 @@ class ProfileApiService {
         // Create mock profile data for bypass mode
         const mockProfileData = {
           userId: userId,
-          name: profileData.name,
-          profession: profileData.profession,
-          email: profileData.email,
-          bio: profileData.bio,
-          location: profileData.location,
-          profilePic: profileData.profileImageUrl || null,
-          topics: profileData.topics || [],
-          skills: profileData.skills || [],
-          experiences: profileData.experiences || [],
-          education: profileData.education || [],
+          name: formattedProfileData.name,
+          profession: formattedProfileData.profession,
+          email: formattedProfileData.email,
+          bio: formattedProfileData.bio,
+          location: formattedProfileData.location,
+          profilePic: formattedProfileData.profileImageUrl || null,
+          topics: formattedProfileData.topics || [],
+          skills: formattedProfileData.skills || [],
+          experiences: formattedProfileData.experiences || [],
+          education: formattedProfileData.education || [],
           contactSyncStatus: 'PENDING',
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
@@ -228,16 +282,16 @@ class ProfileApiService {
 
       // Prepare profile data according to backend API structure
       const payload = {
-        name: profileData.name,
-        profession: profileData.profession,
-        email: profileData.email,
-        bio: profileData.bio,
-        location: profileData.location,
-        profilePic: profileData.profileImageUrl || null,
-        topics: profileData.topics || [],
-        skills: profileData.skills || [],
-        experiences: profileData.experiences || [],
-        education: profileData.education || [],
+        name: formattedProfileData.name,
+        profession: formattedProfileData.profession,
+        email: formattedProfileData.email,
+        bio: formattedProfileData.bio,
+        location: formattedProfileData.location,
+        profilePic: formattedProfileData.profileImageUrl || null,
+        topics: formattedProfileData.topics || [],
+        skills: formattedProfileData.skills || [],
+        experiences: formattedProfileData.experiences || [],
+        education: formattedProfileData.education || [],
       };
 
       const url = `${this.baseUrl}${API_ENDPOINTS.PROFILE.CREATE_UPDATE}`;
@@ -271,18 +325,21 @@ class ProfileApiService {
       if (error.message.includes('timeout') || error.message.includes('Network')) {
         console.log('Network error detected, falling back to demo mode');
         
+        // Format dates before fallback
+        const formattedProfileData = this.formatProfileDates(profileData);
+        
         const mockProfileData = {
           userId: authApi.getCurrentUserId(),
-          name: profileData.name,
-          profession: profileData.profession,
-          email: profileData.email,
-          bio: profileData.bio,
-          location: profileData.location,
-          profilePic: profileData.profileImageUrl || null,
-          topics: profileData.topics || [],
-          skills: profileData.skills || [],
-          experiences: profileData.experiences || [],
-          education: profileData.education || [],
+          name: formattedProfileData.name,
+          profession: formattedProfileData.profession,
+          email: formattedProfileData.email,
+          bio: formattedProfileData.bio,
+          location: formattedProfileData.location,
+          profilePic: formattedProfileData.profileImageUrl || null,
+          topics: formattedProfileData.topics || [],
+          skills: formattedProfileData.skills || [],
+          experiences: formattedProfileData.experiences || [],
+          education: formattedProfileData.education || [],
           contactSyncStatus: 'PENDING',
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
@@ -374,10 +431,13 @@ class ProfileApiService {
         throw new Error(ERROR_MESSAGES.UNAUTHORIZED);
       }
 
+      // Format dates before processing
+      const formattedProfileData = this.formatProfileDates(profileData);
+
       // Check for bypass mode - save locally without API call
       if (userId === 'bypass_user_1234567890') {
         const updatedProfile = {
-          ...profileData,
+          ...formattedProfileData,
           userId,
           updatedAt: new Date().toISOString(),
         };
@@ -393,7 +453,7 @@ class ProfileApiService {
 
       const payload = {
         userId,
-        ...profileData,
+        ...formattedProfileData,
       };
 
       const response = await this.makeRequest(`${this.baseUrl}${API_ENDPOINTS.PROFILE.UPDATE}`, {
@@ -420,8 +480,10 @@ class ProfileApiService {
       if (error.message.includes('timeout') || error.message.includes('Network')) {
         try {
           const userId = authApi.getCurrentUserId();
+          // Format dates before saving locally
+          const formattedProfileData = this.formatProfileDates(profileData);
           const updatedProfile = {
-            ...profileData,
+            ...formattedProfileData,
             userId,
             updatedAt: new Date().toISOString(),
           };
@@ -662,6 +724,56 @@ class ProfileApiService {
   getMediaDisplayUrl(mediaKey) {
     // Use the profile service's media proxy endpoint
     return `${this.baseUrl}/profile/media/proxy?key=${encodeURIComponent(mediaKey)}`;
+  }
+
+  // Report a user profile
+  async reportProfile(userId, reason, description = null) {
+    try {
+      const currentUserId = authApi.getCurrentUserId();
+      if (!currentUserId) {
+        throw new Error(ERROR_MESSAGES.UNAUTHORIZED);
+      }
+
+      if (!userId) {
+        throw new Error('User ID is required');
+      }
+
+      if (!reason || reason.trim().length === 0) {
+        throw new Error('Reason is required');
+      }
+
+      console.log('🚩 Reporting profile:', { userId, reason, hasDescription: !!description });
+
+      const payload = {
+        reason: reason.trim()
+      };
+
+      if (description && description.trim()) {
+        payload.description = description.trim();
+      }
+
+      const response = await this.makeRequest(`${this.baseUrl}/profile/profile/${userId}/report`, {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+
+      if (response.success) {
+        console.log('✅ Profile reported successfully:', response.data);
+        return {
+          success: true,
+          data: response.data,
+          message: response.message || 'Profile reported successfully. Our team will review it.'
+        };
+      } else {
+        throw new Error(response.message || 'Failed to report profile');
+      }
+    } catch (error) {
+      console.error('❌ Report Profile Error:', error);
+      return {
+        success: false,
+        message: error.message || 'Failed to report profile. Please try again.'
+      };
+    }
   }
 }
 

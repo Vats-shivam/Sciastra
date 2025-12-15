@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -10,6 +10,8 @@ import {
   FlatList,
   Modal,
   ActivityIndicator,
+  ScrollView,
+  TextInput,
 } from "react-native";
 import colors from "../config/colors";
 import { useNavigation } from "@react-navigation/native";
@@ -19,17 +21,14 @@ import authApi from "../api/AuthApi";
 import { useNotification } from "../contexts/NotificationContext";
 import PostIcon from "./PostIcon";
 import HeaderIcon from "./HeaderIcon";
+import Icon from "react-native-vector-icons/MaterialCommunityIcons";
+import { getProfileImageSource } from "../utils/profileImage";
 
 const { width: screenWidth } = Dimensions.get("window");
 
 // Reaction types from backend enum
 const REACTIONS = [
   { type: "LIKE", icon: "👍", label: "Like" },
-  { type: "LOVE", icon: "❤️", label: "Love" },
-  { type: "CELEBRATE", icon: "🎉", label: "Celebrate" },
-  { type: "SUPPORT", icon: "🤝", label: "Support" },
-  { type: "LAUGH", icon: "😂", label: "Laugh" },
-  { type: "INSIGHTFUL", icon: "💡", label: "Insightful" },
 ];
 
 const PostCard = ({ post }) => {
@@ -42,17 +41,25 @@ const PostCard = ({ post }) => {
   const { showError, showSuccess } = useNotification();
   const [showFullDescription, setShowFullDescription] = useState(false);
   const [userReaction, setUserReaction] = useState(post.userReaction || null); // Track the current user's reaction
-  const [showReactionPicker, setShowReactionPicker] = useState(false);
-  // reactions state is for tracking reaction types (e.g., {LIKE: 4, CELEBRATE: 2})
-  // post.counts.reactions is a number representing total reactions count
-  const [reactions, setReactions] = useState({}); // For tracking reaction types if available
   const [reactionLoading, setReactionLoading] = useState(false);
   const [imageLoading, setImageLoading] = useState({});
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [totalReactions, setTotalReactions] = useState(post.counts?.reactions || 0);
+  const [imageHeights, setImageHeights] = useState({}); // Track image heights dynamically
 
   // Fullscreen image modal
   const [selectedImage, setSelectedImage] = useState(null);
+  
+  // Options menu and report modal
+  const [showOptionsMenu, setShowOptionsMenu] = useState(false);
+  const [showReportSheet, setShowReportSheet] = useState(false);
+  const [menuButtonLayout, setMenuButtonLayout] = useState({ x: 0, y: 0, width: 0, height: 0 });
+  const menuButtonRef = useRef(null);
+  
+  // Repost modal
+  const [showRepostModal, setShowRepostModal] = useState(false);
+  const [repostCommentText, setRepostCommentText] = useState('');
+  const [repostLoading, setRepostLoading] = useState(false);
 
   // No longer needed with chat service pattern - auth headers handle authentication
 
@@ -69,7 +76,7 @@ const PostCard = ({ post }) => {
     return { uri: mediaItem.uri || mediaItem.url || mediaItem.displayUrl };
   };
 
-  const handleReaction = async (type) => {
+  const handleReaction = async () => {
     if (reactionLoading) return; // Prevent double taps
 
     try {
@@ -77,46 +84,37 @@ const PostCard = ({ post }) => {
 
       // Optimistic update - update UI immediately
       const previousReaction = userReaction;
-      const previousReactions = { ...reactions };
       const previousTotalReactions = totalReactions;
 
       // Update UI optimistically
-      setReactions((prev) => {
-        const newReactions = { ...prev };
-
-        // Remove previous reaction count
-        if (previousReaction && newReactions[previousReaction]) {
-          newReactions[previousReaction] -= 1;
-          if (newReactions[previousReaction] === 0) {
-            delete newReactions[previousReaction];
-          }
-        }
-
-        // Add new reaction count
-        if (newReactions[type]) {
-          newReactions[type] += 1;
-        } else {
-          newReactions[type] = 1;
-        }
-
-        return newReactions;
-      });
-
-      setUserReaction(type);
-      setShowReactionPicker(false);
-      if (!previousReaction) {
+      if (previousReaction) {
+        // If already liked, remove like
+        setUserReaction(null);
+        setTotalReactions((prev) => Math.max(0, prev - 1));
+      } else {
+        // If not liked, add like
+        setUserReaction("LIKE");
         setTotalReactions((prev) => prev + 1);
       }
 
       // Make API call
-      const result = await postApi.addReaction(post.id, type);
+      let result;
+      if (previousReaction) {
+        result = await postApi.removeReaction(post.id);
+      } else {
+        result = await postApi.addReaction(post.id, "LIKE");
+      }
 
       if (!result.success && !result.cancelled) {
         // API failed, revert optimistic update
-        setReactions(previousReactions);
         setUserReaction(previousReaction);
         setTotalReactions(previousTotalReactions);
-        showError('Failed to add reaction. Please try again.');
+        showError('Failed to update reaction. Please try again.');
+      } else if (result.success && result.data) {
+        // Update totalReactions with server response if available
+        if (result.data.counts?.reactions !== undefined) {
+          setTotalReactions(result.data.counts.reactions);
+        }
       } else if (result.cancelled) {
         // Don't revert - the UI state represents the latest user intent
       }
@@ -127,180 +125,200 @@ const PostCard = ({ post }) => {
     }
   };
   
-  const handleRemoveReaction = async () => {
-    if (reactionLoading) return; // Prevent double taps
+  // Determine which reaction icon to show - always LIKE if there are reactions
+  const displayReactionType = totalReactions > 0 ? 'LIKE' : null;
 
-    try {
-      if (!userReaction) return;
-
-      setReactionLoading(true);
-
-      // Optimistic update
-      const previousReaction = userReaction;
-      const previousReactions = { ...reactions };
-      const previousTotalReactions = totalReactions;
-
-      setReactions((prev) => {
-        const newReactions = { ...prev };
-        if (userReaction && newReactions[userReaction]) {
-          newReactions[userReaction] -= 1;
-          if (newReactions[userReaction] === 0) {
-            delete newReactions[userReaction];
-          }
-        }
-        return newReactions;
-      });
-
-      setUserReaction(null);
-      setTotalReactions((prev) => Math.max(0, prev - 1));
-
-      // Make API call
-      const result = await postApi.removeReaction(post.id);
-
-      if (!result.success) {
-        // API failed, revert optimistic update
-        setReactions(previousReactions);
-        setUserReaction(previousReaction);
-        setTotalReactions(previousTotalReactions);
-        showError('Failed to remove reaction. Please try again.');
-      }
-    } catch (error) {
-      showError('Something went wrong. Please try again.');
-    } finally {
-      setReactionLoading(false);
-    }
-  };
-
-  // For displaying reaction types, use reactions state if available
-  const usedReactions = Object.keys(reactions).filter(
-    (key) => reactions[key] > 0
-  );
-  
-  // Determine which reaction icon to show:
-  // 1. If user has reacted, show their reaction type
-  // 2. If we have reaction types in state, show the first one
-  // 3. Otherwise, show default thumbs up (LIKE) if there are reactions
-  const displayReactionType = userReaction 
-    ? userReaction 
-    : (usedReactions.length > 0 
-      ? usedReactions[0] 
-      : (totalReactions > 0 ? 'LIKE' : null));
+  // Determine if this is a repost and get the original post
+  const isRepost = post.isRepost || false;
+  const originalPost = post.originalPost || null;
+  const repostComment = post.repostComment || null;
+  const displayPost = isRepost && originalPost ? originalPost : post;
+  const reposter = isRepost ? post.author : null;
 
   // Handle multiple images using chat service pattern (simplified)
-  const images = Array.isArray(post.media)
-    ? post.media.filter((item) => (item.mediaType === "image" || item.type === "image" || (!item.type && !item.mediaType)))
+  const displayImages = Array.isArray(displayPost.media)
+    ? displayPost.media.filter((item) => (item.mediaType === "image" || item.type === "image" || (!item.type && !item.mediaType)))
     : [];
 
-  // Reset image index when post or images change
+  // Reset image index and heights when post or images change
   useEffect(() => {
+    if (!displayPost || !displayPost.id) return;
+    
     setCurrentImageIndex(0);
-  }, [post.id, images.length]);
+    setImageHeights({}); // Reset heights when post changes
+    
+    // Pre-calculate image dimensions
+    if (displayImages.length > 0) {
+      const imageWidth = screenWidth - 32;
+      const maxHeight = 700;
+      
+      displayImages.forEach((item, index) => {
+        const imageKey = `${displayPost.id}_${index}`;
+        const imageSource = getImageSource(item);
+        
+        if (imageSource.uri) {
+          Image.getSize(
+            imageSource.uri,
+            (width, height) => {
+              if (width && height) {
+                const aspectRatio = height / width;
+                const calculatedHeight = imageWidth * aspectRatio;
+                const finalHeight = Math.min(calculatedHeight, maxHeight);
+                setImageHeights(prev => ({
+                  ...prev,
+                  [imageKey]: finalHeight
+                }));
+              }
+            },
+            (error) => {
+              // Fallback to default height on error
+              setImageHeights(prev => ({
+                ...prev,
+                [imageKey]: 300
+              }));
+            }
+          );
+        }
+      });
+    }
+  }, [displayPost?.id, displayImages.length]);
 
   useEffect(() => {
-    setTotalReactions(post.counts?.reactions || 0);
-  }, [post.counts?.reactions]);
+    const statsPost = isRepost && originalPost ? originalPost : post;
+    // Only update if we're not in the middle of a reaction update
+    if (!reactionLoading) {
+      setTotalReactions(statsPost?.counts?.reactions || 0);
+    }
+  }, [post?.counts?.reactions, isRepost, originalPost]);
 
   const timeAgo = (date) => {
     const seconds = Math.floor((new Date() - new Date(date)) / 1000);
     let interval = seconds / 31536000;
     if (interval > 1) {
-      return Math.floor(interval) + "y ago";
+      return Math.floor(interval) + " year" + (Math.floor(interval) === 1 ? "" : "s") + " ago";
     }
     interval = seconds / 2592000;
     if (interval > 1) {
-      return Math.floor(interval) + "m ago";
+      return Math.floor(interval) + " month" + (Math.floor(interval) === 1 ? "" : "s") + " ago";
     }
     interval = seconds / 86400;
     if (interval > 1) {
-      return Math.floor(interval) + "d ago";
+      return Math.floor(interval) + " day" + (Math.floor(interval) === 1 ? "" : "s") + " ago";
     }
     interval = seconds / 3600;
     if (interval > 1) {
-      return Math.floor(interval) + "h ago";
+      return Math.floor(interval) + " hour" + (Math.floor(interval) === 1 ? "" : "s") + " ago";
     }
     interval = seconds / 60;
     if (interval > 1) {
-      return Math.floor(interval) + "min ago";
+      return Math.floor(interval) + " minute" + (Math.floor(interval) === 1 ? "" : "s") + " ago";
     }
-    return Math.floor(seconds) + "s ago";
+    return Math.floor(seconds) + " second" + (Math.floor(seconds) === 1 ? "" : "s") + " ago";
   };
 
   return (
-    <Pressable
-    onPress={() => navigation.navigate("PostDetail", { postId: post.id, postData: post })}
-    style={styles.container}
-  >
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => {
-            if (post.author?.id === "1") {
-              navigation.navigate("ProfileTab");
-            } else {
-              navigation.navigate("UserProfile", { userId: post.author?.id });
-            }
-          }}
-        >
-          <Image
-            source={profileApi.getImageSource(post.author?.profile?.profilePic, authApi.getAccessToken())}
-            style={styles.avatar}
-          />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={{ flex: 1, paddingLeft: 10 }}
-          onPress={() => {
-            if (post.author?.id === "1") {
-              navigation.navigate("ProfileTab");
-            } else {
-              navigation.navigate("UserProfile", { userId: post.author?.id });
-            }
-          }}
-        >
-          <Text style={styles.author}>{post.author?.profile?.name || "Unknown User"}</Text>
-          <Text style={styles.subTitle}>
-            {post.author?.profile?.profession || "Professional"}
+    <View style={styles.container}>
+      {/* Repost Header - Shows who reposted */}
+      {isRepost && reposter && (
+        <View style={styles.repostHeader}>
+          <View style={styles.repostIndicator}>
+            <PostIcon name="reshare" size={16} color={colors.button} />
+            <Text style={styles.repostIndicatorText}>
+              <Text style={styles.reposterName}>
+                {reposter.profile?.name || reposter.name || 'Someone'}
+              </Text>
+              {' reposted'}
+            </Text>
+          </View>
+          <Text style={styles.repostTimestamp}>
+            {post.createdAt ? timeAgo(post.createdAt) : ''}
           </Text>
-          <Text style={styles.timestamp}>
-            {post.createdAt ? timeAgo(post.createdAt) : "Unknown"}
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => {
-            if (post.author?.id === "1") {
-              navigation.navigate("ProfileTab");
-            } else {
-              navigation.navigate("UserProfile", { userId: post.author?.id });
-            }
-          }}
-        >
-          <HeaderIcon name="menu" size={20} color={colors.textSecondary} />
-        </TouchableOpacity>
-      </View>
-
-      {/* Description */}
-      {post.content && (
-        <TouchableOpacity
-          onPress={() => setShowFullDescription(!showFullDescription)}
-          activeOpacity={0.8}
-          style={{ marginVertical: 8 }}
-        >
-          <Text
-            numberOfLines={showFullDescription ? 0 : 3}
-            style={styles.description}
-          >
-            {post.content}
-          </Text>
-          {!showFullDescription && post.content.length > 100 && (
-            <Text style={styles.showMore}>See More</Text>
-          )}
-        </TouchableOpacity>
+        </View>
       )}
 
-      {/* Image Carousel */}
-      {images.length > 0 && (
+      {/* Repost Comment */}
+      {isRepost && repostComment && (
+        <View style={styles.repostCommentContainer}>
+          <Text style={styles.repostCommentText}>{repostComment}</Text>
+        </View>
+      )}
+
+      {/* Original Post Container - Wrapped in a nested view for reposts */}
+      <View style={isRepost ? styles.originalPostContainer : null}>
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity
+            onPress={() => {
+              const authorId = displayPost.author?.id || displayPost.userId;
+              if (authorId === "1") {
+                navigation.navigate("ProfileTab");
+              } else {
+                navigation.navigate("UserProfile", { userId: authorId });
+              }
+            }}
+          >
+            <Image
+              source={getProfileImageSource(displayPost.author, { 
+                fallbackKey: displayPost.author?.profile?.profilePic || displayPost.author?.profilePic 
+              })}
+              style={styles.avatar}
+              resizeMode="cover"
+              defaultSource={require("../assets/icon.png")}
+            />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={{ flex: 1, paddingLeft: 10 }}
+            onPress={() => navigation.navigate("PostDetail", { postId: displayPost.id, postData: displayPost })}
+          >
+            <Text style={styles.author}>{displayPost.author?.profile?.name || "Unknown User"}</Text>
+            <Text style={styles.subTitle}>
+              {displayPost.author?.profile?.profession || "Professional"}
+            </Text>
+            <Text style={styles.timestamp}>
+              {displayPost.createdAt ? timeAgo(displayPost.createdAt) : "Unknown"}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            ref={menuButtonRef}
+            onPress={(e) => {
+              e.stopPropagation();
+              if (menuButtonRef.current) {
+                menuButtonRef.current.measureInWindow((x, y, width, height) => {
+                  setMenuButtonLayout({ x, y, width, height });
+                  setShowOptionsMenu(true);
+                });
+              } else {
+                setShowOptionsMenu(true);
+              }
+            }}
+          >
+            <HeaderIcon name="menu" size={20} color={colors.textSecondary} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Description */}
+        {displayPost.content && (
+          <Pressable
+            onPress={() => navigation.navigate("PostDetail", { postId: displayPost.id, postData: displayPost })}
+            style={{ marginVertical: 8 }}
+          >
+            <Text
+              numberOfLines={showFullDescription ? 0 : 3}
+              style={styles.description}
+            >
+              {displayPost.content}
+            </Text>
+            {!showFullDescription && displayPost.content && displayPost.content.length > 100 && (
+              <Text style={styles.showMore}>See More</Text>
+            )}
+          </Pressable>
+        )}
+
+        {/* Image Carousel */}
+        {displayImages.length > 0 && (
         <View style={styles.mediaContainer}>
           <FlatList
-            data={images}
+            data={displayImages}
             keyExtractor={(item, index) => `${post.id}_media_${index}`}
             horizontal
             pagingEnabled
@@ -311,7 +329,7 @@ const PostCard = ({ post }) => {
               const index = Math.round(
                 event.nativeEvent.contentOffset.x / imageWidth
               );
-              setCurrentImageIndex(Math.min(index, images.length - 1));
+              setCurrentImageIndex(Math.min(index, displayImages.length - 1));
             }}
             onScrollToIndexFailed={(info) => {
               // Handle scroll to index failure gracefully
@@ -320,19 +338,33 @@ const PostCard = ({ post }) => {
             renderItem={({ item, index }) => {
               const imageSource = getImageSource(item);
               const imageKey = `${post.id}_${index}`;
+              const imageWidth = screenWidth - 32;
+              const imageHeight = imageHeights[imageKey] || 300; // Default to 300 if not calculated yet
+              const maxHeight = 700; // Maximum height to prevent extremely tall images
+              const calculatedHeight = Math.min(imageHeight, maxHeight);
 
               return (
-                <TouchableOpacity onPress={() => setSelectedImage(imageSource.uri)}>
+                <TouchableOpacity 
+                  onPress={() => setSelectedImage(imageSource.uri)}
+                  activeOpacity={0.9}
+                >
                   <View style={styles.imageContainer}>
                     {imageLoading[imageKey] && (
-                      <View style={styles.imageLoader}>
+                      <View style={[styles.imageLoader, { height: calculatedHeight }]}>
                         <ActivityIndicator size="large" color={colors.primary} />
                       </View>
                     )}
                     <Image
                       source={imageSource}
-                      style={[styles.image, imageLoading[imageKey] && styles.imageLoading]}
-                      resizeMode="cover"
+                      style={[
+                        styles.image,
+                        {
+                          width: imageWidth,
+                          height: calculatedHeight,
+                        },
+                        imageLoading[imageKey] && styles.imageLoading
+                      ]}
+                      resizeMode="contain"
                       onError={() => {
                         setImageLoading(prev => ({ ...prev, [imageKey]: false }));
                       }}
@@ -349,87 +381,66 @@ const PostCard = ({ post }) => {
             }}
           />
           {/* Media count indicator */}
-          {images.length > 1 && (
+          {displayImages.length > 1 && (
             <View style={styles.mediaCountIndicator}>
-              <Text style={styles.mediaCountText}>{currentImageIndex + 1} / {images.length}</Text>
+              <Text style={styles.mediaCountText}>{currentImageIndex + 1} / {displayImages.length}</Text>
             </View>
           )}
         </View>
-      )}
+        )}
 
-      {/* Fullscreen Modal */}
-      <Modal
-        visible={!!selectedImage}
-        transparent
-        onRequestClose={() => setSelectedImage(null)}
-      >
-        <View style={styles.modalBackground}>
-          <TouchableOpacity
-            style={styles.modalClose}
-            onPress={() => setSelectedImage(null)}
-          >
-            <Text style={{ color: colors.white, fontSize: 30, fontFamily: 'Gilroy-Bold' }}>×</Text>
-          </TouchableOpacity>
-          <Image
-            source={{ uri: selectedImage }}
-            style={styles.fullscreenImage}
-            resizeMode="contain"
-          />
-        </View>
-      </Modal>
-
-      {/* Stats */}
-      <View style={styles.stats}>
-        {totalReactions > 0 ? (
-          <View style={styles.reactionWrapper}>
-            {displayReactionType && (
-              <View
-                style={[
-                  styles.reactionsContainer,
-                  { width: usedReactions.length > 1 ? usedReactions.length * 16 + 8 : 22 },
-                ]}
-              >
-                <View style={styles.reactionBubble}>
-                  <Text style={styles.reactionText}>
-                    {REACTIONS.find((x) => x.type === displayReactionType)?.icon || '👍'}
-                  </Text>
-                </View>
-                {usedReactions.length > 1 && usedReactions.slice(1).map((r, index) => (
-                  <View
-                    key={r}
-                    style={[
-                      styles.reactionBubble,
-                      { left: (index + 1) * 16, zIndex: usedReactions.length - index },
-                    ]}
-                  >
-                    <Text style={styles.reactionText}>
-                      {REACTIONS.find((x) => x.type === r)?.icon}
+        {/* Stats */}
+        <Pressable 
+          style={styles.stats}
+          onPress={() => navigation.navigate("PostDetail", { postId: displayPost.id, postData: displayPost })}
+        >
+          {(() => {
+            const statsPost = isRepost && originalPost ? originalPost : post;
+            // Use totalReactions state for instant updates instead of reading from post prop
+            const reactionsCount = totalReactions;
+            const commentsCount = statsPost.counts?.comments || 0;
+            
+            return (
+              <>
+                {reactionsCount > 0 ? (
+                  <View style={styles.reactionWrapper}>
+                    {displayReactionType && (
+                      <View style={styles.reactionsContainer}>
+                        <View style={styles.reactionBubble}>
+                          <Text style={styles.reactionText}>
+                            {REACTIONS.find((x) => x.type === displayReactionType)?.icon || '👍'}
+                          </Text>
+                        </View>
+                      </View>
+                    )}
+                    <Text style={styles.reactionCount}>
+                      {reactionsCount} {reactionsCount === 1 ? 'Like' : 'Likes'}
                     </Text>
                   </View>
-                ))}
-              </View>
-            )}
-            <Text style={styles.reactionCount}>
-              {totalReactions} {totalReactions === 1 ? 'Reaction' : 'Reactions'}
-            </Text>
-          </View>
-        ) : (
-          <Text style={styles.statsText}>Be the first to react</Text>
-        )}
-        <TouchableOpacity
-          onPress={() => navigation.navigate("PostDetail", { postId: post.id, postData: post })}
-        >
-          <Text style={styles.statsText}>
-            {post.counts?.comments || 0} Comments
-          </Text>
-        </TouchableOpacity>
-      </View>
+                ) : (
+                  <Text style={styles.statsText}>Be the first to like</Text>
+                )}
+                <TouchableOpacity
+                  onPress={() => navigation.navigate("PostDetail", { postId: displayPost.id, postData: displayPost })}
+                >
+                  <Text style={styles.statsText}>
+                    {commentsCount} {commentsCount === 1 ? 'Comment' : 'Comments'}
+                  </Text>
+                </TouchableOpacity>
+                {statsPost.counts?.reposts > 0 && (
+                  <Text style={styles.statsText}>
+                    {statsPost.counts.reposts} {statsPost.counts.reposts === 1 ? 'Repost' : 'Reposts'}
+                  </Text>
+                )}
+              </>
+            );
+          })()}
+        </Pressable>
 
-      {/* Action Buttons */}
-      <View style={styles.actions}>
+        {/* Action Buttons */}
+        <View style={styles.actions}>
         <Pressable
-          onLongPress={() => !reactionLoading && setShowReactionPicker(true)}
-          onPress={() => !reactionLoading && (userReaction ? handleRemoveReaction() : handleReaction("LIKE"))}
+          onPress={() => !reactionLoading && handleReaction()}
           style={styles.actionButton}
           disabled={reactionLoading}
         >
@@ -448,8 +459,8 @@ const PostCard = ({ post }) => {
                   color={colors.textSecondary}
                 />
               )}
-              <Text style={styles.actionText}>
-                {userReaction ? REACTIONS.find((x) => x.type === userReaction)?.label || 'Like' : 'Like'}
+              <Text style={[styles.actionText, { marginLeft: 6 }]}>
+                {userReaction ? 'Liked' : 'Like'}
               </Text>
             </View>
           )}
@@ -460,77 +471,263 @@ const PostCard = ({ post }) => {
         >
           <View style={styles.actionContent}>
             <PostIcon name="comment" size={20} color={colors.textSecondary} />
-            <Text style={styles.actionText}>Comment</Text>
+            <Text style={[styles.actionText, { marginLeft: 6 }]}>Comment</Text>
           </View>
         </TouchableOpacity>
-        {/* <TouchableOpacity style={styles.actionButton}>
+        <TouchableOpacity 
+          style={styles.actionButton}
+          onPress={() => {
+            // Check if user is trying to repost their own post
+            const currentUserId = authApi.getCurrentUserId();
+            const postToRepost = isRepost && originalPost ? originalPost : post;
+            const postAuthorId = postToRepost.author?.id || postToRepost.userId;
+            
+            if (String(currentUserId) === String(postAuthorId)) {
+              showError('You cannot repost your own post');
+              return;
+            }
+            
+            setShowRepostModal(true);
+          }}
+        >
           <View style={styles.actionContent}>
             <PostIcon name="reshare" size={20} color={colors.textSecondary} />
-            <Text style={styles.actionText}>Repost</Text>
+            <Text style={[styles.actionText, { marginLeft: 6 }]}>Repost</Text>
           </View>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.actionButton}>
-          <View style={styles.actionContent}>
-            <PostIcon name="send" size={20} color={colors.textSecondary} />
-            <Text style={styles.actionText}>Send</Text>
-          </View>
-        </TouchableOpacity> */}
+      </View>
       </View>
 
-      {/* Reaction Picker */}
-      {showReactionPicker && !reactionLoading && (
-        <View style={styles.reactionPickerContainer}>
-          <View style={styles.reactionPicker}>
-            {REACTIONS.map((reaction) => (
-              <TouchableOpacity
-                key={reaction.type}
-                onPress={() => handleReaction(reaction.type)}
-                style={styles.reactionOption}
-                disabled={reactionLoading}
-              >
-                <Text style={styles.reactionIcon}>{reaction.icon}</Text>
-                <Text style={styles.reactionLabel}>{reaction.label}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-          <TouchableOpacity
-            style={styles.reactionPickerClose}
-            onPress={() => setShowReactionPicker(false)}
+      {/* Options Menu Modal */}
+      <Modal
+        visible={showOptionsMenu}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowOptionsMenu(false)}
+      >
+        <Pressable 
+          style={styles.modalOverlay}
+          onPress={() => setShowOptionsMenu(false)}
+        >
+          <Pressable 
+            style={[
+              styles.optionsMenu,
+              {
+                position: 'absolute',
+                top: menuButtonLayout.y + menuButtonLayout.height + 8,
+                right: screenWidth - menuButtonLayout.x - menuButtonLayout.width + 20,
+              }
+            ]}
+            onPress={(e) => e.stopPropagation()}
           >
-                <Text style={{ color: colors.textMuted, fontSize: 16, fontFamily: 'Gilroy-Bold' }}>×</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-      {/* Overlay to close reaction picker when tapping outside */}
-      {showReactionPicker && (
-        <TouchableOpacity
-          style={styles.reactionPickerOverlay}
-          activeOpacity={1}
-          onPress={() => setShowReactionPicker(false)}
-        />
-      )}
-    </Pressable>
+            <TouchableOpacity
+              style={styles.optionItem}
+              onPress={() => {
+                setShowOptionsMenu(false);
+                if (post.author?.id === "1") {
+                  navigation.navigate("ProfileTab");
+                } else {
+                  navigation.navigate("UserProfile", { userId: post.author?.id });
+                }
+              }}
+            >
+              <Text style={styles.optionText}>View Profile</Text>
+            </TouchableOpacity>
+            <View style={styles.optionDivider} />
+            <TouchableOpacity
+              style={styles.optionItem}
+              onPress={() => {
+                setShowOptionsMenu(false);
+                setShowReportSheet(true);
+              }}
+            >
+              <Text style={[styles.optionText, styles.reportOptionTextMenu]}>Report Post</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Report Bottom Sheet */}
+      <Modal
+        visible={showReportSheet}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowReportSheet(false)}
+      >
+        <Pressable 
+          style={styles.bottomSheetOverlay}
+          onPress={() => setShowReportSheet(false)}
+        >
+          <Pressable style={styles.bottomSheet} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.bottomSheetHandle} />
+            <Text style={styles.reportTitle}>Report</Text>
+            <Text style={styles.reportSubtitle}>
+              Why are you reporting this post?
+            </Text>
+            <Text style={styles.reportInfo}>
+              Your report is anonymous. If someone is in immediate danger, call the local emergency services – don't wait.
+            </Text>
+            
+            <ScrollView 
+              style={styles.reportOptionsList}
+              showsVerticalScrollIndicator={false}
+            >
+              {[
+                "I just don't like it",
+                "Bullying or unwanted contact",
+                "Suicide, self-injury or eating disorders",
+                "Violence, hate or exploitation",
+                "Selling or promoting restricted items",
+                "Nudity or sexual activity",
+                "Scam, fraud or spam",
+                "False information",
+                "Intellectual property"
+              ].map((option, index) => (
+                <TouchableOpacity
+                  key={index}
+                  style={styles.reportOption}
+                  onPress={async () => {
+                    try {
+                      setShowReportSheet(false);
+                      
+                      // Get the post ID to report (handle reposts correctly)
+                      const postToReport = isRepost && originalPost ? originalPost.id : post.id;
+                      
+                      // Call the report API
+                      const result = await postApi.reportPost(postToReport, option);
+                      
+                      if (result.success) {
+                        showSuccess(result.message || 'Report submitted successfully. Our team will review it.');
+                      } else {
+                        showError(result.message || 'Failed to submit report. Please try again.');
+                      }
+                    } catch (error) {
+                      console.error('Report error:', error);
+                      showError('Failed to submit report. Please try again.');
+                    }
+                  }}
+                >
+                  <Text style={styles.reportOptionText}>{option}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Repost Modal */}
+      <Modal
+        visible={showRepostModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => {
+          setShowRepostModal(false);
+          setRepostCommentText('');
+        }}
+      >
+        <Pressable 
+          style={styles.repostModalOverlay}
+          onPress={() => {
+            setShowRepostModal(false);
+            setRepostCommentText('');
+          }}
+        >
+          <Pressable style={styles.repostModal} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.repostModalHeader}>
+              <Text style={styles.repostModalTitle}>Repost</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowRepostModal(false);
+                  setRepostCommentText('');
+                }}
+              >
+                <Icon name="close" size={24} color={colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
+            
+            <Text style={styles.repostModalSubtitle}>Add a comment (optional)</Text>
+            
+            <TextInput
+              style={styles.repostCommentInput}
+              placeholder="What are your thoughts?"
+              placeholderTextColor={colors.textMuted}
+              value={repostCommentText}
+              onChangeText={setRepostCommentText}
+              multiline
+              maxLength={500}
+              autoFocus
+            />
+            
+            <View style={styles.repostModalActions}>
+              <TouchableOpacity
+                style={[styles.repostModalButton, styles.repostCancelButton]}
+                onPress={() => {
+                  setShowRepostModal(false);
+                  setRepostCommentText('');
+                }}
+                disabled={repostLoading}
+              >
+                <Text style={styles.repostCancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.repostModalButton, styles.repostConfirmButton]}
+                onPress={async () => {
+                  const postToRepost = isRepost && originalPost ? originalPost.id : post.id;
+                  
+                  setRepostLoading(true);
+                  try {
+                    const result = await postApi.repostPost(postToRepost, repostCommentText);
+                    
+                    if (result.success) {
+                      showSuccess('Post reposted successfully!');
+                      setShowRepostModal(false);
+                      setRepostCommentText('');
+                      // Optionally refresh the feed or update the post
+                    } else {
+                      showError(result.message || 'Failed to repost');
+                    }
+                  } catch (error) {
+                    showError('Failed to repost. Please try again.');
+                  } finally {
+                    setRepostLoading(false);
+                  }
+                }}
+                disabled={repostLoading}
+              >
+                {repostLoading ? (
+                  <ActivityIndicator size="small" color={colors.white} />
+                ) : (
+                  <Text style={styles.repostConfirmButtonText}>Repost</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: colors.background,
-    padding: 16,
-    marginVertical: 4,
+    backgroundColor: colors.card,
+    padding: 20,
+    marginVertical: 6,
+    marginHorizontal: 0,
     width: "100%",
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    shadowColor: "#848484ff",
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
+    shadowColor: "#000",
     shadowOffset: {
       width: 0,
-      height: 2,
+      height: 4,
     },
-    borderRadius : 20 ,
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 3,
-    marginBottom : 50 ,
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 4,
+    marginBottom: 12,
   },
   header: { flexDirection: "row", alignItems: "center" },
   avatar: { width: 48, height: 48, borderRadius: 24 },
@@ -554,8 +751,6 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   image: {
-    width: screenWidth - 32, // padding aware
-    height: 300,
     borderRadius: 12,
     marginRight: 12,
   },
@@ -619,11 +814,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingTop: 12,
+    paddingTop: 16,
     paddingBottom: 4,
     borderTopWidth: 1,
     borderTopColor: colors.border,
-    paddingHorizontal: 8,
+    marginTop: 12,
+    paddingHorizontal: 4,
   },
   actionButton: {
     flexDirection: "row",
@@ -636,7 +832,6 @@ const styles = StyleSheet.create({
   actionContent: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
   },
   actionText: {
     color: colors.textSecondary,
@@ -649,6 +844,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     position: "relative",
     height: 24,
+    width: 22,
     marginRight: 6,
   },
   reactionBubble: {
@@ -666,75 +862,237 @@ const styles = StyleSheet.create({
   },
   reactionText: { fontSize: 12 },
   reactionCount: { fontSize: 13, color: colors.textSecondary },
-  // Reaction Picker Styles
-  reactionPickerContainer: {
-    position: 'relative',
-    marginTop: 8,
-  },
-  reactionPicker: {
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 12,
-    backgroundColor: colors.background,
-    borderRadius: 30,
-    shadowColor: colors.primary,
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 3,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  reactionOption: {
-    alignItems: 'center',
-    marginHorizontal: 8,
-    paddingVertical: 4,
-    paddingHorizontal: 6,
-    borderRadius: 8,
-  },
-  reactionIcon: {
-    fontSize: 24,
-    marginBottom: 2,
-  },
-  reactionLabel: {
-    fontSize: 10,
-    color: colors.textSecondary,
-    textAlign: 'center',
-  },
-  reactionPickerClose: {
-    position: 'absolute',
-    top: -8,
-    right: -8,
-    backgroundColor: colors.background,
-    borderRadius: 12,
-    width: 24,
-    height: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: colors.primary,
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-
   // Action button with reaction emoji
   reactionEmoji: {
     fontSize: 20,
     marginRight: 6,
   },
-
-  // Overlay to close reaction picker
-  reactionPickerOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: -1,
+  // Options Menu Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  optionsMenu: {
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    width: 180,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: colors.border,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  optionItem: {
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+  },
+  optionText: {
+    color: colors.textPrimary,
+    fontSize: 16,
+    fontFamily: 'Gilroy-Medium',
+  },
+  reportOptionTextMenu: {
+    color: colors.error || '#ef4444',
+  },
+  reportOptionText: {
+    color: colors.textPrimary,
+    fontSize: 16,
+    fontFamily: 'Gilroy-Regular',
+  },
+  optionDivider: {
+    height: 1,
+    backgroundColor: colors.border,
+  },
+  // Report Bottom Sheet Styles
+  bottomSheetOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  bottomSheet: {
+    backgroundColor: colors.card,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingTop: 12,
+    paddingBottom: 40,
+    maxHeight: '90%',
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderBottomWidth: 0,
+  },
+  bottomSheetHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: colors.textMuted,
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 20,
+  },
+  reportTitle: {
+    color: colors.textPrimary,
+    fontSize: 20,
+    fontFamily: 'Gilroy-Bold',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  reportSubtitle: {
+    color: colors.textPrimary,
+    fontSize: 16,
+    fontFamily: 'Gilroy-SemiBold',
+    textAlign: 'center',
+    marginBottom: 8,
+    paddingHorizontal: 20,
+  },
+  reportInfo: {
+    color: colors.textMuted,
+    fontSize: 13,
+    fontFamily: 'Gilroy-Regular',
+    textAlign: 'center',
+    marginBottom: 24,
+    paddingHorizontal: 20,
+    lineHeight: 18,
+  },
+  reportOptionsList: {
+    paddingHorizontal: 0,
+  },
+  reportOption: {
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  repostHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  repostIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  repostIndicatorText: {
+    fontSize: 14,
+    fontFamily: 'Gilroy-Medium',
+    color: colors.textSecondary,
+    marginLeft: 6,
+  },
+  reposterName: {
+    fontFamily: 'Gilroy-SemiBold',
+    color: colors.textPrimary,
+  },
+  repostTimestamp: {
+    fontSize: 12,
+    fontFamily: 'Gilroy-Regular',
+    color: colors.textMuted,
+  },
+  repostCommentContainer: {
+    backgroundColor: colors.backgroundElevated,
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 12,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.button,
+  },
+  repostCommentText: {
+    fontSize: 14,
+    fontFamily: 'Gilroy-Regular',
+    color: colors.textPrimary,
+    lineHeight: 20,
+  },
+  originalPostContainer: {
+    backgroundColor: colors.backgroundElevated,
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  repostModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  repostModal: {
+    backgroundColor: colors.card,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingTop: 12,
+    paddingBottom: 40,
+    paddingHorizontal: 20,
+    maxHeight: '80%',
+  },
+  repostModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+    paddingTop: 8,
+  },
+  repostModalTitle: {
+    fontSize: 20,
+    fontFamily: 'Gilroy-Bold',
+    color: colors.textPrimary,
+  },
+  repostModalSubtitle: {
+    fontSize: 15,
+    fontFamily: 'Gilroy-Medium',
+    color: colors.textSecondary,
+    marginBottom: 12,
+  },
+  repostCommentInput: {
+    backgroundColor: colors.backgroundElevated,
+    borderRadius: 12,
+    padding: 16,
+    minHeight: 120,
+    maxHeight: 200,
+    fontSize: 15,
+    fontFamily: 'Gilroy-Regular',
+    color: colors.textPrimary,
+    textAlignVertical: 'top',
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: 20,
+  },
+  repostModalActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  repostModalButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  repostCancelButton: {
+    backgroundColor: colors.backgroundElevated,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  repostCancelButtonText: {
+    fontSize: 16,
+    fontFamily: 'Gilroy-SemiBold',
+    color: colors.textPrimary,
+  },
+  repostConfirmButton: {
+    backgroundColor: colors.button,
+  },
+  repostConfirmButtonText: {
+    fontSize: 16,
+    fontFamily: 'Gilroy-SemiBold',
+    color: colors.white,
   },
 });
 

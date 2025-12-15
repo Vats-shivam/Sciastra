@@ -12,6 +12,7 @@ import {
   StatusBar,
   ActivityIndicator,
 } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { useNavigation } from "@react-navigation/native";
 import colors from "../config/colors";
@@ -20,21 +21,35 @@ import PostCard from "../components/PostCard";
 import Header from "../components/Header";
 import { useLoader } from "../context/LoaderContext";
 import useScreenApiLogger from "../hooks/useScreenApiLogger";
+import CustomRefreshControl from "../components/CustomRefreshControl";
 
 const trendingSearches = ["React Native", "AI", "Blockchain", "Jobs", "Events"];
-const POSTS_PER_PAGE = 15;
+const POSTS_PER_PAGE = 50;
+
+// Fisher-Yates shuffle algorithm
+const shuffleArray = (array) => {
+  const shuffled = [...array];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+};
 
 const HomeScreen = () => {
   const navigation = useNavigation();
   const { showLoader, hideLoader } = useLoader();
+  const insets = useSafeAreaInsets();
   const [searching, setSearching] = useState(false);
   const [searchText, setSearchText] = useState("");
+  const [searchLoading, setSearchLoading] = useState(false);
   const [feedPosts, setFeedPosts] = useState([]);
   const [searchResultsPosts, setSearchResultsPosts] = useState([]);
   const [searchResultsPeople, setSearchResultsPeople] = useState([]);
   const [nextCursor, setNextCursor] = useState(null);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const loadingMoreRef = useRef(false);
   const lastCursorRef = useRef(null);
   const seenPostIdsRef = useRef(new Set());
@@ -62,7 +77,7 @@ const HomeScreen = () => {
     };
   }, [searchText, searching]);
 
-  const loadFeedPosts = async (cursor = null) => {
+  const loadFeedPosts = async (cursor = null, skipLoader = false) => {
     const isLoadMore = Boolean(cursor);
 
     if (isLoadMore) {
@@ -83,7 +98,9 @@ const HomeScreen = () => {
       // Reset bookkeeping for a fresh load
       seenPostIdsRef.current = new Set();
       lastCursorRef.current = null;
-      showLoader();
+      if (!skipLoader) {
+        showLoader();
+      }
     }
 
     try {
@@ -123,7 +140,9 @@ const HomeScreen = () => {
           seenPostIdsRef.current = new Set(
             posts.filter((p) => p?.id).map((p) => p.id)
           );
-          setFeedPosts(posts);
+          // Shuffle posts on refresh/initial load
+          const shuffledPosts = shuffleArray(posts);
+          setFeedPosts(shuffledPosts);
         }
 
         const newCursor = pagination.nextCursor || null;
@@ -160,7 +179,9 @@ const HomeScreen = () => {
         loadingMoreRef.current = false;
         setLoadingMore(false);
       } else {
-        hideLoader();
+        if (!skipLoader) {
+          hideLoader();
+        }
       }
     }
   };
@@ -172,10 +193,20 @@ const HomeScreen = () => {
     loadFeedPosts(nextCursor);
   };
 
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await loadFeedPosts(null, true); // Skip loader during refresh
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   const performSearch = async (query) => {
     if (!query.trim()) {
       setSearchResultsPosts([]);
       setSearchResultsPeople([]);
+      setSearchLoading(false);
       return;
     }
 
@@ -183,9 +214,11 @@ const HomeScreen = () => {
     if (query.trim().length < 2) {
       setSearchResultsPosts([]);
       setSearchResultsPeople([]);
+      setSearchLoading(false);
       return;
     }
 
+    setSearchLoading(true);
     try {
       // Search using the new PostApi
       const searchResult = await postApi.search(query, 'all', 1, 10);
@@ -200,6 +233,7 @@ const HomeScreen = () => {
           // Just clear results for short queries - this is expected behavior
           setSearchResultsPosts([]);
           setSearchResultsPeople([]);
+          setSearchLoading(false);
           return;
         }
         // Fallback to local search
@@ -228,6 +262,8 @@ const HomeScreen = () => {
       );
       
       setSearchResultsPeople([]);
+    } finally {
+      setSearchLoading(false);
     }
   };
 
@@ -235,6 +271,7 @@ const HomeScreen = () => {
     setSearchText("");
     setSearchResultsPosts([]);
     setSearchResultsPeople([]);
+    setSearchLoading(false);
   };
 
   const handlePostClick = async (postId) => {
@@ -260,6 +297,12 @@ const HomeScreen = () => {
       contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 100 }}
       onEndReached={handleLoadMore}
       onEndReachedThreshold={0.5}
+      refreshControl={
+        <CustomRefreshControl
+          refreshing={refreshing}
+          onRefresh={handleRefresh}
+        />
+      }
       ListFooterComponent={() =>
         loadingMore ? (
           <View style={styles.footerLoader}>
@@ -270,70 +313,88 @@ const HomeScreen = () => {
     />
   );
 
-  const renderSearchResults = () => (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      style={{ flex: 1 }}
-    >
-      <View style={{ backgroundColor: colors.background, flex: 1 }}>
-        {searchResultsPosts.length > 0 && (
-          <>
-            <Text style={styles.sectionHeader}>Posts</Text>
-            <FlatList
-              data={searchResultsPosts}
-              keyExtractor={(item) => item.id}
-              renderItem={({ item }) => <PostCard post={item} />}
-              showsVerticalScrollIndicator={false}
-            />
-          </>
-        )}
-        {searchResultsPeople.length > 0 && (
-          <>
-            <Text style={styles.sectionHeader}>People</Text>
-            <FlatList
-              data={searchResultsPeople}
-              keyExtractor={(item) => item.id}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={styles.peopleCard}
-                  onPress={() => {
-                    // Check if this is the current user
-                    if (item.id === "1") {
-                      // Current user ID is '1'
-                      navigation.navigate("Profile");
-                    } else {
-                      navigation.navigate("UserProfile", { userId: item.id });
-                    }
-                  }}
-                >
-                  <Image
-                    source={
-                      item.profilePic
-                        ? { uri: item.profilePic }
-                        : require("../assets/icon.png")
-                    }
-                    style={styles.avatarSmall}
+  const renderSearchResults = () => {
+    const hasResults = searchResultsPosts.length > 0 || searchResultsPeople.length > 0;
+    const showNoResults = !searchLoading && searchText.trim().length >= 2 && !hasResults;
+
+    return (
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={{ flex: 1 }}
+      >
+        <View style={{ backgroundColor: colors.background, flex: 1 }}>
+          {searchLoading ? (
+            <View style={styles.searchLoadingContainer}>
+              <ActivityIndicator size="large" color={colors.primary} />
+              <Text style={styles.searchLoadingText}>Searching...</Text>
+            </View>
+          ) : showNoResults ? (
+            <View style={styles.noResultsContainer}>
+              <Icon name="magnify-remove" size={64} color={colors.textMuted} />
+              <Text style={styles.noResultsText}>No results found</Text>
+              <Text style={styles.noResultsSubtext}>Try different keywords or search terms</Text>
+            </View>
+          ) : (
+            <>
+              {searchResultsPosts.length > 0 && (
+                <>
+                  <Text style={styles.sectionHeader}>Posts</Text>
+                  <FlatList
+                    data={searchResultsPosts}
+                    keyExtractor={(item) => item.id}
+                    renderItem={({ item }) => <PostCard post={item} />}
+                    showsVerticalScrollIndicator={false}
                   />
-                  <View style={{ flex: 1, marginLeft: 8 }}>
-                    <Text style={styles.personName}>{item.name}</Text>
-                    <Text style={styles.subTitle}>{item.bio}</Text>
-                  </View>
-                </TouchableOpacity>
+                </>
               )}
-            />
-          </>
-        )}
-      </View>
-    </KeyboardAvoidingView>
-  );
+              {searchResultsPeople.length > 0 && (
+                <>
+                  <Text style={styles.sectionHeader}>People</Text>
+                  <FlatList
+                    data={searchResultsPeople}
+                    keyExtractor={(item) => item.id}
+                    renderItem={({ item }) => (
+                      <TouchableOpacity
+                        style={styles.peopleCard}
+                        onPress={() => {
+                          // Check if this is the current user
+                          if (item.id === "1") {
+                            // Current user ID is '1'
+                            navigation.navigate("Profile");
+                          } else {
+                            navigation.navigate("UserProfile", { userId: item.id });
+                          }
+                        }}
+                      >
+                        <Image
+                          source={
+                            item.profilePic
+                              ? { uri: item.profilePic }
+                              : require("../assets/icon.png")
+                          }
+                          style={styles.avatarSmall}
+                        />
+                        <View style={{ flex: 1, marginLeft: 8 }}>
+                          <Text style={styles.personName}>{item.name}</Text>
+                          <Text style={styles.subTitle}>{item.bio}</Text>
+                        </View>
+                      </TouchableOpacity>
+                    )}
+                  />
+                </>
+              )}
+            </>
+          )}
+        </View>
+      </KeyboardAvoidingView>
+    );
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <StatusBar barStyle="light-content" backgroundColor={colors.background} translucent={false} />
       {/* Header with Search */}
-      <View style={[
-        styles.headerContainer,
-        searching && styles.headerContainerSearching
-      ]}>
+      <View style={styles.headerContainer}>
         {!searching ? (
           <Header
             title="SCICOMM"
@@ -343,28 +404,33 @@ const HomeScreen = () => {
             onChatPress={() => navigation.navigate("ChatList")}
           />
         ) : (
-          <View style={styles.searchBar}>
-            <TouchableOpacity
-              onPress={() => {
-                setSearching(false);
-                clearSearch();
-              }}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <Icon
-                name="arrow-left"
-                size={20}
-                color={colors.textPrimary}
+          <View style={[
+            styles.searchBarContainer,
+            { paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) : 0 }
+          ]}>
+            <View style={styles.searchBar}>
+              <TouchableOpacity
+                onPress={() => {
+                  setSearching(false);
+                  clearSearch();
+                }}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Icon
+                  name="arrow-left"
+                  size={20}
+                  color={colors.textPrimary}
+                />
+              </TouchableOpacity>
+              <TextInput
+                autoFocus
+                placeholder="Search posts or people"
+                placeholderTextColor={colors.textMuted}
+                style={styles.searchInput}
+                value={searchText}
+                onChangeText={setSearchText}
               />
-            </TouchableOpacity>
-            <TextInput
-              autoFocus
-              placeholder="Search posts or people"
-              placeholderTextColor={colors.textMuted}
-              style={styles.searchInput}
-              value={searchText}
-              onChangeText={setSearchText}
-            />
+            </View>
           </View>
         )}
       </View>
@@ -401,8 +467,8 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
     backgroundColor: colors.background,
   },
-  headerContainerSearching: {
-    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 8 : 44,
+  searchBarContainer: {
+    paddingHorizontal: 12,
   },
   searchBar: {
     flexDirection: "row",
@@ -410,7 +476,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     borderRadius: 20,
     height: 40,
-    marginHorizontal: 12,
     paddingHorizontal: 12,
     borderWidth: 1,
     borderColor: colors.border,
@@ -479,6 +544,38 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     alignItems: "center",
     justifyContent: "center",
+  },
+  searchLoadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 50,
+  },
+  searchLoadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    fontFamily: 'Gilroy-Medium',
+    color: colors.textSecondary,
+  },
+  noResultsContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 50,
+    paddingHorizontal: 32,
+  },
+  noResultsText: {
+    fontSize: 18,
+    fontFamily: 'Gilroy-Bold',
+    color: colors.textPrimary,
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  noResultsSubtext: {
+    fontSize: 14,
+    fontFamily: 'Gilroy-Regular',
+    color: colors.textSecondary,
+    textAlign: 'center',
   },
 });
 

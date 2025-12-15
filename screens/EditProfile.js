@@ -1,10 +1,11 @@
 // screens/EditProfileScreen.js
 import React, { useState, useEffect } from 'react';
-import { View, TextInput, StyleSheet, Image, TouchableOpacity, Text, ScrollView, KeyboardAvoidingView, Platform, Modal } from 'react-native';
+import { View, TextInput, StyleSheet, Image, TouchableOpacity, Text, ScrollView, KeyboardAvoidingView, Platform, Modal, Alert } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Container from '../components/Container';
 import Button from '../components/Button';
+import Header from '../components/Header';
 import colors from '../config/colors';
 import authManager from '../services/AuthManager';
 import profileApi from '../api/ProfileApi';
@@ -17,6 +18,7 @@ const EditProfileScreen = ({ navigation }) => {
   const [name, setName] = useState('');
   const [profession, setProfession] = useState('');
   const [email, setEmail] = useState('');
+  const [bio, setBio] = useState('');
   const [topics, setTopics] = useState([]);
   const [skills, setSkills] = useState([]);
   const [experiences, setExperiences] = useState([]);
@@ -94,9 +96,8 @@ const EditProfileScreen = ({ navigation }) => {
     setExperiences(updatedExperiences);
   };
 
-  const removeExperience = (index) => {
-    setExperiences(experiences.filter((_, i) => i !== index));
-  };
+  // Removed removeExperience - no API endpoint to delete individual experiences
+  // Users can remove by clearing fields and saving, or backend handles it via full profile update
 
   const addEducation = () => {
     const newEducation = {
@@ -117,9 +118,8 @@ const EditProfileScreen = ({ navigation }) => {
     setEducation(updatedEducation);
   };
 
-  const removeEducation = (index) => {
-    setEducation(education.filter((_, i) => i !== index));
-  };
+  // Removed removeEducation - no API endpoint to delete individual education entries
+  // Users can remove by clearing fields and saving, or backend handles it via full profile update
 
   // Date utility functions
   const formatDateForDisplay = (dateString) => {
@@ -179,11 +179,57 @@ const EditProfileScreen = ({ navigation }) => {
     if (currentDateField) {
       const [type, itemIndex, field] = currentDateField.split('_');
       const formattedDate = formatDateForAPI(selectedYear, selectedMonth);
+      const index = parseInt(itemIndex);
 
+      // Validate date range
       if (type === 'experience') {
-        updateExperience(parseInt(itemIndex), field, formattedDate);
+        const experience = experiences[index];
+        if (field === 'startDate' && experience.endDate && !experience.isCurrentRole) {
+          // Check if start date is after end date
+          const startDate = new Date(selectedYear, selectedMonth - 1);
+          const [endMonth, endYear] = experience.endDate.split('/');
+          const endDate = new Date(parseInt(endYear), parseInt(endMonth) - 1);
+          
+          if (startDate > endDate) {
+            showError('Start date cannot be after end date');
+            return;
+          }
+        } else if (field === 'endDate' && experience.startDate) {
+          // Check if end date is before start date
+          const [startMonth, startYear] = experience.startDate.split('/');
+          const startDate = new Date(parseInt(startYear), parseInt(startMonth) - 1);
+          const endDate = new Date(selectedYear, selectedMonth - 1);
+          
+          if (endDate < startDate) {
+            showError('End date cannot be before start date');
+            return;
+          }
+        }
+        updateExperience(index, field, formattedDate);
       } else if (type === 'education') {
-        updateEducation(parseInt(itemIndex), field, formattedDate);
+        const edu = education[index];
+        if (field === 'startDate' && edu.endDate && !edu.isCurrent) {
+          // Check if start date is after end date
+          const startDate = new Date(selectedYear, selectedMonth - 1);
+          const [endMonth, endYear] = edu.endDate.split('/');
+          const endDate = new Date(parseInt(endYear), parseInt(endMonth) - 1);
+          
+          if (startDate > endDate) {
+            showError('Start date cannot be after end date');
+            return;
+          }
+        } else if (field === 'endDate' && edu.startDate) {
+          // Check if end date is before start date
+          const [startMonth, startYear] = edu.startDate.split('/');
+          const startDate = new Date(parseInt(startYear), parseInt(startMonth) - 1);
+          const endDate = new Date(selectedYear, selectedMonth - 1);
+          
+          if (endDate < startDate) {
+            showError('End date cannot be before start date');
+            return;
+          }
+        }
+        updateEducation(index, field, formattedDate);
       }
     }
 
@@ -230,6 +276,7 @@ const EditProfileScreen = ({ navigation }) => {
         setName(currentUser.name || '');
         setProfession(currentUser.profession || currentUser.designation || '');
         setEmail(currentUser.email || '');
+        setBio(currentUser.bio || '');
         setPhotoUri(currentUser.profilePic || null);
         setTopics(currentUser.topics || []);
         setSkills(currentUser.skills || []);
@@ -264,6 +311,7 @@ const EditProfileScreen = ({ navigation }) => {
         name: name.trim(),
         profession: profession.trim(),
         email: email.trim(),
+        bio: bio.trim() || undefined,
         topics: topics.length > 0 ? topics : undefined,
         skills: skills.length > 0 ? skills : undefined,
         experiences: experiences.length > 0 ? experiences.filter(exp =>
@@ -320,11 +368,21 @@ const EditProfileScreen = ({ navigation }) => {
 
   return (
     <Container>
+      <Header 
+        title="Edit Profile" 
+        showTitle={true}
+        showBackButton={true}
+        onBackPress={() => navigation.goBack()}
+      />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardAvoidingView}
       >
-        <ScrollView showsVerticalScrollIndicator={false} style={styles.scrollView}>
+        <ScrollView 
+          showsVerticalScrollIndicator={false} 
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+        >
         <TouchableOpacity onPress={pickImage} style={styles.photoContainer}>
           {photoUri ? (
             <Image source={{ uri: photoUri }} style={styles.avatar} />
@@ -363,10 +421,32 @@ const EditProfileScreen = ({ navigation }) => {
           maxLength={100}
         />
 
+        {/* Bio Section */}
+        <View style={styles.sectionContainer}>
+          <View style={styles.sectionTitleContainer}>
+            <Icon name="information-outline" size={20} color={colors.button} />
+            <Text style={styles.sectionTitle}>About</Text>
+          </View>
+          <TextInput
+            style={[styles.input, styles.bioInput]}
+            value={bio}
+            onChangeText={setBio}
+            placeholder="Tell others about yourself..."
+            placeholderTextColor={colors.textSecondary}
+            multiline
+            numberOfLines={5}
+            textAlignVertical="top"
+            maxLength={500}
+          />
+          <Text style={[styles.charCount, { color: 'white' }]}>{bio.length}/500</Text>
+        </View>
 
         {/* Topics Section */}
         <View style={styles.sectionContainer}>
-          <Text style={styles.sectionTitle}>Topics of Interest</Text>
+          <View style={styles.sectionTitleContainer}>
+            <Icon name="tag-outline" size={20} color={colors.button} />
+            <Text style={styles.sectionTitle}>Topics of Interest</Text>
+          </View>
           <View style={styles.addItemContainer}>
             <TextInput
               style={[styles.input, styles.addItemInput]}
@@ -398,7 +478,10 @@ const EditProfileScreen = ({ navigation }) => {
 
         {/* Skills Section */}
         <View style={styles.sectionContainer}>
-          <Text style={styles.sectionTitle}>Skills</Text>
+          <View style={styles.sectionTitleContainer}>
+            <Icon name="lightbulb-outline" size={20} color={colors.button} />
+            <Text style={styles.sectionTitle}>Skills</Text>
+          </View>
           <View style={styles.addItemContainer}>
             <TextInput
               style={[styles.input, styles.addItemInput]}
@@ -431,7 +514,10 @@ const EditProfileScreen = ({ navigation }) => {
         {/* Experience Section */}
         <View style={styles.sectionContainer}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Work Experience</Text>
+            <View style={styles.sectionTitleContainer}>
+              <Icon name="briefcase-outline" size={20} color={colors.button} />
+              <Text style={styles.sectionTitle}>Work Experience</Text>
+            </View>
             <TouchableOpacity style={styles.addSectionButton} onPress={addExperience}>
               <Icon name="plus" size={18} color="white" />
               <Text style={styles.addSectionButtonText}>Add</Text>
@@ -441,9 +527,6 @@ const EditProfileScreen = ({ navigation }) => {
             <View key={index} style={styles.experienceCard}>
               <View style={styles.cardHeader}>
                 <Text style={styles.cardTitle}>Experience {index + 1}</Text>
-                <TouchableOpacity onPress={() => removeExperience(index)}>
-                  <Icon name="trash-can-outline" size={20} color="#ff6b6b" />
-                </TouchableOpacity>
               </View>
               <TextInput
                 style={styles.input}
@@ -525,7 +608,10 @@ const EditProfileScreen = ({ navigation }) => {
         {/* Education Section */}
         <View style={styles.sectionContainer}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Education</Text>
+            <View style={styles.sectionTitleContainer}>
+              <Icon name="school-outline" size={20} color={colors.button} />
+              <Text style={styles.sectionTitle}>Education</Text>
+            </View>
             <TouchableOpacity style={styles.addSectionButton} onPress={addEducation}>
               <Icon name="plus" size={18} color="white" />
               <Text style={styles.addSectionButtonText}>Add</Text>
@@ -535,9 +621,6 @@ const EditProfileScreen = ({ navigation }) => {
             <View key={index} style={styles.experienceCard}>
               <View style={styles.cardHeader}>
                 <Text style={styles.cardTitle}>Education {index + 1}</Text>
-                <TouchableOpacity onPress={() => removeEducation(index)}>
-                  <Icon name="trash-can-outline" size={20} color="#ff6b6b" />
-                </TouchableOpacity>
               </View>
               <TextInput
                 style={styles.input}
@@ -620,8 +703,6 @@ const EditProfileScreen = ({ navigation }) => {
             </View>
           ))}
         </View>
-
-        <Button title="Save Changes" onPress={handleSave} />
 
         {/* Custom Date Picker Modal */}
         <Modal
@@ -725,6 +806,11 @@ const EditProfileScreen = ({ navigation }) => {
         </Modal>
       </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Floating Save Button */}
+      <View style={styles.floatingButtonContainer}>
+        <Button title="Save Changes" onPress={handleSave} style={styles.floatingSaveButton} />
+      </View>
     </Container>
   );
 };
@@ -736,38 +822,66 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
   },
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 100, // Extra padding for floating button
+  },
   photoContainer: {
     alignSelf: 'center',
-    marginBottom: 20,
+    marginTop: 20,
+    marginBottom: 24,
+    position: 'relative',
   },
   avatar: {
     width: 120,
     height: 120,
     borderRadius: 60,
     alignSelf: 'center',
+    borderWidth: 4,
+    borderColor: colors.button,
+    shadowColor: colors.button,
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
   },
   avatarPlaceholder: {
     width: 120,
     height: 120,
-    backgroundColor: colors.secondary,
+    backgroundColor: colors.backgroundElevated,
     borderRadius: 60,
     justifyContent: 'center',
     alignItems: 'center',
     alignSelf: 'center',
+    borderWidth: 3,
+    borderColor: colors.border,
   },
   avatarPlaceholderText: {
-    color: colors.white,
-    fontWeight: 'bold',
+    color: colors.textPrimary,
+    fontFamily: 'Gilroy-SemiBold',
+    fontSize: 14,
   },
   input: {
-    backgroundColor: colors.backgroundSecondary,
+    backgroundColor: colors.backgroundElevated,
     borderColor: colors.border,
     borderWidth: 1,
-    borderRadius: 8,
-    padding: 12,
+    borderRadius: 14,
+    padding: 16,
     marginBottom: 16,
     color: colors.textPrimary,
     fontSize: 16,
+    fontFamily: 'Gilroy-Regular',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
   textArea: {
     height: 80,
@@ -784,20 +898,30 @@ const styles = StyleSheet.create({
   },
   sectionContainer: {
     marginBottom: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.02)',
-    borderRadius: 12,
-    padding: 16,
+    backgroundColor: colors.card,
+    borderRadius: 18,
+    padding: 24,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.05)',
+    borderColor: colors.border,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  sectionTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
   },
   sectionTitle: {
-    color: colors.white,
+    color: colors.textPrimary,
     fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 12,
-    textShadowColor: 'rgba(0, 0, 0, 0.5)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
+    fontFamily: 'Gilroy-Bold',
+    marginLeft: 8,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -845,22 +969,25 @@ const styles = StyleSheet.create({
   tag: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.button,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    backgroundColor: colors.backgroundElevated,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     borderRadius: 20,
     marginRight: 8,
     marginBottom: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   tagText: {
-    color: 'white',
+    color: colors.textPrimary,
     fontSize: 14,
-    marginRight: 6,
+    fontFamily: 'Gilroy-Medium',
+    marginRight: 8,
   },
   experienceCard: {
     backgroundColor: colors.backgroundElevated,
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 16,
+    padding: 20,
     marginBottom: 16,
     borderWidth: 1,
     borderColor: colors.border,
@@ -870,14 +997,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
   cardTitle: {
-    color: colors.white,
+    color: colors.textPrimary,
     fontSize: 16,
-    fontWeight: '700',
-    textShadowColor: 'rgba(0, 0, 0, 0.3)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 1,
+    fontFamily: 'Gilroy-Bold',
   },
   dateContainer: {
     flexDirection: 'row',
@@ -900,6 +1027,30 @@ const styles = StyleSheet.create({
   checkboxText: {
     color: colors.textPrimary,
     fontSize: 14,
+    fontFamily: 'Gilroy-Regular',
+  },
+  floatingButtonContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 16,
+    paddingBottom: 20,
+    paddingTop: 12,
+    backgroundColor: colors.background,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: -2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  floatingSaveButton: {
+    marginHorizontal: 0,
   },
   datePickerButton: {
     flexDirection: 'row',

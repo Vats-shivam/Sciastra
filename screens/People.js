@@ -9,7 +9,6 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
-  RefreshControl,
 } from "react-native";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import colors from "../config/colors";
@@ -21,6 +20,7 @@ import postApi from "../api/PostApi";
 import { useLoader } from "../context/LoaderContext";
 import useScreenApiLogger from "../hooks/useScreenApiLogger";
 import { getProfileImageSource } from "../utils/profileImage";
+import CustomRefreshControl from "../components/CustomRefreshControl";
 
 
 const PEOPLE_CATEGORIES = [
@@ -267,7 +267,9 @@ const ConnectionsScreen = () => {
           source={
             profileImageErrors[item.id]
               ? require("../assets/icon.png")
-              : getProfileImageSource(item.user || { profilePic: item.profilePic }, { fallbackKey: item.profilePic })
+              : getProfileImageSource(item.user || item, { 
+                  fallbackKey: item.profilePic || item.user?.profilePic || item.user?.profile?.profilePic 
+                })
           }
           style={styles.avatar}
           resizeMode="cover"
@@ -276,32 +278,38 @@ const ConnectionsScreen = () => {
             setProfileImageErrors((prev) => ({ ...prev, [item.id]: true }))
           }
         />
-        <View style={{ flex: 1 }}>
+        <View style={styles.userInfoContainer}>
           <Text style={styles.name}>{item.name}</Text>
           <Text style={styles.designation}>{item.designation}</Text>
-          <Text style={styles.mutual}>
-            {item.mutualConnections} mutual connections
-          </Text>
+          {item.mutualConnections > 0 && (
+            <Text style={styles.mutual}>
+              {item.mutualConnections} mutual {item.mutualConnections === 1 ? 'connection' : 'connections'}
+            </Text>
+          )}
         </View>
-        {isConnection ? (
-          <TouchableOpacity
-            style={styles.actionBtn}
-            onPress={() => handleMessagePress(item)}
-          >
-            <Text style={styles.actionBtnText}>Message</Text>
-          </TouchableOpacity>
-        ) : hasRequestPending ? (
-          <View style={styles.pendingBtn}>
-            <Text style={styles.pendingText}>Pending</Text>
-          </View>
-        ) : (
-          <TouchableOpacity
-            style={styles.connectBtn}
-            onPress={() => handleSendConnectionRequest(item.id, item.name)}
-          >
-            <Icon name="account-plus" size={18} color={colors.white} />
-          </TouchableOpacity>
-        )}
+        <View style={styles.actionContainer}>
+          {isConnection ? (
+            <TouchableOpacity
+              style={styles.actionBtn}
+              onPress={() => handleMessagePress(item)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.actionBtnText}>Message</Text>
+            </TouchableOpacity>
+          ) : hasRequestPending ? (
+            <View style={styles.pendingBtn}>
+              <Text style={styles.pendingText}>Pending</Text>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={styles.connectBtn}
+              onPress={() => handleSendConnectionRequest(item.id, item.name)}
+              activeOpacity={0.8}
+            >
+              <Icon name="account-plus" size={18} color={colors.white} />
+            </TouchableOpacity>
+          )}
+        </View>
       </TouchableOpacity>
     );
   }, [connections, receivedRequests]);
@@ -359,7 +367,9 @@ const ConnectionsScreen = () => {
           source={
             profileImageErrors[item.id]
               ? require("../assets/icon.png")
-              : getProfileImageSource(item.user || { profilePic: item.profilePic }, { fallbackKey: item.profilePic })
+              : getProfileImageSource(item.user || item, { 
+                  fallbackKey: item.profilePic || item.user?.profilePic || item.user?.profile?.profilePic 
+                })
           }
           style={styles.avatar}
           resizeMode="cover"
@@ -368,22 +378,24 @@ const ConnectionsScreen = () => {
             setProfileImageErrors((prev) => ({ ...prev, [item.id]: true }))
           }
         />
-        <View style={{ flex: 1 }}>
+        <View style={styles.userInfoContainer}>
           <Text style={styles.name}>{item.name}</Text>
           <Text style={styles.designation}>{item.designation}</Text>
         </View>
-        <View style={{ flexDirection: "row" }}>
+        <View style={styles.inviteActionContainer}>
           <TouchableOpacity 
             style={styles.acceptBtn}
             onPress={() => handleAcceptRequest(item.connectionId, item.name)}
+            activeOpacity={0.8}
           >
-            <Text style={styles.acceptText}>Accept</Text>
+            <Icon name="check" size={20} color={colors.white} />
           </TouchableOpacity>
           <TouchableOpacity 
             style={styles.ignoreBtn}
             onPress={() => handleRejectRequest(item.connectionId, item.name)}
+            activeOpacity={0.8}
           >
-            <Text style={styles.ignoreText}>Reject</Text>
+            <Icon name="close" size={20} color={colors.textSecondary} />
           </TouchableOpacity>
         </View>
       </TouchableOpacity>
@@ -392,7 +404,9 @@ const ConnectionsScreen = () => {
 
   const renderSearchBar = () => (
     <View style={styles.searchBarContainer}>
-      <Icon name="magnify" size={22} color={colors.textMuted} style={styles.searchIcon} />
+      <View style={styles.searchIconContainer}>
+        <Icon name="magnify" size={20} color={colors.textMuted} />
+      </View>
       <TextInput
         style={styles.searchBar}
         placeholder="Search connections & people..."
@@ -403,11 +417,17 @@ const ConnectionsScreen = () => {
         autoCorrect={false}
       />
       {searching && (
-        <Icon name="loading" size={20} color={colors.primary} style={styles.searchActionIcon} />
+        <View style={styles.searchActionContainer}>
+          <Icon name="loading" size={18} color={colors.button} />
+        </View>
       )}
       {searchQuery.length > 0 && !searching && (
-        <TouchableOpacity onPress={() => handleSearch('')}>
-          <Icon name="close-circle" size={20} color={colors.textMuted} style={styles.searchActionIcon} />
+        <TouchableOpacity 
+          onPress={() => handleSearch('')}
+          style={styles.searchActionContainer}
+          activeOpacity={0.7}
+        >
+          <Icon name="close-circle" size={18} color={colors.textMuted} />
         </TouchableOpacity>
       )}
     </View>
@@ -417,8 +437,7 @@ const ConnectionsScreen = () => {
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
-      contentContainerStyle={{ paddingHorizontal: 12 }}
-      style={{ marginTop: 4 }}
+      contentContainerStyle={styles.tabsContainer}
     >
       {PEOPLE_CATEGORIES.map((cat) => (
         <TouchableOpacity
@@ -427,14 +446,19 @@ const ConnectionsScreen = () => {
             styles.catChip,
             activeCategory === cat.id && styles.catChipActive,
           ]}
-          
           onPress={() => setActiveCategory(cat.id)}
+          activeOpacity={0.7}
         >
-          <Icon
-            name={cat.icon}
-            size={18}
-            color={activeCategory === cat.id ? colors.black : colors.textPrimary}
-          />
+          <View style={[
+            styles.catIconContainer,
+            activeCategory === cat.id && styles.catIconContainerActive
+          ]}>
+            <Icon
+              name={cat.icon}
+              size={16}
+              color={activeCategory === cat.id ? colors.white : colors.textSecondary}
+            />
+          </View>
           <Text style={[styles.catText, activeCategory === cat.id && styles.catTextActive]}>
             {cat.label}
           </Text>
@@ -473,11 +497,9 @@ const ConnectionsScreen = () => {
         keyExtractor={(item) => item.id}
         renderItem={isInvites ? renderInvite : renderConnection}
         refreshControl={
-          <RefreshControl
+          <CustomRefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            colors={[colors.primary]}
-            tintColor={colors.primary}
           />
         }
         ListHeaderComponent={
@@ -528,33 +550,49 @@ const styles = StyleSheet.create({
   searchBarContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.backgroundElevated,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginBottom: 8,
+    backgroundColor: colors.card,
+    borderRadius: 14,
+    paddingHorizontal: 4,
+    paddingVertical: 4,
+    marginBottom: 12,
     borderWidth: 1,
     borderColor: colors.border,
   },
+  searchIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: colors.backgroundElevated,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  searchBar: {
+    flex: 1,
+    color: colors.textPrimary,
+    fontSize: 15,
+    fontFamily: 'Gilroy-Medium',
+    paddingVertical: 8,
+  },
+  searchActionContainer: {
+    width: 32,
+    height: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 4,
+  },
   listHeader: {
     paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 8,
+    paddingTop: 16,
+    paddingBottom: 12,
   },
   listContentNew: {
     paddingHorizontal: 16,
     paddingBottom: 120,
   },
-  searchIcon: {
-    marginRight: 8,
-  },
-  searchBar: {
-    flex: 1,
-    color: colors.white,
-    fontSize: 16,
-  },
-  searchActionIcon: {
-    marginLeft: 8,
+  tabsContainer: {
+    paddingHorizontal: 4,
+    paddingVertical: 4,
   },
   sectionTitle: {
     fontSize: 18,
@@ -567,60 +605,95 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: colors.card,
-    padding: 12,
-    borderRadius: 12,
-    marginBottom: 10,
-    shadowColor: colors.black,
+    padding: 18,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: colors.border,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
     shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
+    shadowRadius: 6,
+    elevation: 3,
+    marginBottom: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
     width: '100%',
   },
   avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    marginRight: 16,
+    backgroundColor: colors.backgroundElevated,
+    borderWidth: 2,
+    borderColor: colors.border,
+    borderWidth: 2,
+    borderColor: colors.border,
+  },
+  userInfoContainer: {
+    flex: 1,
     marginRight: 12,
-    backgroundColor: colors.borderLight, // fallback if no image
   },
   name: {
     fontSize: 16,
     fontFamily: 'Gilroy-SemiBold',
     color: colors.textPrimary,
+    marginBottom: 4,
   },
   designation: {
-    fontSize: 14,
-    color: colors.textSecondary,
+    fontSize: 13,
+    fontFamily: 'Gilroy-Regular',
+    color: colors.textMuted,
+    marginBottom: 4,
   },
   mutual: {
     fontSize: 12,
+    fontFamily: 'Gilroy-Regular',
     color: colors.textMuted,
   },
+  actionContainer: {
+    alignItems: 'flex-end',
+  },
+  inviteActionContainer: {
+    flexDirection: "row",
+    gap: 8,
+  },
   actionBtn: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
+    backgroundColor: colors.button,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    minWidth: 90,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   actionBtnText: {
-    color: colors.textInverse,
+    color: colors.white,
     fontFamily: 'Gilroy-SemiBold',
+    fontSize: 13,
   },
   connectBtn: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
+    backgroundColor: colors.button,
+    width: 44,
+    height: 44,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
   },
   pendingBtn: {
     backgroundColor: colors.backgroundElevated,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.border,
+    minWidth: 90,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   pendingText: {
     color: colors.textMuted,
@@ -629,34 +702,31 @@ const styles = StyleSheet.create({
   },
   acceptBtn: {
     backgroundColor: colors.success,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    marginRight: 6,
-  },
-  acceptText: {
-    color: colors.textInverse,
-    fontFamily: 'Gilroy-SemiBold',
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   ignoreBtn: {
-    backgroundColor: colors.backgroundElevated,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
+    backgroundColor: colors.card,
+    width: 44,
+    height: 44,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: colors.borderLight,
-  },
-  ignoreText: {
-    color: colors.textMuted,
-    fontFamily: 'Gilroy-SemiBold',
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   showMoreBtn: {
     alignItems: "center",
-    paddingVertical: 6,
+    paddingVertical: 16,
+    marginTop: 8,
   },
   showMoreText: {
-    color: colors.secondary, // softer cyan for "show more"
+    color: colors.button,
     fontFamily: 'Gilroy-SemiBold',
+    fontSize: 14,
   },
   footerSpacer: {
     height: 32,
@@ -664,37 +734,57 @@ const styles = StyleSheet.create({
   catChip: {
     flexDirection: "row",
     alignItems: "center",
-    borderRadius: 14,
-    paddingHorizontal: 14,
+    justifyContent: "center",
+    borderRadius: 16,
+    paddingHorizontal: 16,
     paddingVertical: 10,
     backgroundColor: colors.card,
     borderWidth: 1,
     borderColor: colors.border,
     marginRight: 10,
-    height: 42,
-    marginBottom: 8,
+    minHeight: 44,
   },
-  catChipActive: { backgroundColor: colors.white },
-  catText: { marginLeft: 8, color: colors.textPrimary, fontWeight: "600" },
+  catChipActive: { 
+    backgroundColor: 'rgba(138, 43, 226, 0.15)',
+    borderColor: colors.button,
+  },
+  catIconContainer: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.backgroundElevated,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  catIconContainerActive: {
+    backgroundColor: colors.button,
+  },
+  catText: { 
+    color: colors.textPrimary, 
+    fontFamily: 'Gilroy-SemiBold',
+    fontSize: 14,
+  },
   catTextActive: { 
-    color: colors.black 
+    color: colors.button,
   },
   emptyContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 60,
+    paddingVertical: 80,
     paddingHorizontal: 20,
   },
   emptyText: {
     fontSize: 18,
-    fontWeight: '600',
+    fontFamily: 'Gilroy-Bold',
     color: colors.textPrimary,
-    marginTop: 16,
+    marginTop: 20,
     textAlign: 'center',
   },
   emptySubText: {
     fontSize: 14,
-    color: colors.textSecondary,
+    fontFamily: 'Gilroy-Regular',
+    color: colors.textMuted,
     marginTop: 8,
     textAlign: 'center',
   },

@@ -9,7 +9,6 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
-  RefreshControl,
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import colors from '../config/colors';
@@ -19,6 +18,8 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import ConnectionApi from '../api/ConnectionApi';
 import { useLoader } from '../context/LoaderContext';
 import useScreenApiLogger from '../hooks/useScreenApiLogger';
+import { getProfileImageSource } from '../utils/profileImage';
+import CustomRefreshControl from '../components/CustomRefreshControl';
 
 const REQUEST_CATEGORIES = [
   { id: 'received', label: 'Received', icon: 'account-clock' },
@@ -34,6 +35,7 @@ const ConnectionRequestsScreen = () => {
   const [sentRequests, setSentRequests] = useState([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [profileImageErrors, setProfileImageErrors] = useState({});
 
   useScreenApiLogger('ConnectionRequests');
 
@@ -285,11 +287,18 @@ const ConnectionRequestsScreen = () => {
       >
         <Image
           source={
-            item.profilePic
-              ? { uri: item.profilePic }
-              : require('../assets/icon.png')
+            profileImageErrors[item.id]
+              ? require('../assets/icon.png')
+              : getProfileImageSource(item, { 
+                  fallbackKey: item.profilePic 
+                })
           }
           style={styles.avatar}
+          resizeMode="cover"
+          defaultSource={require('../assets/icon.png')}
+          onError={() =>
+            setProfileImageErrors((prev) => ({ ...prev, [item.id]: true }))
+          }
         />
         <View style={{ flex: 1 }}>
           <Text style={styles.name}>{item.name}</Text>
@@ -346,11 +355,18 @@ const ConnectionRequestsScreen = () => {
       >
         <Image
           source={
-            item.profilePic
-              ? { uri: item.profilePic }
-              : require('../assets/icon.png')
+            profileImageErrors[item.id]
+              ? require('../assets/icon.png')
+              : getProfileImageSource(item, { 
+                  fallbackKey: item.profilePic 
+                })
           }
           style={styles.avatar}
+          resizeMode="cover"
+          defaultSource={require('../assets/icon.png')}
+          onError={() =>
+            setProfileImageErrors((prev) => ({ ...prev, [item.id]: true }))
+          }
         />
         <View style={{ flex: 1 }}>
           <Text style={styles.name}>{item.name}</Text>
@@ -428,11 +444,9 @@ const ConnectionRequestsScreen = () => {
         keyExtractor={(item) => `${item.id}-${item.connectionId}`}
         renderItem={renderItem}
         refreshControl={
-          <RefreshControl
+          <CustomRefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            colors={[colors.primary]}
-            tintColor={colors.primary}
           />
         }
         ListEmptyComponent={
@@ -574,6 +588,7 @@ const styles = StyleSheet.create({
   catChip: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     borderRadius: 14,
     paddingHorizontal: 14,
     paddingVertical: 10,
@@ -581,8 +596,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     marginRight: 10,
-    height: 42,
-    marginBottom: 30,
+    minHeight: 42,
+    marginBottom: 8,
   },
   catChipActive: {
     backgroundColor: colors.white,

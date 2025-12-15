@@ -1561,6 +1561,102 @@ class PostApiService {
       errors,
     };
   }
+
+  // Repost a post
+  async repostPost(originalPostId, comment = null) {
+    try {
+      const userId = authApi.getCurrentUserId();
+      if (!userId) {
+        throw new Error(ERROR_MESSAGES.UNAUTHORIZED);
+      }
+
+      if (!originalPostId) {
+        throw new Error('Original post ID is required');
+      }
+
+      console.log('🔄 Creating repost:', { originalPostId, hasComment: !!comment });
+
+      const payload = {
+        originalPostId: originalPostId
+      };
+
+      if (comment && comment.trim()) {
+        payload.comment = comment.trim();
+      }
+
+      const response = await this.makeRequest(`${this.baseUrl}/post/posts/repost`, {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+
+      if (response.success) {
+        console.log('✅ Repost created successfully:', response.data);
+        return {
+          success: true,
+          data: response.data,
+          message: 'Post reposted successfully'
+        };
+      } else {
+        throw new Error(response.message || 'Failed to repost');
+      }
+    } catch (error) {
+      console.error('❌ Repost Error:', error);
+      return {
+        success: false,
+        message: error.message || 'Failed to repost. Please try again.'
+      };
+    }
+  }
+
+  // Report a post
+  async reportPost(postId, reason, description = null) {
+    try {
+      const userId = authApi.getCurrentUserId();
+      if (!userId) {
+        throw new Error(ERROR_MESSAGES.UNAUTHORIZED);
+      }
+
+      if (!postId) {
+        throw new Error('Post ID is required');
+      }
+
+      if (!reason || reason.trim().length === 0) {
+        throw new Error('Reason is required');
+      }
+
+      console.log('🚩 Reporting post:', { postId, reason, hasDescription: !!description });
+
+      const payload = {
+        reason: reason.trim()
+      };
+
+      if (description && description.trim()) {
+        payload.description = description.trim();
+      }
+
+      const response = await this.makeRequest(`${this.baseUrl}/post/posts/${postId}/report`, {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+
+      if (response.success) {
+        console.log('✅ Post reported successfully:', response.data);
+        return {
+          success: true,
+          data: response.data,
+          message: response.message || 'Post reported successfully. Our team will review it.'
+        };
+      } else {
+        throw new Error(response.message || 'Failed to report post');
+      }
+    } catch (error) {
+      console.error('❌ Report Post Error:', error);
+      return {
+        success: false,
+        message: error.message || 'Failed to report post. Please try again.'
+      };
+    }
+  }
 }
 
 // Create and export singleton instance

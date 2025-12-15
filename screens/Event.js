@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, FlatList, RefreshControl } from "react-native";
+import React, { useState, useEffect, useMemo } from "react";
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, ScrollView } from "react-native";
 import colors from "../config/colors";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import EventCard from "../components/EventCard";
@@ -7,6 +7,7 @@ import Header from "../components/Header";
 import eventsApi from "../api/EventsApi";
 import { useLoader } from "../context/LoaderContext";
 import useScreenApiLogger from "../hooks/useScreenApiLogger";
+import CustomRefreshControl from "../components/CustomRefreshControl";
 
 const DEFAULT_CATEGORIES = [
   { id: "ALL", label: "All", icon: "format-list-bulleted" },
@@ -144,9 +145,6 @@ const EventScreen = ({ navigation }) => {
     }
   };
 
-  const handleSearch = (query) => {
-    setSearchQuery(query);
-  };
 
   const handleCategorySelect = (categoryId) => {
     setSelectedCategory(categoryId);
@@ -159,99 +157,104 @@ const EventScreen = ({ navigation }) => {
   };
 
   // Filter events by title based on search query
-  const filteredEvents = searchQuery.trim() 
-    ? events.filter(event => 
-        event.title?.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-    : events;
+  const filteredEvents = useMemo(() => {
+    return searchQuery.trim() 
+      ? events.filter(event => 
+          event.title?.toLowerCase().includes(searchQuery.toLowerCase())
+        )
+      : events;
+  }, [events, searchQuery]);
 
-  const renderEvents = () => {
-    const title = searchQuery.trim()
+  const title = useMemo(() => {
+    return searchQuery.trim()
       ? `Search Results for "${searchQuery}"`
       : selectedCategory === 'ALL'
       ? 'All Events'
       : `${categories.find(c => c.id === selectedCategory)?.label || selectedCategory} Events`;
+  }, [searchQuery, selectedCategory, categories]);
 
-    const emptyIcon = searchQuery.trim() ? "magnify-remove" : "calendar-remove";
-    const emptyTitle = searchQuery.trim()
-      ? 'No events found for your search'
-      : selectedCategory === 'ALL' 
-        ? 'No events available at the moment' 
-        : 'No events found in this category';
-    const emptySubText = searchQuery.trim()
-      ? 'Try different keywords or browse all events'
-      : selectedCategory === 'ALL' 
-        ? 'Check back later for new events' 
-        : 'Try selecting a different category';
+  const emptyIcon = searchQuery.trim() ? "magnify-remove" : "calendar-remove";
+  const emptyTitle = searchQuery.trim()
+    ? 'No events found for your search'
+    : selectedCategory === 'ALL' 
+      ? 'No events available at the moment' 
+      : 'No events found in this category';
+  const emptySubText = searchQuery.trim()
+    ? 'Try different keywords or browse all events'
+    : selectedCategory === 'ALL' 
+      ? 'Check back later for new events' 
+      : 'Try selecting a different category';
 
-    return (
-      <View style={{ paddingTop: 8, flex: 1 }}>
-        <SectionHeader title={title} onSeeAll={() => {}} />
-        <FlatList
-          data={filteredEvents}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <View style={{ marginHorizontal: 8 }}>
-              <EventCard event={item} onPress={() => goDetail(item)} />
-            </View>
-          )}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 20 }}
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Icon name={emptyIcon} size={64} color={colors.textMuted} />
-              <Text style={styles.emptyText}>{emptyTitle}</Text>
-              <Text style={styles.emptySubText}>{emptySubText}</Text>
-            </View>
-          }
-        />
-      </View>
-    );
-  };
+  const renderListFooter = () => (
+    <View style={styles.footer}>
+      <Text style={styles.footerTitle}>EXPLORE EVENTS WITH SCIASTRA</Text>
+      <Text style={styles.footerMade}>Made with 💙 in India</Text>
+    </View>
+  );
 
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: colors.background }}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={handleRefresh}
-          colors={[colors.primary]}
-          tintColor={colors.primary}
-        />
-      }
-    >
-      {/* Header */}
-      <Header title="EVENTS" />
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      {/* Fixed Header Section */}
+      <View style={{ backgroundColor: colors.background }}>
+        {/* Header */}
+        <Header title="EVENTS" />
 
-      {/* Search */}
-      <View style={styles.searchBar}>
-        <Icon name="magnify" size={22} color={colors.textMuted} />
-        <TextInput
-          placeholder="Search for events or topics"
-          placeholderTextColor={colors.textMuted}
-          style={styles.searchInput}
-          value={searchQuery}
-          onChangeText={handleSearch}
+        {/* Search - Outside FlatList to prevent re-renders */}
+        <View style={styles.searchBar}>
+          <Icon name="magnify" size={22} color={colors.textMuted} />
+          <TextInput
+            placeholder="Search for events or topics"
+            placeholderTextColor={colors.textMuted}
+            style={styles.searchInput}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            autoCorrect={false}
+            autoCapitalize="none"
+          />
+        </View>
+
+        {/* Categories */}
+        <CategoryTabs
+          categories={categories}
+          selectedCategory={selectedCategory}
+          onCategorySelect={handleCategorySelect}
         />
+
+        {/* Section Header */}
+        <View style={{ paddingTop: 8, paddingBottom: 8 }}>
+          <SectionHeader title={title} onSeeAll={() => {}} />
+        </View>
       </View>
 
-      {/* Categories */}
-      <CategoryTabs
-        categories={categories}
-        selectedCategory={selectedCategory}
-        onCategorySelect={handleCategorySelect}
+      {/* FlatList */}
+      <FlatList
+        data={filteredEvents}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => (
+          <View style={{ marginHorizontal: 8 }}>
+            <EventCard event={item} onPress={() => goDetail(item)} />
+          </View>
+        )}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 20 }}
+        ListFooterComponent={renderListFooter}
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Icon name={emptyIcon} size={64} color={colors.textMuted} />
+            <Text style={styles.emptyText}>{emptyTitle}</Text>
+            <Text style={styles.emptySubText}>{emptySubText}</Text>
+          </View>
+        }
+        refreshControl={
+          <CustomRefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+          />
+        }
+        keyboardShouldPersistTaps="handled"
+        style={{ flex: 1 }}
       />
-
-      {/* Events List */}
-      {renderEvents()}
-
-      {/* Footer */}
-      <View style={styles.footer}>
-        <Text style={styles.footerTitle}>EXPLORE EVENTS WITH SCIASTRA</Text>
-        <Text style={styles.footerMade}>Made with 💙 in India</Text>
-      </View>
-    </ScrollView>
+    </View>
   );
 };
 

@@ -1,6 +1,6 @@
 // screens/UserProfile.js
-import React, { useState, useEffect } from 'react';
-import { View, Text, Image, ScrollView, StyleSheet, TouchableOpacity, Modal, Animated, Alert } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, Image, ScrollView, StyleSheet, TouchableOpacity, Modal, Animated, Alert, Pressable } from 'react-native';
 import Container from '../components/Container';
 import colors from '../config/colors';
 import ConnectionApi from '../api/ConnectionApi';
@@ -13,9 +13,11 @@ import { useLoader } from "../context/LoaderContext";
 import { useNotification } from '../contexts/NotificationContext';
 import postApi from '../api/PostApi';
 import useScreenApiLogger from '../hooks/useScreenApiLogger';
+import authManager from '../services/AuthManager';
+import { getProfileImageSource } from '../utils/profileImage';
 
 const UserProfileScreen = ({ navigation, route }) => {
-  const { userId } = route.params;
+  const { userId, isOnline: initialOnlineStatus } = route.params || {};
   const [user, setUser] = useState(null);
   const [posts, setPosts] = useState([]);
   const [connectionStatus, setConnectionStatus] = useState('unknown');
@@ -24,19 +26,74 @@ const UserProfileScreen = ({ navigation, route }) => {
   const [activeTab, setActiveTab] = useState('About');
   const [showConnectionModal, setShowConnectionModal] = useState(false);
   const [modalAnimation] = useState(new Animated.Value(0));
+  const [isOnline, setIsOnline] = useState(initialOnlineStatus || false);
+  const statusHandlerRef = useRef(null);
+  const [showOptionsMenu, setShowOptionsMenu] = useState(false);
+  const [showReportSheet, setShowReportSheet] = useState(false);
   const { showLoader, hideLoader } = useLoader();
   const { showError, showSuccess, showWarning, showInfo } = useNotification();
 
   useScreenApiLogger('UserProfile');
 
   useEffect(() => {
-    // If this is the current user, redirect to Profile screen
-    if (userId === '1') {
-      navigation.replace('Profile');
+    // Check if this is the current user
+    const currentUser = authManager.getCurrentUser();
+    const currentUserId = currentUser?.id || currentUser?.userId || '1';
+    
+    // Compare userIds (handle both string and number)
+    if (String(userId) === String(currentUserId)) {
+      // Navigate to MainTabs and then to ProfileTab
+      navigation.navigate('MainTabs', { screen: 'ProfileTab' });
       return;
     }
     loadUserData();
+    initializeSocketListeners();
+    
+    // Cleanup on unmount
+    return () => {
+      cleanupSocketListeners();
+    };
   }, [userId]);
+
+  // Set up socket listeners for online/offline status
+  const initializeSocketListeners = async () => {
+    try {
+      // Initialize socket if not already initialized
+      await chatApi.initializeSocket();
+      
+      // Handle status change events
+      const handleStatusChange = (statusData) => {
+        console.log('UserProfile: Status change event received:', statusData);
+        const { userId: eventUserId, status } = statusData;
+        
+        // Check if this event is for the user we're viewing
+        if (String(eventUserId) === String(userId)) {
+          setIsOnline(status === 'online');
+          console.log(`UserProfile: User ${userId} is now ${status}`);
+        }
+      };
+      
+      // Add listener using ChatApi's status listener system
+      chatApi.addStatusListener(userId, handleStatusChange);
+      
+      // Store handler for cleanup
+      statusHandlerRef.current = handleStatusChange;
+    } catch (error) {
+      console.error('UserProfile: Error initializing socket listeners:', error);
+    }
+  };
+
+  // Cleanup socket listeners
+  const cleanupSocketListeners = () => {
+    try {
+      if (statusHandlerRef.current) {
+        chatApi.removeStatusListener(userId, statusHandlerRef.current);
+        statusHandlerRef.current = null;
+      }
+    } catch (error) {
+      console.error('UserProfile: Error cleaning up socket listeners:', error);
+    }
+  };
 
   const loadUserData = async () => {
     try {
@@ -76,15 +133,27 @@ const UserProfileScreen = ({ navigation, route }) => {
       setConnectionData(connectionInfo);
       
       // Fetch actual connections count for this user
-      // Note: For now using limit=1 just to get the total count from pagination
+      // Note: The API endpoint might not support getting connections for other users
+      // So we'll try to fetch it, but gracefully handle 404 errors
       try {
         const connectionsResult = await ConnectionApi.getUserConnections(userId, 1, 1);
         if (connectionsResult.success && connectionsResult.data) {
           const totalConnections = connectionsResult.data.pagination?.total || 0;
           profileResult.data.connectionsCount = totalConnections;
+        } else {
+          // If API call fails (e.g., 404), set to 0 or undefined
+          // Don't log 404 errors as they're expected if the endpoint doesn't support it
+          if (connectionsResult.status !== 404) {
+            console.log('Could not fetch connections count:', connectionsResult.error);
+          }
+          profileResult.data.connectionsCount = 0;
         }
       } catch (error) {
-        console.log('Could not fetch connections count:', error);
+        // Silently handle errors - the connections count is optional
+        // Only log non-404 errors
+        if (error?.response?.status !== 404 && error?.status !== 404) {
+          console.log('Could not fetch connections count:', error);
+        }
         // Set default to 0 if can't fetch
         profileResult.data.connectionsCount = 0;
       }
@@ -266,7 +335,7 @@ const UserProfileScreen = ({ navigation, route }) => {
             userId: userId,
             userName: user?.name,
             avatar: user?.profilePic,
-            isOnline: true, // Default to online since we don't have real-time status yet
+            isOnline: isOnline, // Use real-time online status
             roomId: chatResult.data.id,
           });
         } else {
@@ -481,7 +550,10 @@ const UserProfileScreen = ({ navigation, route }) => {
 
   const renderActionButton = () => {
     // Don't show any action button for current user
-    if (userId === '1') {
+    const currentUser = authManager.getCurrentUser();
+    const currentUserId = currentUser?.id || currentUser?.userId || '1';
+    
+    if (String(userId) === String(currentUserId)) {
       return null;
     }
 
@@ -560,16 +632,24 @@ const UserProfileScreen = ({ navigation, route }) => {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      {/* Header */}
       <Header title="PROFILE" />
       
       <ScrollView style={{ flex: 1 }}>
         {/* Profile Header */}
         <View style={styles.profileHeader}>
-          <Image
-            source={user.profilePic ? { uri: user.profilePic } : require('../assets/icon.png')}
-            style={styles.avatar}
-          />
+          <TouchableOpacity 
+            onPress={() => setShowOptionsMenu(true)}
+            style={styles.profileMenuButton}
+          >
+            <Icon name="dots-vertical" size={24} color={colors.textPrimary} />
+          </TouchableOpacity>
+          <View style={styles.avatarContainer}>
+            <Image
+              source={getProfileImageSource(user, { fallbackKey: user.profilePic })}
+              style={styles.avatar}
+            />
+            <View style={styles.avatarBorder} />
+          </View>
           <Text style={styles.name}>{user.name}</Text>
           <Text style={styles.designation}>{user.designation}</Text>
           
@@ -611,7 +691,7 @@ const UserProfileScreen = ({ navigation, route }) => {
               {/* Skills Section */}
               <View style={styles.sectionContainer}>
                 <View style={styles.sectionHeader}>
-                  <Icon name="lightbulb-outline" size={24} color={colors.primary} />
+                  <Icon name="lightbulb-outline" size={22} color={colors.button} />
                   <Text style={styles.sectionTitle}>Skills</Text>
                 </View>
                 <View style={styles.skillsContainer}>
@@ -630,14 +710,22 @@ const UserProfileScreen = ({ navigation, route }) => {
               {/* Work Experience Section */}
               <View style={styles.sectionContainer}>
                 <View style={styles.sectionHeader}>
-                  <Icon name="briefcase-outline" size={24} color={colors.primary} />
+                  <Icon name="briefcase-outline" size={22} color={colors.button} />
                   <Text style={styles.sectionTitle}>Work Experience</Text>
                 </View>
                 {user.workExperience && user.workExperience.length > 0 ? (
-                  user.workExperience.map((work) => (
-                    <View key={work.id} style={styles.experienceItem}>
+                  user.workExperience.map((work, index) => (
+                    <View 
+                      key={work.id} 
+                      style={[
+                        styles.experienceItem,
+                        index === user.workExperience.length - 1 && styles.experienceItemLast
+                      ]}
+                    >
                       <View style={styles.experienceHeader}>
-                        <Icon name="domain" size={40} color={colors.primary} />
+                        <View style={styles.experienceIconContainer}>
+                          <Icon name="domain" size={24} color={colors.button} />
+                        </View>
                         <View style={styles.experienceDetails}>
                           <Text style={styles.experienceCompany}>{work.company}</Text>
                           <Text style={styles.experiencePosition}>{work.position}</Text>
@@ -650,21 +738,32 @@ const UserProfileScreen = ({ navigation, route }) => {
                     </View>
                   ))
                 ) : (
-                  <Text style={styles.noDataText}>No work experience listed</Text>
+                  <View style={styles.emptyStateContainer}>
+                    <Icon name="briefcase-outline" size={32} color={colors.textMuted} />
+                    <Text style={styles.noDataText}>No work experience listed</Text>
+                  </View>
                 )}
               </View>
 
               {/* Education Section */}
               <View style={styles.sectionContainer}>
                 <View style={styles.sectionHeader}>
-                  <Icon name="school-outline" size={24} color={colors.primary} />
+                  <Icon name="school-outline" size={22} color={colors.button} />
                   <Text style={styles.sectionTitle}>Education</Text>
                 </View>
                 {user.education && user.education.length > 0 ? (
-                  user.education.map((edu) => (
-                    <View key={edu.id} style={styles.experienceItem}>
+                  user.education.map((edu, index) => (
+                    <View 
+                      key={edu.id} 
+                      style={[
+                        styles.experienceItem,
+                        index === user.education.length - 1 && styles.experienceItemLast
+                      ]}
+                    >
                       <View style={styles.experienceHeader}>
-                        <Icon name="school" size={40} color={colors.primary} />
+                        <View style={styles.experienceIconContainer}>
+                          <Icon name="school" size={24} color={colors.button} />
+                        </View>
                         <View style={styles.experienceDetails}>
                           <Text style={styles.experienceCompany}>{edu.institution}</Text>
                           <Text style={styles.experiencePosition}>
@@ -680,7 +779,10 @@ const UserProfileScreen = ({ navigation, route }) => {
                     </View>
                   ))
                 ) : (
-                  <Text style={styles.noDataText}>No education listed</Text>
+                  <View style={styles.emptyStateContainer}>
+                    <Icon name="school-outline" size={32} color={colors.textMuted} />
+                    <Text style={styles.noDataText}>No education listed</Text>
+                  </View>
                 )}
               </View>
             </View>
@@ -774,6 +876,90 @@ const UserProfileScreen = ({ navigation, route }) => {
           </Animated.View>
         </View>
       </Modal>
+
+      {/* Options Menu */}
+      <Modal
+        visible={showOptionsMenu}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowOptionsMenu(false)}
+      >
+        <Pressable 
+          style={styles.modalOverlay}
+          onPress={() => setShowOptionsMenu(false)}
+        >
+          <Pressable 
+            style={styles.optionsMenu}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <TouchableOpacity
+              style={styles.optionItem}
+              onPress={() => {
+                setShowOptionsMenu(false);
+                setShowReportSheet(true);
+              }}
+            >
+              <Text style={[styles.optionText, styles.reportOptionTextMenu]}>Report User</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Report Bottom Sheet */}
+      <Modal
+        visible={showReportSheet}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowReportSheet(false)}
+      >
+        <Pressable 
+          style={styles.bottomSheetOverlay}
+          onPress={() => setShowReportSheet(false)}
+        >
+          <Pressable style={styles.bottomSheet} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.bottomSheetHandle} />
+            <Text style={styles.reportTitle}>Report</Text>
+            <Text style={styles.reportSubtitle}>
+              Why are you reporting this profile?
+            </Text>
+            
+            <ScrollView 
+              style={styles.reportOptionsList}
+              showsVerticalScrollIndicator={false}
+            >
+              {[
+                "They are pretending to be someone else",
+                "They may be under the age of 13",
+                "Something else"
+              ].map((option, index) => (
+                <TouchableOpacity
+                  key={index}
+                  style={styles.reportOption}
+                  onPress={async () => {
+                    try {
+                      setShowReportSheet(false);
+                      
+                      // Call the report API
+                      const result = await ProfileApi.reportProfile(userId, option);
+                      
+                      if (result.success) {
+                        showSuccess(result.message || 'Report submitted successfully. Our team will review it.');
+                      } else {
+                        showError(result.message || 'Failed to submit report. Please try again.');
+                      }
+                    } catch (error) {
+                      console.error('Report error:', error);
+                      showError('Failed to submit report. Please try again.');
+                    }
+                  }}
+                >
+                  <Text style={styles.reportOptionText}>{option}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 };
@@ -782,25 +968,66 @@ const styles = StyleSheet.create({
   profileHeader: {
     alignItems: 'center',
     paddingHorizontal: 15,
-    paddingBottom: 20,
+    paddingTop: 20,
+    paddingBottom: 24,
+    backgroundColor: colors.card,
+    marginHorizontal: 16,
+    marginTop: 16,
+    marginBottom: 20,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 3,
+    position: 'relative',
+  },
+  profileMenuButton: {
+    position: 'absolute',
+    top: 20,
+    right: 20,
+    padding: 4,
+    zIndex: 10,
+  },
+  avatarContainer: {
+    position: 'relative',
+    marginBottom: 16,
   },
   avatar: { 
     width: 120, 
     height: 120, 
-    borderRadius: 60, 
-    marginBottom: 12 
+    borderRadius: 60,
+    borderWidth: 4,
+    borderColor: colors.button,
+  },
+  avatarBorder: {
+    position: 'absolute',
+    width: 128,
+    height: 128,
+    borderRadius: 64,
+    borderWidth: 2,
+    borderColor: colors.border,
+    top: -4,
+    left: -4,
   },
   name: { 
-    fontSize: 24, 
-    fontWeight: '700', 
-    color: colors.primary,
-    marginBottom: 4,
+    fontSize: 26, 
+    fontFamily: 'Gilroy-Bold',
+    color: colors.textPrimary,
+    marginBottom: 6,
+    textAlign: 'center',
   },
   designation: { 
-    fontSize: 16, 
-    color: colors.secondary,
+    fontSize: 15, 
+    fontFamily: 'Gilroy-Medium',
+    color: colors.textMuted,
     textAlign: 'center',
-    marginBottom: 16,
+    marginBottom: 20,
   },
   actionContainer: {
     width: '100%',
@@ -857,10 +1084,12 @@ const styles = StyleSheet.create({
   tabContainer: {
     flexDirection: 'row',
     backgroundColor: colors.card,
-    marginHorizontal: 15,
-    borderRadius: 25,
+    marginHorizontal: 16,
+    borderRadius: 20,
     padding: 4,
-    marginBottom: 15,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   tab: {
     flex: 1,
@@ -880,13 +1109,15 @@ const styles = StyleSheet.create({
     color: colors.white,
   },
   aboutSection: {
-    paddingHorizontal: 15,
+    paddingHorizontal: 16,
+    paddingTop: 8,
   },
   aboutText: {
-    fontSize: 16,
-    color: colors.textPrimary,
+    fontSize: 15,
+    fontFamily: 'Gilroy-Regular',
+    color: colors.textSecondary,
     lineHeight: 24,
-    marginBottom: 16,
+    marginBottom: 20,
   },
   connectionsContainer: {
     marginBottom: 20,
@@ -897,10 +1128,20 @@ const styles = StyleSheet.create({
     color: colors.primary,
   },
   sectionContainer: {
-    marginBottom: 24,
+    marginBottom: 20,
     backgroundColor: colors.card,
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 18,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: colors.border,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 3,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -909,8 +1150,8 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: '700',
-    color: colors.primary,
+    fontFamily: 'Gilroy-Bold',
+    color: colors.textPrimary,
     flex: 1,
     marginLeft: 12,
   },
@@ -922,10 +1163,12 @@ const styles = StyleSheet.create({
   skillChip: {
     backgroundColor: colors.backgroundElevated,
     borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     borderWidth: 1,
     borderColor: colors.border,
+    marginRight: 8,
+    marginBottom: 8,
   },
   skillText: {
     fontSize: 14,
@@ -933,42 +1176,70 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   experienceItem: {
-    marginBottom: 16,
+    marginBottom: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  experienceItemLast: {
+    borderBottomWidth: 0,
+    marginBottom: 0,
+    paddingBottom: 0,
   },
   experienceHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
+  },
+  experienceIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.backgroundElevated,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   experienceDetails: {
     flex: 1,
     marginLeft: 12,
   },
   experienceCompany: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.primary,
-    marginBottom: 2,
+    fontSize: 17,
+    fontFamily: 'Gilroy-Bold',
+    color: colors.textPrimary,
+    marginBottom: 4,
   },
   experiencePosition: {
-    fontSize: 14,
-    color: colors.textPrimary,
-    marginBottom: 2,
-  },
-  experienceDuration: {
-    fontSize: 12,
+    fontSize: 15,
+    fontFamily: 'Gilroy-Medium',
     color: colors.textSecondary,
     marginBottom: 4,
   },
-  experienceDescription: {
+  experienceDuration: {
     fontSize: 13,
+    fontFamily: 'Gilroy-Regular',
+    color: colors.textMuted,
+    marginBottom: 6,
+  },
+  experienceDescription: {
+    fontSize: 14,
+    fontFamily: 'Gilroy-Regular',
     color: colors.textSecondary,
-    fontStyle: 'italic',
-    marginTop: 4,
+    lineHeight: 20,
+    marginTop: 6,
+  },
+  emptyStateContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
   },
   noDataText: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    fontStyle: 'italic',
+    fontSize: 15,
+    fontFamily: 'Gilroy-Medium',
+    color: colors.textMuted,
+    marginTop: 12,
+    textAlign: 'center',
   },
   postsContainer: {
     paddingHorizontal: 15,
@@ -1093,6 +1364,88 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginLeft: 12,
     flex: 1,
+  },
+  optionsMenu: {
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    paddingVertical: 8,
+    minWidth: 180,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+    position: 'absolute',
+    top: 100,
+    right: 20,
+  },
+  optionItem: {
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+  },
+  optionText: {
+    fontSize: 15,
+    fontFamily: 'Gilroy-Medium',
+    color: colors.textPrimary,
+  },
+  reportOptionTextMenu: {
+    color: colors.error || '#dc3545',
+  },
+  optionDivider: {
+    height: 1,
+    backgroundColor: colors.border,
+    marginVertical: 4,
+  },
+  bottomSheetOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  bottomSheet: {
+    backgroundColor: colors.card,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingTop: 12,
+    paddingBottom: 40,
+    maxHeight: '80%',
+  },
+  bottomSheetHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: colors.border,
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 20,
+  },
+  reportTitle: {
+    fontSize: 24,
+    fontFamily: 'Gilroy-Bold',
+    color: colors.textPrimary,
+    textAlign: 'center',
+    marginBottom: 8,
+    paddingHorizontal: 20,
+  },
+  reportSubtitle: {
+    fontSize: 16,
+    fontFamily: 'Gilroy-Medium',
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: 20,
+    paddingHorizontal: 20,
+  },
+  reportOptionsList: {
+    paddingHorizontal: 0,
+  },
+  reportOption: {
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  reportOptionText: {
+    fontSize: 15,
+    fontFamily: 'Gilroy-Regular',
+    color: colors.textPrimary,
   },
 });
 

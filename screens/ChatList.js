@@ -4,7 +4,6 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  RefreshControl,
   ActivityIndicator,
   View,
   Image,
@@ -20,6 +19,7 @@ import chatApi from '../api/ChatApi';
 import { useLoader } from '../context/LoaderContext';
 import useScreenApiLogger from '../hooks/useScreenApiLogger';
 import { getProfileImageSource } from '../utils/profileImage';
+import CustomRefreshControl from '../components/CustomRefreshControl';
 
 const ChatListScreen = ({ navigation }) => {
   const { showLoader, hideLoader } = useLoader();
@@ -161,6 +161,16 @@ const ChatListScreen = ({ navigation }) => {
           const participant = !room.isGroup && room.members
             ? room.members.find(member => member.user.id !== chatApi.getCurrentUserId?.())
             : null;
+          const participantUser = participant?.user || null;
+          const avatarKey = participantUser?.profile?.profilePic || participantUser?.profilePic || null;
+          
+          // Debug logging
+          if (avatarKey) {
+            console.log('ChatList: Avatar key found for room', room.id, ':', avatarKey);
+          } else {
+            console.log('ChatList: No avatar key for room', room.id, 'participantUser:', participantUser);
+          }
+          
           return {
             id: room.id,
             name: getOtherParticipantName(room),
@@ -169,14 +179,14 @@ const ChatListScreen = ({ navigation }) => {
               ? new Date(room.messages[0].createdAt).toLocaleDateString() 
               : (room.lastMessage?.createdAt ? new Date(room.lastMessage.createdAt).toLocaleDateString() : ''),
             unread: room.unreadCount || 0,
-            avatar: getOtherParticipantAvatar(room),
+            avatar: avatarKey,
             isOnline: onlineUsers.has(participantId), // Use actual online status
             room: room,
-            participant: participant?.user,
+            participant: participantUser,
           };
         });
 
-        console.log('ChatList: Formatted chats:', formattedChats);
+        console.log('ChatList: Formatted chats:', formattedChats.map(c => ({ id: c.id, name: c.name, avatar: c.avatar, hasParticipant: !!c.participant })));
         setChats(formattedChats);
       } else {
         console.error('ChatList: Failed to load chat rooms:', result.message || result.error);
@@ -254,12 +264,15 @@ const ChatListScreen = ({ navigation }) => {
                 source={
                   avatarErrors[item.id]
                     ? require('../assets/icon.png')
-                    : getProfileImageSource(item.participant, { fallbackKey: item.avatar })
+                    : getProfileImageSource(item.participant || {}, { fallbackKey: item.avatar })
                 }
                 style={styles.avatar}
                 resizeMode="cover"
                 defaultSource={require('../assets/icon.png')}
-                onError={() => setAvatarErrors(prev => ({ ...prev, [item.id]: true }))}
+                onError={() => {
+                  console.log('ChatList: Avatar error for chat', item.id, 'participant:', item.participant, 'avatar:', item.avatar);
+                  setAvatarErrors(prev => ({ ...prev, [item.id]: true }));
+                }}
               />
               {item.isOnline && <View style={styles.onlineIndicator} />}
             </View>
@@ -289,11 +302,9 @@ const ChatListScreen = ({ navigation }) => {
           </TouchableOpacity>
         )}
         refreshControl={
-          <RefreshControl
+          <CustomRefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            colors={[colors.primary]}
-            tintColor={colors.primary}
           />
         }
         ListEmptyComponent={

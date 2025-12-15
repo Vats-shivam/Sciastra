@@ -220,11 +220,57 @@ const ProfileSetupScreen = ({ navigation, route }) => {
     if (currentDateField) {
       const [type, itemIndex, field] = currentDateField.split('_');
       const formattedDate = formatDateForAPI(selectedYear, selectedMonth);
+      const index = parseInt(itemIndex);
 
+      // Validate date range
       if (type === 'experience') {
-        updateExperience(parseInt(itemIndex), field, formattedDate);
+        const experience = experiences[index];
+        if (field === 'startDate' && experience.endDate && !experience.current) {
+          // Check if start date is after end date
+          const startDate = new Date(selectedYear, selectedMonth - 1);
+          const [endMonth, endYear] = experience.endDate.split('/');
+          const endDate = new Date(parseInt(endYear), parseInt(endMonth) - 1);
+          
+          if (startDate > endDate) {
+            showError('Start date cannot be after end date');
+            return;
+          }
+        } else if (field === 'endDate' && experience.startDate) {
+          // Check if end date is before start date
+          const [startMonth, startYear] = experience.startDate.split('/');
+          const startDate = new Date(parseInt(startYear), parseInt(startMonth) - 1);
+          const endDate = new Date(selectedYear, selectedMonth - 1);
+          
+          if (endDate < startDate) {
+            showError('End date cannot be before start date');
+            return;
+          }
+        }
+        updateExperience(index, field, formattedDate);
       } else if (type === 'education') {
-        updateEducation(parseInt(itemIndex), field, formattedDate);
+        const edu = education[index];
+        if (field === 'startDate' && edu.endDate && !edu.current) {
+          // Check if start date is after end date
+          const startDate = new Date(selectedYear, selectedMonth - 1);
+          const [endMonth, endYear] = edu.endDate.split('/');
+          const endDate = new Date(parseInt(endYear), parseInt(endMonth) - 1);
+          
+          if (startDate > endDate) {
+            showError('Start date cannot be after end date');
+            return;
+          }
+        } else if (field === 'endDate' && edu.startDate) {
+          // Check if end date is before start date
+          const [startMonth, startYear] = edu.startDate.split('/');
+          const startDate = new Date(parseInt(startYear), parseInt(startMonth) - 1);
+          const endDate = new Date(selectedYear, selectedMonth - 1);
+          
+          if (endDate < startDate) {
+            showError('End date cannot be before start date');
+            return;
+          }
+        }
+        updateEducation(index, field, formattedDate);
       }
     }
 

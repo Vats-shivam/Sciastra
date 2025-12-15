@@ -24,6 +24,8 @@ const OtpVerificationScreen = ({ navigation, route }) => {
   const [loading, setLoading] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
   const [smsListener, setSmsListener] = useState(null);
+  const [timer, setTimer] = useState(30);
+  const [isTimerActive, setIsTimerActive] = useState(true);
   const phone = route.params?.phone;
   const { showSuccess, showError } = useNotification();
 
@@ -33,12 +35,21 @@ const OtpVerificationScreen = ({ navigation, route }) => {
   const inputRefs = useRef([]);
   const isAutoFilling = useRef(false);
 
+  // Start timer function
+  const startTimer = () => {
+    setTimer(30);
+    setIsTimerActive(true);
+  };
+
   useEffect(() => {
     // Initialize refs
     inputRefs.current = inputRefs.current.slice(0, 6);
 
     // Set up SMS auto-detection
     setupSmsListener();
+
+    // Start timer on mount (after first OTP is sent)
+    startTimer();
 
     // Clean up on unmount
     return () => {
@@ -47,6 +58,27 @@ const OtpVerificationScreen = ({ navigation, route }) => {
       }
     };
   }, []);
+
+  // Timer effect
+  useEffect(() => {
+    let interval = null;
+    if (isTimerActive) {
+      interval = setInterval(() => {
+        setTimer((prevTimer) => {
+          if (prevTimer <= 1) {
+            setIsTimerActive(false);
+            return 0;
+          }
+          return prevTimer - 1;
+        });
+      }, 1000);
+    }
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
+  }, [isTimerActive]);
 
   // Auto-detect OTP from SMS/Clipboard
   const setupSmsListener = () => {
@@ -172,6 +204,10 @@ const OtpVerificationScreen = ({ navigation, route }) => {
   };
 
   const resendOtp = async () => {
+    if (isTimerActive || timer > 0) {
+      return; // Prevent resend if timer is active
+    }
+
     setResendLoading(true);
     
     try {
@@ -182,6 +218,8 @@ const OtpVerificationScreen = ({ navigation, route }) => {
         showSuccess('OTP has been resent to your phone number.');
         // Clear current OTP input
         setOtp(['', '', '', '', '', '']);
+        // Start timer after successful resend
+        startTimer();
         // Focus first input
         setTimeout(() => {
           inputRefs.current[0]?.focus();
@@ -210,7 +248,7 @@ const OtpVerificationScreen = ({ navigation, route }) => {
         <View style={styles.content}>
           {/* Header Section */}
           <View style={styles.headerContainer}>
-            <Text style={styles.logoText}>SciAstra</Text>
+            <Text style={styles.logoText}>Xcience</Text>
             <Text style={styles.title}>Verify Your Number</Text>
             <Text style={styles.subtitle}>
               Enter the 6-digit code sent to{'\n'}
@@ -287,13 +325,22 @@ const OtpVerificationScreen = ({ navigation, route }) => {
             {/* Resend Section */}
             <View style={styles.resendContainer}>
               <Text style={styles.resendText}>Didn't receive the code?</Text>
-              <TouchableOpacity onPress={resendOtp} disabled={resendLoading}>
-                {resendLoading ? (
-                  <ActivityIndicator size="small" color="#8a2be2" />
-                ) : (
-                  <Text style={styles.resendLink}>Resend OTP</Text>
-                )}
-              </TouchableOpacity>
+              {isTimerActive && timer > 0 ? (
+                <Text style={styles.timerText}>
+                  Resend OTP in {timer}s
+                </Text>
+              ) : (
+                <TouchableOpacity 
+                  onPress={resendOtp} 
+                  disabled={resendLoading || isTimerActive}
+                >
+                  {resendLoading ? (
+                    <ActivityIndicator size="small" color="#8a2be2" />
+                  ) : (
+                    <Text style={styles.resendLink}>Resend OTP</Text>
+                  )}
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         </View>
@@ -423,6 +470,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     textDecorationLine: 'underline',
+  },
+  timerText: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 14,
+    fontWeight: '500',
   },
   bypassHint: {
     backgroundColor: 'rgba(138, 43, 226, 0.1)',

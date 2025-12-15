@@ -14,7 +14,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
-import { LinearGradient } from 'expo-linear-gradient';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import colors from '../config/colors';
 import postApi from '../api/PostApi';
@@ -22,6 +21,9 @@ import Header from '../components/Header';
 import authManager from '../services/AuthManager';
 import { useNotification } from '../contexts/NotificationContext';
 import useScreenApiLogger from '../hooks/useScreenApiLogger';
+import { getProfileImageSource } from '../utils/profileImage';
+import authApi from '../api/AuthApi';
+import profileApi from '../api/ProfileApi';
 
 const { width } = Dimensions.get('window');
 
@@ -48,6 +50,7 @@ const PostCreationScreen = ({ navigation }) => {
   const [uploadProgress, setUploadProgress] = useState('');
   const [textInputFocused, setTextInputFocused] = useState(false);
   const [userName, setUserName] = useState('You'); // Default fallback
+  const [userProfilePic, setUserProfilePic] = useState(null);
   const [showVisibilityPicker, setShowVisibilityPicker] = useState(false);
   const { showError, showSuccess, showWarning } = useNotification();
 
@@ -55,11 +58,21 @@ const PostCreationScreen = ({ navigation }) => {
 
   // Load user information on component mount
   useEffect(() => {
-    const loadUserInfo = () => {
+    const loadUserInfo = async () => {
       try {
         const currentUser = authManager.getCurrentUser();
         if (currentUser?.name) {
           setUserName(currentUser.name);
+        }
+        
+        // Load profile picture
+        try {
+          const profileResult = await profileApi.getProfile();
+          if (profileResult.success && profileResult.data) {
+            setUserProfilePic(profileResult.data.profilePic);
+          }
+        } catch (error) {
+          console.log('Could not load profile picture');
         }
       } catch (error) {
         console.log('Could not load user info, using fallback');
@@ -239,11 +252,17 @@ const PostCreationScreen = ({ navigation }) => {
           ]}
           onPress={handlePost}
           disabled={(!text.trim() && images.length === 0) || loading}
+          activeOpacity={0.8}
         >
           {loading ? (
-            <ActivityIndicator size="small" color="white" />
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="small" color={colors.white} />
+            </View>
           ) : (
-            <Text style={styles.postButtonText}>Post</Text>
+            <Text style={[
+              styles.postButtonText,
+              (!text.trim() && images.length === 0) && styles.postButtonTextDisabled
+            ]}>Post</Text>
           )}
         </TouchableOpacity>
 
@@ -259,39 +278,51 @@ const PostCreationScreen = ({ navigation }) => {
           {/* User Info */}
           <View style={styles.userSection}>
             <Image
-              source={require('../assets/icon.png')} // Placeholder user avatar
+              source={getProfileImageSource({ profilePic: userProfilePic }, { fallbackKey: userProfilePic })}
               style={styles.userAvatar}
+              resizeMode="cover"
+              defaultSource={require('../assets/icon.png')}
             />
-            <View>
+            <View style={styles.userInfo}>
               <Text style={styles.userName}>{userName}</Text>
               <TouchableOpacity
                 style={styles.visibilitySelector}
                 onPress={() => setShowVisibilityPicker(true)}
+                activeOpacity={0.7}
               >
-                <Icon
-                  name={visibility === 'public' ? 'earth' : 'account-group'}
-                  size={16}
-                  color="#8a2be2"
-                />
+                <View style={styles.visibilityIconContainer}>
+                  <Icon
+                    name={visibility === 'public' ? 'earth' : 'account-group'}
+                    size={14}
+                    color={colors.button}
+                  />
+                </View>
                 <Text style={styles.visibilityText}>
                   {visibility === 'public' ? 'Public' : 'Connections'}
                 </Text>
-                <Icon name="chevron-down" size={16} color="rgba(255,255,255,0.6)" />
+                <Icon name="chevron-down" size={14} color={colors.textMuted} />
               </TouchableOpacity>
             </View>
           </View>
 
           {/* Text Input */}
-          <TextInput
-            style={[styles.textInput, textInputFocused && styles.textInputFocused]}
-            placeholder="What's on your mind?"
-            placeholderTextColor="rgba(255,255,255,0.5)"
-            multiline
-            value={text}
-            onChangeText={setText}
-            onFocus={() => setTextInputFocused(true)}
-            onBlur={() => setTextInputFocused(false)}
-          />
+          <View style={styles.textInputContainer}>
+            <TextInput
+              style={[styles.textInput, textInputFocused && styles.textInputFocused]}
+              placeholder="What's on your mind?"
+              placeholderTextColor={colors.textMuted}
+              multiline
+              value={text}
+              onChangeText={setText}
+              onFocus={() => setTextInputFocused(true)}
+              onBlur={() => setTextInputFocused(false)}
+            />
+            {text.length > 0 && (
+              <View style={styles.charCountContainer}>
+                <Text style={styles.charCount}>{text.length} characters</Text>
+              </View>
+            )}
+          </View>
 
           {/* Image Preview Grid */}
           {images.length > 0 && (
@@ -314,26 +345,38 @@ const PostCreationScreen = ({ navigation }) => {
 
           {/* Media Actions */}
           <View style={styles.mediaActions}>
-            <TouchableOpacity style={styles.mediaButton} onPress={pickImages}>
-              <LinearGradient
-                colors={['rgba(138, 43, 226, 0.2)', 'rgba(138, 43, 226, 0.1)']}
-                style={styles.mediaButtonGradient}
-              >
-                <Icon name="image-multiple" size={24} color="#8a2be2" />
-                <Text style={styles.mediaButtonText}>
-                  Photos ({images.length}/5)
-                </Text>
-              </LinearGradient>
+            <TouchableOpacity 
+              style={styles.mediaButton} 
+              onPress={pickImages}
+              activeOpacity={0.8}
+            >
+              <View style={styles.mediaButtonContent}>
+                <View style={styles.mediaIconContainer}>
+                  <Icon name="image-multiple" size={22} color={colors.button} />
+                </View>
+                <View style={styles.mediaButtonTextContainer}>
+                  <Text style={styles.mediaButtonText}>Photos</Text>
+                  <Text style={styles.mediaButtonSubtext}>
+                    {images.length}/5 images
+                  </Text>
+                </View>
+              </View>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.mediaButton} onPress={takePicture}>
-              <LinearGradient
-                colors={['rgba(138, 43, 226, 0.2)', 'rgba(138, 43, 226, 0.1)']}
-                style={styles.mediaButtonGradient}
-              >
-                <Icon name="camera" size={24} color="#8a2be2" />
-                <Text style={styles.mediaButtonText}>Camera</Text>
-              </LinearGradient>
+            <TouchableOpacity 
+              style={styles.mediaButton} 
+              onPress={takePicture}
+              activeOpacity={0.8}
+            >
+              <View style={styles.mediaButtonContent}>
+                <View style={styles.mediaIconContainer}>
+                  <Icon name="camera" size={22} color={colors.button} />
+                </View>
+                <View style={styles.mediaButtonTextContainer}>
+                  <Text style={styles.mediaButtonText}>Camera</Text>
+                  <Text style={styles.mediaButtonSubtext}>Take photo</Text>
+                </View>
+              </View>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -408,218 +451,301 @@ const styles = StyleSheet.create({
   },
   postButtonContainer: {
     position: 'absolute',
-    top: 114, // Adjust based on SafeAreaView + header height
+    top: 114,
     right: 16,
     zIndex: 10,
   },
   postButton: {
-    backgroundColor: '#8a2be2',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
+    backgroundColor: colors.button,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 12,
+    shadowColor: colors.button,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+    overflow: 'hidden',
   },
   postButtonDisabled: {
-    backgroundColor: 'rgba(138, 43, 226, 0.3)',
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    shadowOpacity: 0,
+    elevation: 0,
   },
   postButtonText: {
-    color: 'white',
-    fontWeight: '600',
-    fontSize: 16,
+    color: colors.white,
+    fontFamily: 'Gilroy-SemiBold',
+    fontSize: 15,
+    backgroundColor: 'transparent',
+  },
+  postButtonTextDisabled: {
+    color: colors.textMuted,
+  },
+  loadingContainer: {
+    backgroundColor: 'transparent',
   },
   progressContainer: {
     marginTop: 8,
     paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: 'rgba(138, 43, 226, 0.1)',
-    borderRadius: 6,
+    paddingVertical: 8,
+    backgroundColor: 'rgba(138, 43, 226, 0.15)',
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: 'rgba(138, 43, 226, 0.3)',
   },
   progressText: {
-    color: '#8a2be2',
+    color: colors.button,
     fontSize: 12,
     textAlign: 'center',
-    fontWeight: '500',
+    fontFamily: 'Gilroy-Medium',
   },
   content: {
     flex: 1,
     paddingHorizontal: 16,
+    paddingTop: 8,
   },
   userSection: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 16,
+    paddingVertical: 20,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.05)',
+    borderBottomColor: colors.border,
   },
   userAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    marginRight: 12,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    marginRight: 14,
     backgroundColor: colors.backgroundElevated,
+    borderWidth: 2,
+    borderColor: colors.border,
+  },
+  userInfo: {
+    flex: 1,
   },
   userName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: 'white',
-    marginBottom: 4,
+    fontSize: 17,
+    fontFamily: 'Gilroy-SemiBold',
+    color: colors.textPrimary,
+    marginBottom: 8,
   },
   visibilitySelector: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 16,
+    backgroundColor: colors.card,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: 'rgba(138, 43, 226, 0.3)',
+    borderColor: colors.border,
+    alignSelf: 'flex-start',
+  },
+  visibilityIconContainer: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(138, 43, 226, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 6,
   },
   visibilityText: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: 12,
-    marginHorizontal: 4,
+    color: colors.textSecondary,
+    fontSize: 13,
+    fontFamily: 'Gilroy-Medium',
+    marginRight: 4,
+  },
+  textInputContainer: {
+    marginTop: 8,
+    marginBottom: 16,
   },
   textInput: {
-    fontSize: 18,
-    color: 'white',
-    paddingVertical: 20,
+    fontSize: 16,
+    fontFamily: 'Gilroy-Regular',
+    color: colors.textPrimary,
+    paddingVertical: 16,
     paddingHorizontal: 0,
-    minHeight: 120,
+    minHeight: 140,
     textAlignVertical: 'top',
     lineHeight: 24,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
   textInputFocused: {
     borderBottomWidth: 2,
-    borderBottomColor: '#8a2be2',
+    borderBottomColor: colors.button,
+  },
+  charCountContainer: {
+    marginTop: 8,
+    alignItems: 'flex-end',
+  },
+  charCount: {
+    fontSize: 12,
+    fontFamily: 'Gilroy-Regular',
+    color: colors.textMuted,
   },
   imagesSection: {
-    marginVertical: 16,
+    marginVertical: 20,
   },
   imageGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    paddingBottom: 8,
+    gap: 12,
   },
   imageContainer: {
     position: 'relative',
-    width: (width - 56) / 2, // Account for padding and gap
-    marginBottom: 8,
+    width: (width - 56) / 2,
+    marginBottom: 0,
   },
   imagePreview: {
     width: '100%',
-    height: 120,
-    borderRadius: 12,
+    height: 140,
+    borderRadius: 16,
     backgroundColor: colors.backgroundElevated,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   removeImageButton: {
     position: 'absolute',
     top: 8,
     right: 8,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    borderRadius: 12,
-    width: 24,
-    height: 24,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    borderRadius: 16,
+    width: 28,
+    height: 28,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
   },
   mediaActions: {
     flexDirection: 'row',
-    paddingVertical: 16,
+    paddingVertical: 8,
     gap: 12,
+    marginTop: 8,
   },
   mediaButton: {
     flex: 1,
-    borderRadius: 12,
+    borderRadius: 16,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
     overflow: 'hidden',
   },
-  mediaButtonGradient: {
+  mediaButtonContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
     paddingVertical: 16,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
+  },
+  mediaIconContainer: {
+    width: 40,
+    height: 40,
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(138, 43, 226, 0.3)',
+    backgroundColor: 'rgba(138, 43, 226, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  mediaButtonTextContainer: {
+    flex: 1,
   },
   mediaButtonText: {
-    color: '#8a2be2',
+    color: colors.textPrimary,
     fontSize: 14,
-    fontWeight: '600',
-    marginLeft: 8,
+    fontFamily: 'Gilroy-SemiBold',
+    marginBottom: 2,
+  },
+  mediaButtonSubtext: {
+    color: colors.textMuted,
+    fontSize: 11,
+    fontFamily: 'Gilroy-Regular',
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: 'rgba(0,0,0,0.7)',
     justifyContent: 'flex-end',
     padding: 16,
   },
   visibilityModal: {
-    backgroundColor: colors.background,
-    borderRadius: 20,
-    padding: 20,
+    backgroundColor: colors.card,
+    borderRadius: 24,
+    padding: 24,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: colors.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 10,
   },
   modalTitle: {
-    color: colors.white,
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 16,
+    color: colors.textPrimary,
+    fontSize: 18,
+    fontFamily: 'Gilroy-Bold',
+    marginBottom: 20,
   },
   visibilityOption: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 12,
-    paddingHorizontal: 8,
-    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-    marginBottom: 10,
+    borderColor: colors.border,
+    marginBottom: 12,
+    backgroundColor: colors.backgroundElevated,
   },
   visibilityOptionActive: {
     backgroundColor: 'rgba(138, 43, 226, 0.15)',
-    borderColor: '#8a2be2',
+    borderColor: colors.button,
   },
   visibilityOptionLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 14,
     flex: 1,
   },
   visibilityOptionIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: 'rgba(138, 43, 226, 0.15)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   visibilityOptionLabel: {
-    color: colors.white,
-    fontSize: 14,
-    fontWeight: '600',
+    color: colors.textPrimary,
+    fontSize: 15,
+    fontFamily: 'Gilroy-SemiBold',
   },
   visibilityOptionLabelActive: {
-    color: colors.primary,
+    color: colors.button,
   },
   visibilityOptionDesc: {
-    color: colors.textSecondary,
+    color: colors.textMuted,
     fontSize: 12,
-    marginTop: 2,
+    fontFamily: 'Gilroy-Regular',
+    marginTop: 4,
     maxWidth: width * 0.55,
   },
   visibilityCancelButton: {
-    marginTop: 8,
-    paddingVertical: 10,
+    marginTop: 12,
+    paddingVertical: 12,
     alignItems: 'center',
+    borderRadius: 12,
+    backgroundColor: colors.backgroundElevated,
   },
   visibilityCancelText: {
     color: colors.textSecondary,
-    fontSize: 14,
+    fontSize: 15,
+    fontFamily: 'Gilroy-Medium',
   },
 });
 

@@ -90,7 +90,30 @@ const EventDetailScreen = ({ route, navigation }) => {
   const eventStarted = event ? isEventStarted(event) : false;
   const { status: eventStatus, color: statusColor } = event ? getEventStatus(event) : { status: '', color: colors.gray };
   const isRegistrationOpen = event?.status === 'PUBLISHED' && !eventStarted;
-  const isOnlineEvent = event?.venueType === 'ONLINE';
+  const isOnlineEvent = event?.venueType === 'ONLINE' || event?.venue_type === 'ONLINE' || event?.venueType === 'VIRTUAL' || event?.venue_type === 'VIRTUAL';
+  
+  // Get meeting link from multiple possible field names
+  const getMeetingLink = (event) => {
+    if (!event) return null;
+    return event.meetLink || 
+           event.onlineLink || 
+           event.meetingUrl || 
+           event.meeting_link ||
+           event.meetingURL ||
+           event.eventLink || 
+           event.link || 
+           event.onlineUrl || 
+           event.online_url ||
+           event.meetingLink ||
+           event.videoLink ||
+           event.video_link ||
+           event.zoomLink ||
+           event.zoom_link ||
+           registrationStatus?.meetingLink ||
+           registrationStatus?.onlineLink;
+  };
+  
+  const meetingLink = getMeetingLink(event);
 
   useEffect(() => {
     if (eventId && !initialEvent) {
@@ -345,37 +368,25 @@ const EventDetailScreen = ({ route, navigation }) => {
             </Text>
           </View>
 
-          {/* Meet Link - Only show for online events */}
-          {isOnlineEvent && event.meetLink && (
+          {/* Join Button - Always show if user is registered */}
+          {registrationStatus?.is_registered && meetingLink && (
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Join Event</Text>
               <TouchableOpacity 
-                style={styles.meetLinkCard}
+                style={styles.joinButton}
                 onPress={() => {
-                  if (registrationStatus?.is_registered) {
-                    Linking.openURL(event.meetLink).catch(err => 
-                      showError('Unable to open meeting link')
-                    );
-                  } else {
-                    showError('Please register for the event to access the meeting link');
-                  }
+                  Linking.openURL(meetingLink).catch(err => {
+                    console.error('Error opening meeting link:', err);
+                    showError('Unable to open meeting link');
+                  });
                 }}
+                activeOpacity={0.8}
               >
-                <View style={styles.meetLinkIconContainer}>
-                  <Icon name="video" size={24} color="#8B5CF6" />
-                </View>
-                <View style={styles.meetLinkContent}>
-                  <Text style={styles.meetLinkTitle}>
-                    {registrationStatus?.is_registered ? 'Join Meeting' : 'Meeting Link Available After Registration'}
-                  </Text>
-                  <Text style={styles.meetLinkUrl} numberOfLines={1}>
-                    {registrationStatus?.is_registered ? event.meetLink : 'Register to view'}
-                  </Text>
-                </View>
-                <Icon name="chevron-right" size={24} color={colors.textMuted} />
+                <Icon name="video" size={20} color={colors.white} />
+                <Text style={styles.joinButtonText}>Join</Text>
               </TouchableOpacity>
             </View>
           )}
+          
 
           {/* Speakers Section */}
           {event.speakers && event.speakers.length > 0 && (
@@ -781,7 +792,18 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.3)',
+    shadowColor: '#8B5CF6',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  meetLinkCardDisabled: {
     borderColor: colors.border,
+    opacity: 0.7,
+    shadowOpacity: 0,
+    elevation: 0,
   },
   meetLinkIconContainer: {
     width: 48,
@@ -805,6 +827,28 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: 'Gilroy-Regular',
     color: colors.textMuted,
+  },
+
+  // Join Button Styles
+  joinButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.button,
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    gap: 8,
+    shadowColor: colors.button,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  joinButtonText: {
+    fontSize: 16,
+    fontFamily: 'Gilroy-SemiBold',
+    color: colors.white,
   },
 
   // Speaker Styles

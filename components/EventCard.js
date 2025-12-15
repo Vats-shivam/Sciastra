@@ -62,7 +62,20 @@ const EventCard = ({ event, onPress }) => {
   };
 
   const shouldShowCategoryChip = event.category && ['FEATURED', 'SPOTLIGHT', 'TRENDING'].includes(event.category);
-  const shouldShowVenueChip = event.venue_type === 'VIRTUAL';
+  
+  // Check if event is upcoming (start date is in the future)
+  const isUpcoming = () => {
+    if (!event.startDateTime) return false;
+    try {
+      const eventDate = new Date(event.startDateTime);
+      const now = new Date();
+      return eventDate > now;
+    } catch (error) {
+      return false;
+    }
+  };
+
+  const shouldShowUpcomingBadge = isUpcoming();
 
   // Format the event data to match what the component expects
   const formattedEvent = {
@@ -85,18 +98,16 @@ const EventCard = ({ event, onPress }) => {
             style={styles.image}
             resizeMode="cover"
           />
-          {/* Category Chip - Top Right */}
-          {shouldShowCategoryChip && (
-            <View style={[styles.chip, { top: 8, right: 8 }]}> 
-              <Text style={styles.chipText}>{getEventCategory(formattedEvent)}</Text>
+          {/* Upcoming Badge - Top Right (highest priority) */}
+          {shouldShowUpcomingBadge && (
+            <View style={[styles.upcomingBadge, { top: 8, right: 8 }]}> 
+              <Text style={styles.upcomingBadgeText}>Upcoming</Text>
             </View>
           )}
-          {/* Venue Type Chip - Top Right (or below category if both exist) */}
-          {(shouldShowVenueChip || formattedEvent.venueType === 'ONLINE') && (
-            <View style={[styles.chip, { top: shouldShowCategoryChip ? 32 : 8, right: 8 }]}> 
-              <Text style={styles.chipText}>
-                {formattedEvent.venueType === 'ONLINE' ? 'Online' : 'In-Person'}
-              </Text>
+          {/* Category Chip - Top Right (below upcoming badge if it exists) */}
+          {shouldShowCategoryChip && (
+            <View style={[styles.chip, { top: shouldShowUpcomingBadge ? 32 : 8, right: 8 }]}> 
+              <Text style={styles.chipText}>{getEventCategory(formattedEvent)}</Text>
             </View>
           )}
         </View>
@@ -149,6 +160,20 @@ const styles = StyleSheet.create({
     color: "#DDD",
     fontSize: 10,
     fontFamily: 'Gilroy-Medium',
+  },
+  upcomingBadge: {
+    position: "absolute",
+    backgroundColor: "#10B981", // Green color
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12, // Pill-shaped
+    zIndex: 3,
+  },
+  upcomingBadgeText: {
+    color: "#FFFFFF", // White text
+    fontSize: 11,
+    fontFamily: 'Gilroy-SemiBold',
+    fontWeight: '600',
   },
   content: {
     paddingHorizontal: 12,

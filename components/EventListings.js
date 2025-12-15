@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from "react";
-import { FlatList, RefreshControl, View, Text, StyleSheet, ActivityIndicator } from "react-native";
+import { FlatList, View, Text, StyleSheet, ActivityIndicator } from "react-native";
 import EventCard from "./EventCard";
 import colors from "../config/colors";
 import { useNavigation } from "@react-navigation/native";
 import eventsApi from "../api/EventsApi";
+import CustomRefreshControl from "./CustomRefreshControl";
 
 const EventListings = ({ onEventPress, category = null, limit = 20 }) => {
   const [events, setEvents] = useState([]);
@@ -87,11 +88,9 @@ const EventListings = ({ onEventPress, category = null, limit = 20 }) => {
       contentContainerStyle={{ paddingVertical: 8 }}
       showsVerticalScrollIndicator={false}
       refreshControl={
-        <RefreshControl
+        <CustomRefreshControl
           refreshing={refreshing}
           onRefresh={handleRefresh}
-          colors={[colors.primary]}
-          tintColor={colors.primary}
         />
       }
       ListEmptyComponent={

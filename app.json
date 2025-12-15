@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "ScistraCommunityApp",
+    "name": "Xcience",
     "slug": "ScistraCommunityApp",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -16,8 +16,8 @@
       "supportsTablet": true
     },
     "android": {
-      "package": "com.xcience.scistracommunityapp",
-      "versionCode": 18,
+      "package": "com.sciastra.xcience",
+      "versionCode": 26,
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#ffffff"

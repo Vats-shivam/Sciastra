@@ -14,6 +14,9 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import colors from '../config/colors';
 import authManager from '../services/AuthManager';
 import ConnectionApi from '../api/ConnectionApi';
+import postApi from '../api/PostApi';
+import profileApi from '../api/ProfileApi';
+import authApi from '../api/AuthApi';
 import useScreenApiLogger from '../hooks/useScreenApiLogger';
 
 const SuggestedConnectionsScreen = ({ navigation }) => {
@@ -27,8 +30,145 @@ const SuggestedConnectionsScreen = ({ navigation }) => {
     const loadSuggestedConnections = async () => {
       try {
         setLoading(true);
-        // TODO: Replace with dedicated suggestion endpoint when available
-        setConnections([]);
+        
+        // Get current user ID
+        const currentUserId = authApi.getCurrentUserId();
+        if (!currentUserId) {
+          console.error('SuggestedConnections: No current user ID found');
+          setConnections([]);
+          return;
+        }
+
+        // Get all users we're already connected to or have pending requests with
+        const [connectionsResult, sentRequestsResult, receivedRequestsResult] = await Promise.all([
+          ConnectionApi.getConnections(1, 100), // Get all connections
+          ConnectionApi.getSentRequests(1, 100), // Get all sent requests
+          ConnectionApi.getReceivedRequests(1, 100), // Get all received requests
+        ]);
+
+        // Collect all user IDs we should exclude
+        const excludedUserIds = new Set([currentUserId]);
+        
+        // Add connected users (handle different response structures)
+        if (connectionsResult.success) {
+          const connections = connectionsResult.data?.users || connectionsResult.data?.connections || [];
+          connections.forEach(item => {
+            // Handle both direct user objects and connection objects with user property
+            const userId = item.id || item.user?.id || item.userId;
+            if (userId) {
+              excludedUserIds.add(userId);
+            }
+          });
+        }
+
+        // Add sent request users (handle different response structures)
+        if (sentRequestsResult.success) {
+          const requests = sentRequestsResult.data?.requests || sentRequestsResult.data?.connections || [];
+          requests.forEach(request => {
+            // Handle both direct receiverId and nested user structure
+            const userId = request.receiverId || request.user?.id || request.receiver?.id;
+            if (userId) {
+              excludedUserIds.add(userId);
+            }
+          });
+        }
+
+        // Add received request users (handle different response structures)
+        if (receivedRequestsResult.success) {
+          const requests = receivedRequestsResult.data?.requests || receivedRequestsResult.data?.connections || [];
+          requests.forEach(request => {
+            // Handle both direct senderId and nested user structure
+            const userId = request.senderId || request.user?.id || request.sender?.id;
+            if (userId) {
+              excludedUserIds.add(userId);
+            }
+          });
+        }
+
+        console.log('SuggestedConnections: Excluding users:', Array.from(excludedUserIds));
+
+        // Search for users with a broad query to get real users
+        // Using common search terms that will return many users (min 2 chars required)
+        // Try multiple searches to get a good pool of users
+        const searchQueries = ['aa', 'ab', 'ac', 'ad', 'tech', 'sci', 'dev', 'eng']; // Common terms
+        let allUsers = [];
+        
+        // Try to get users from multiple search queries
+        for (const query of searchQueries) {
+          if (allUsers.length >= 30) break; // Enough users collected
+          
+          try {
+            const searchResult = await postApi.search(query, 'users', 1, 20);
+            if (searchResult.success && searchResult.data?.users) {
+              // Add users that aren't already in the collection
+              const newUsers = searchResult.data.users.filter(user => {
+                const userId = user.id || user.userId;
+                return userId && !allUsers.find(u => (u.id || u.userId) === userId);
+              });
+              allUsers = [...allUsers, ...newUsers];
+            }
+          } catch (error) {
+            console.log(`SuggestedConnections: Search with "${query}" failed:`, error.message);
+          }
+        }
+
+        if (allUsers.length === 0) {
+          console.log('SuggestedConnections: No users found from search');
+          setConnections([]);
+          return;
+        }
+
+        // Filter out already connected users
+        const availableUsers = allUsers.filter(user => {
+          // Handle different user ID formats (id, userId, etc.)
+          const userId = user.id || user.userId;
+          return userId && !excludedUserIds.has(userId);
+        });
+
+        if (availableUsers.length === 0) {
+          console.log('SuggestedConnections: No available users after filtering');
+          setConnections([]);
+          return;
+        }
+
+        // Shuffle and pick 3 random users
+        const shuffled = availableUsers.sort(() => 0.5 - Math.random());
+        const selectedUsers = shuffled.slice(0, 3);
+
+        // Format users for display
+        const formattedConnections = await Promise.all(
+          selectedUsers.map(async (user) => {
+            const userId = user.id || user.userId;
+            
+            // Try to get full profile details
+            let profileData = user;
+            try {
+              if (userId) {
+                const profileResult = await profileApi.getProfile(userId);
+                if (profileResult.success && profileResult.data) {
+                  profileData = profileResult.data;
+                }
+              }
+            } catch (error) {
+              console.log(`SuggestedConnections: Failed to fetch profile for ${userId}:`, error.message);
+            }
+
+            // Extract user info from different possible structures
+            const name = profileData.profile?.name || profileData.name || user.name || 'Unknown User';
+            const bio = profileData.profile?.bio || profileData.bio || profileData.profession || user.profession || 'Member';
+            const profilePic = profileData.profile?.profilePic || profileData.profilePic || user.profilePic || null;
+
+            return {
+              id: userId,
+              name,
+              bio,
+              profilePic,
+            };
+          })
+        );
+
+        console.log('SuggestedConnections: Loaded', formattedConnections.length, 'suggestions');
+        setConnections(formattedConnections);
       } catch (error) {
         console.error('SuggestedConnections: Failed to load suggestions', error);
         setConnections([]);
@@ -104,7 +244,11 @@ const SuggestedConnectionsScreen = ({ navigation }) => {
       >
         <View style={styles.cardContent}>
           <Image
-            source={item.profilePic ? { uri: item.profilePic } : require('../assets/icon.png')}
+            source={
+              item.profilePic
+                ? profileApi.getImageSource(item.profilePic, authApi.getAccessToken())
+                : require('../assets/icon.png')
+            }
             style={styles.avatar}
           />
           <View style={styles.userInfo}>
@@ -134,7 +278,7 @@ const SuggestedConnectionsScreen = ({ navigation }) => {
       <SafeAreaView style={styles.safeArea}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.logoText}>SciAstra</Text>
+          <Text style={styles.logoText}>Xcience</Text>
           <Text style={styles.title}>Connect with People</Text>
           <Text style={styles.subtitle}>
             Discover and connect with like-minded{'\n'}

@@ -1,5 +1,5 @@
 import React from "react";
-import { View, StyleSheet, TouchableOpacity, Image, Text } from "react-native";
+import { View, StyleSheet, TouchableOpacity, Image, Text, Platform } from "react-native";
 import colors from "../config/colors";
 import HeaderIcon from "./HeaderIcon";
 
@@ -20,11 +20,7 @@ const Header = ({
     <View style={styles.headerContainer}>
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <Image 
-            source={require("../assets/top.png")} 
-            style={styles.logoSvg}
-            resizeMode="contain"
-          />
+          <Text style={styles.logoText}>Xcience</Text>
         </View>
         {showTitle && (
           <View style={styles.headerCenter}>
@@ -94,9 +90,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 16,
   },
-  logoSvg: {
-    width: 120,
-    height: 40,
+  logoText: {
+    fontSize: 25,
+    fontFamily: Platform.select({
+      ios: 'Gilroy-SemiBold',
+      android: 'Arial Rounded MT Bold',
+      default: 'Arial Rounded MT Bold',
+    }),
+    fontWeight: 'bold',
+    color: colors.textPrimary,
   },
   iconButton: { 
     padding: 4,

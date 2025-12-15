@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, StyleSheet, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity, Image, Pressable, Linking } from "react-native";
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, Image, Pressable, Linking } from "react-native";
 import Container from "../components/Container";
 import colors from "../config/colors";
 import Header from "../components/Header";
@@ -9,6 +9,7 @@ import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { useFocusEffect } from "@react-navigation/native";
 import useScreenApiLogger from "../hooks/useScreenApiLogger";
 import Card from "../components/Card";
+import CustomRefreshControl from "../components/CustomRefreshControl";
 
 const DEFAULT_EVENT_BANNER_URL = require("../assets/splash-icon.png");
 
@@ -52,28 +53,45 @@ const getDisplayDate = (event) => {
 };
 
 const getVenueInfo = (event) => {
-  if (!event) return { type: 'none', value: 'Not available' };
+  if (!event) return { type: 'none', value: 'Not available', meetingLink: null };
   
-  const isOnline = event.venueType === 'ONLINE';
+  const isOnline = event.venueType === 'ONLINE' || event.venue_type === 'ONLINE' || event.venueType === 'VIRTUAL' || event.venue_type === 'VIRTUAL';
   
-  // Check for online link fields (common field names)
-  const onlineLink = event.onlineLink || event.meetingUrl || event.eventLink || event.link || event.onlineUrl || event.meetingLink;
+  // Check for online link fields (common field names) - check all possible locations
+  const onlineLink = event.meetLink || 
+                     event.onlineLink || 
+                     event.meetingUrl || 
+                     event.meeting_link ||
+                     event.meetingURL ||
+                     event.eventLink || 
+                     event.link || 
+                     event.onlineUrl || 
+                     event.online_url ||
+                     event.meetingLink ||
+                     event.videoLink ||
+                     event.video_link ||
+                     event.zoomLink ||
+                     event.zoom_link ||
+                     event.registration?.meetingLink ||
+                     event.registration?.onlineLink;
+  
+  // Always return meeting link if it exists, regardless of venue type
+  if (onlineLink && onlineLink.trim()) {
+    return { type: 'link', value: onlineLink.trim(), meetingLink: onlineLink.trim() };
+  }
   
   if (isOnline) {
-    if (onlineLink) {
-      return { type: 'link', value: onlineLink };
-    }
     // If online but no link, still show "Online Event" but indicate link not available
-    return { type: 'none', value: 'Not available' };
+    return { type: 'none', value: 'Online Event', meetingLink: null };
   }
   
   // For offline events, check venue address or location
-  const venueAddress = event.venueAddress || event.location;
+  const venueAddress = event.venueAddress || event.venue_address || event.location;
   if (venueAddress && venueAddress.trim()) {
-    return { type: 'address', value: venueAddress };
+    return { type: 'address', value: venueAddress.trim(), meetingLink: null };
   }
   
-  return { type: 'none', value: 'Not available' };
+  return { type: 'none', value: 'Not available', meetingLink: null };
 };
 
 const getStatusColor = (status) => {
@@ -179,11 +197,9 @@ const RegisteredEvents = ({ navigation }) => {
         <ScrollView 
           contentContainerStyle={{ paddingBottom: 32 }}
           refreshControl={
-            <RefreshControl
+            <CustomRefreshControl
               refreshing={refreshing}
               onRefresh={handleRefresh}
-              colors={[colors.primary]}
-              tintColor={colors.primary}
             />
           }
         >
@@ -206,9 +222,45 @@ const RegisteredEvents = ({ navigation }) => {
               const event = registration.event;
               if (!event) return null;
               
+              // Check for meeting link in both event and registration objects
+              const meetingLinkFromEvent = event.meetLink || event.onlineLink || event.meetingUrl || 
+                                          event.meeting_link || event.meetingURL || event.eventLink || 
+                                          event.link || event.onlineUrl || event.online_url ||
+                                          event.meetingLink || event.videoLink || event.video_link ||
+                                          event.zoomLink || event.zoom_link;
+              
+              const meetingLinkFromRegistration = registration.meetingLink || registration.onlineLink || 
+                                                   registration.meetingUrl || registration.meeting_link;
+              
+              const actualMeetingLink = meetingLinkFromRegistration || meetingLinkFromEvent;
+              
               const venueInfo = getVenueInfo(event);
-              const isOnline = event.venueType === 'ONLINE';
+              // Override venueInfo with meeting link from registration if it exists
+              if (actualMeetingLink && actualMeetingLink.trim()) {
+                venueInfo.meetingLink = actualMeetingLink.trim();
+                venueInfo.type = 'link';
+                venueInfo.value = actualMeetingLink.trim();
+              }
+              
+              const isOnline = event.venueType === 'ONLINE' || event.venue_type === 'ONLINE' || 
+                              event.venueType === 'VIRTUAL' || event.venue_type === 'VIRTUAL';
               const isExpanded = expandedCards.has(registration.id);
+              const hasMeetingLink = venueInfo.meetingLink && venueInfo.meetingLink.trim();
+              
+              // Debug log
+              console.log('RegisteredEvents: Full data:', {
+                registrationId: registration.id,
+                eventId: event.id,
+                title: event.title,
+                venueType: event.venueType || event.venue_type,
+                eventKeys: Object.keys(event),
+                registrationKeys: Object.keys(registration),
+                meetingLinkFromEvent: meetingLinkFromEvent,
+                meetingLinkFromRegistration: meetingLinkFromRegistration,
+                actualMeetingLink: actualMeetingLink,
+                venueInfo: venueInfo,
+                hasMeetingLink: hasMeetingLink
+              });
               
               return (
                 <Card key={registration.id} style={styles.card}>
@@ -242,17 +294,52 @@ const RegisteredEvents = ({ navigation }) => {
                       {/* Venue/Link Info */}
                       <View style={styles.venueContainer}>
                         <Icon 
-                          name={isOnline ? 'link' : 'map-marker'} 
+                          name={hasMeetingLink ? 'video' : (isOnline ? 'link' : 'map-marker')} 
                           size={14} 
-                          color="#9CA6AB" 
+                          color={hasMeetingLink ? "#8B5CF6" : "#9CA6AB"} 
                           style={styles.venueIcon}
                         />
-                        <Text style={styles.venueText} numberOfLines={1}>
-                          {venueInfo.type === 'link' ? venueInfo.value : 
-                           venueInfo.type === 'address' ? venueInfo.value : 
-                           'Not available'}
-                        </Text>
+                        {hasMeetingLink ? (
+                          <TouchableOpacity 
+                            onPress={() => {
+                              Linking.openURL(venueInfo.meetingLink).catch(err => {
+                                console.error('Error opening meeting link:', err);
+                                showError('Unable to open meeting link');
+                              });
+                            }}
+                            activeOpacity={0.7}
+                            style={{ flex: 1 }}
+                          >
+                            <Text style={styles.venueLinkText} numberOfLines={1}>
+                              {venueInfo.meetingLink}
+                            </Text>
+                          </TouchableOpacity>
+                        ) : (
+                          <Text style={styles.venueText} numberOfLines={1}>
+                            {venueInfo.type === 'address' ? venueInfo.value : (isOnline ? 'Online Event' : 'Not available')}
+                          </Text>
+                        )}
+                        {hasMeetingLink && (
+                          <Icon name="open-in-new" size={14} color="#8B5CF6" style={{ marginLeft: 4 }} />
+                        )}
                       </View>
+                      
+                      {/* Join Button - Always show if available */}
+                      {hasMeetingLink && (
+                        <TouchableOpacity 
+                          style={styles.joinButton}
+                          onPress={() => {
+                            Linking.openURL(venueInfo.meetingLink).catch(err => {
+                              console.error('Error opening meeting link:', err);
+                              showError('Unable to open meeting link');
+                            });
+                          }}
+                          activeOpacity={0.8}
+                        >
+                          <Icon name="video" size={18} color={colors.white} />
+                          <Text style={styles.joinButtonText}>Join</Text>
+                        </TouchableOpacity>
+                      )}
                       
                       {/* Payment Status */}
                       <View style={styles.paymentContainer}>
@@ -275,29 +362,44 @@ const RegisteredEvents = ({ navigation }) => {
                     {/* Expanded Details */}
                     {isExpanded && (
                       <View style={styles.expandedSection}>
-                        {/* Meet Link */}
-                        {isOnline && event.meetLink && (
+                        {/* Meeting Link - Always show in expanded view if available */}
+                        {hasMeetingLink && (
                           <View style={styles.detailSection}>
                             <Text style={styles.detailSectionTitle}>Join Event</Text>
-                            <TouchableOpacity 
-                              style={styles.meetLinkButton}
-                              onPress={() => {
-                                Linking.openURL(event.meetLink).catch(err => 
-                                  showError('Unable to open meeting link')
-                                );
-                              }}
-                            >
-                              <View style={styles.meetLinkIcon}>
+                            <View style={styles.meetingLinkContainer}>
+                              <View style={styles.meetingLinkInfo}>
                                 <Icon name="video" size={20} color="#8B5CF6" />
+                                <View style={styles.meetingLinkTextContainer}>
+                                  <Text style={styles.meetingLinkLabel}>Meeting Link</Text>
+                                  <TouchableOpacity 
+                                    onPress={() => {
+                                      Linking.openURL(venueInfo.meetingLink).catch(err => {
+                                        console.error('Error opening meeting link:', err);
+                                        showError('Unable to open meeting link');
+                                      });
+                                    }}
+                                    activeOpacity={0.7}
+                                  >
+                                    <Text style={styles.meetingLinkUrl} numberOfLines={1}>
+                                      {venueInfo.meetingLink}
+                                    </Text>
+                                  </TouchableOpacity>
+                                </View>
                               </View>
-                              <View style={styles.meetLinkContent}>
-                                <Text style={styles.meetLinkTitle}>Join Meeting</Text>
-                                <Text style={styles.meetLinkUrl} numberOfLines={1}>
-                                  {event.meetLink}
-                                </Text>
-                              </View>
-                              <Icon name="open-in-new" size={20} color={colors.textMuted} />
-                            </TouchableOpacity>
+                              <TouchableOpacity 
+                                style={styles.joinButton}
+                                onPress={() => {
+                                  Linking.openURL(venueInfo.meetingLink).catch(err => {
+                                    console.error('Error opening meeting link:', err);
+                                    showError('Unable to open meeting link');
+                                  });
+                                }}
+                                activeOpacity={0.8}
+                              >
+                                <Icon name="video" size={18} color={colors.white} />
+                                <Text style={styles.joinButtonText}>Join</Text>
+                              </TouchableOpacity>
+                            </View>
                           </View>
                         )}
 
@@ -483,6 +585,35 @@ const styles = StyleSheet.create({
     fontFamily: 'Gilroy-Medium',
     flex: 1,
   },
+  venueLinkText: {
+    fontSize: 12,
+    lineHeight: 16,
+    color: "#8B5CF6",
+    fontFamily: 'Gilroy-SemiBold',
+    flex: 1,
+    textDecorationLine: 'underline',
+  },
+  joinButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.button,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    marginTop: 8,
+    gap: 8,
+    shadowColor: colors.button,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  joinButtonText: {
+    fontSize: 14,
+    fontFamily: 'Gilroy-SemiBold',
+    color: colors.white,
+  },
   paymentContainer: {
     marginTop: 4,
     marginBottom: 4,
@@ -568,40 +699,37 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
-
-  // Meet Link Styles
-  meetLinkButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  meetingLinkContainer: {
     backgroundColor: colors.backgroundElevated,
     borderRadius: 12,
-    padding: 12,
+    padding: 16,
     borderWidth: 1,
     borderColor: colors.border,
   },
-  meetLinkIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(139, 92, 246, 0.15)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
+  meetingLinkInfo: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 12,
   },
-  meetLinkContent: {
+  meetingLinkTextContainer: {
     flex: 1,
+    marginLeft: 12,
   },
-  meetLinkTitle: {
-    fontSize: 14,
-    fontFamily: 'Gilroy-SemiBold',
-    color: colors.textPrimary,
-    marginBottom: 2,
-  },
-  meetLinkUrl: {
+  meetingLinkLabel: {
     fontSize: 12,
-    fontFamily: 'Gilroy-Regular',
+    fontFamily: 'Gilroy-SemiBold',
     color: colors.textMuted,
+    marginBottom: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
+  meetingLinkUrl: {
+    fontSize: 14,
+    fontFamily: 'Gilroy-Medium',
+    color: '#8B5CF6',
+    lineHeight: 20,
+  },
+
 
   // Speaker Styles
   speakerItem: {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,13 +7,14 @@ import {
   TextInput,
   StyleSheet,
   SafeAreaView,
-  RefreshControl,
   FlatList,
   Image,
   Modal,
   ActivityIndicator,
   KeyboardAvoidingView,
-  Platform
+  Platform,
+  Pressable,
+  Dimensions
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -24,16 +25,20 @@ import { useLoader } from '../context/LoaderContext';
 import { useNotification } from '../contexts/NotificationContext';
 import useScreenApiLogger from '../hooks/useScreenApiLogger';
 import { getProfileImageSource } from '../utils/profileImage';
+import PostIcon from '../components/PostIcon';
+import CustomRefreshControl from '../components/CustomRefreshControl';
 
 // Reaction types from backend enum
 const REACTIONS = [
   { type: "LIKE", icon: "👍", label: "Like" },
-  { type: "LOVE", icon: "❤️", label: "Love" },
-  { type: "CELEBRATE", icon: "🎉", label: "Celebrate" },
-  { type: "SUPPORT", icon: "🤝", label: "Support" },
-  { type: "LAUGH", icon: "😂", label: "Laugh" },
-  { type: "INSIGHTFUL", icon: "💡", label: "Insightful" },
+  // { type: "LOVE", icon: "❤️", label: "Love" },
+  // { type: "CELEBRATE", icon: "🎉", label: "Celebrate" },
+  // { type: "SUPPORT", icon: "🤝", label: "Support" },
+  // { type: "LAUGH", icon: "😂", label: "Laugh" },
+  // { type: "INSIGHTFUL", icon: "💡", label: "Insightful" },
 ];
+
+const { width: screenWidth } = Dimensions.get("window");
 
 const PostDetailScreen = ({ route, navigation }) => {
   const { postId, postData } = route.params;
@@ -56,10 +61,30 @@ const PostDetailScreen = ({ route, navigation }) => {
   const [commentToDelete, setCommentToDelete] = useState(null);
   const [commentAvatarErrors, setCommentAvatarErrors] = useState({});
   const [reactionAvatarErrors, setReactionAvatarErrors] = useState({});
+  const [userReaction, setUserReaction] = useState(null);
+  const [reactionLoading, setReactionLoading] = useState(false);
+  const [commentsYPosition, setCommentsYPosition] = useState(0);
+  const [showRepostModal, setShowRepostModal] = useState(false);
+  const [repostCommentText, setRepostCommentText] = useState('');
+  const [repostLoading, setRepostLoading] = useState(false);
+  const [showOptionsMenu, setShowOptionsMenu] = useState(false);
+  const [showReportSheet, setShowReportSheet] = useState(false);
+  const [menuButtonLayout, setMenuButtonLayout] = useState({ x: 0, y: 0, width: 0, height: 0 });
+  
+  const scrollViewRef = useRef(null);
+  const commentsSectionRef = useRef(null);
+  const menuButtonRef = useRef(null);
 
   useEffect(() => {
     loadPostDetails();
   }, [postId, postData]);
+
+  useEffect(() => {
+    // Set initial user reaction from post data
+    if (post?.userReaction) {
+      setUserReaction(post.userReaction);
+    }
+  }, [post]);
 
   const loadPostDetails = async () => {
     try {
@@ -109,10 +134,89 @@ const PostDetailScreen = ({ route, navigation }) => {
         setReactions(reactionsResult.data.reactions || []);
       }
 
+      // Set user reaction if available
+      if (post?.userReaction) {
+        setUserReaction(post.userReaction);
+      }
+
     } catch (error) {
       showError('Failed to load post details');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleReaction = async () => {
+    if (reactionLoading) return;
+
+    try {
+      setReactionLoading(true);
+
+      const previousReaction = userReaction;
+
+      // Optimistic update
+      if (previousReaction) {
+        setUserReaction(null);
+        setReactions(prev => prev.filter(r => r.user?.id !== authApi.getCurrentUserId()));
+      } else {
+        setUserReaction("LIKE");
+        // Add optimistic reaction to list
+        const currentUser = authApi.getCurrentUserId();
+        setReactions(prev => [...prev, {
+          id: `temp_${Date.now()}`,
+          type: "LIKE",
+          user: { id: currentUser, profile: { name: "You" } }
+        }]);
+      }
+
+      // Make API call
+      let result;
+      if (previousReaction) {
+        result = await postApi.removeReaction(postId);
+      } else {
+        result = await postApi.addReaction(postId, "LIKE");
+      }
+
+      if (!result.success && !result.cancelled) {
+        // Revert on failure
+        setUserReaction(previousReaction);
+        if (previousReaction) {
+          // Re-add reaction to list
+          const currentUser = authApi.getCurrentUserId();
+          setReactions(prev => [...prev, {
+            id: `temp_${Date.now()}`,
+            type: "LIKE",
+            user: { id: currentUser, profile: { name: "You" } }
+          }]);
+        } else {
+          setReactions(prev => prev.filter(r => r.user?.id !== authApi.getCurrentUserId()));
+        }
+        showError('Failed to update reaction. Please try again.');
+      } else if (result.success && result.data) {
+        // Update post counts if API returns updated data
+        if (result.data.counts) {
+          setPost(prev => ({
+            ...prev,
+            counts: {
+              ...prev.counts,
+              reactions: result.data.counts.reactions
+            }
+          }));
+        }
+      }
+    } catch (error) {
+      showError('Something went wrong. Please try again.');
+    } finally {
+      setReactionLoading(false);
+    }
+  };
+
+  const scrollToComments = () => {
+    if (commentsYPosition > 0 && scrollViewRef.current) {
+      scrollViewRef.current.scrollTo({ y: commentsYPosition - 20, animated: true });
+    } else {
+      // Fallback: scroll to a reasonable position
+      scrollViewRef.current?.scrollTo({ y: 500, animated: true });
     }
   };
 
@@ -208,10 +312,39 @@ const PostDetailScreen = ({ route, navigation }) => {
     return { uri: mediaItem.uri || mediaItem.url || mediaItem.displayUrl };
   };
 
+  const timeAgo = (date) => {
+    const seconds = Math.floor((new Date() - new Date(date)) / 1000);
+    let interval = seconds / 31536000;
+    if (interval > 1) {
+      return Math.floor(interval) + " year" + (Math.floor(interval) === 1 ? "" : "s");
+    }
+    interval = seconds / 2592000;
+    if (interval > 1) {
+      return Math.floor(interval) + " month" + (Math.floor(interval) === 1 ? "" : "s");
+    }
+    interval = seconds / 86400;
+    if (interval > 1) {
+      return Math.floor(interval) + " day" + (Math.floor(interval) === 1 ? "" : "s");
+    }
+    interval = seconds / 3600;
+    if (interval > 1) {
+      return Math.floor(interval) + " hour" + (Math.floor(interval) === 1 ? "" : "s");
+    }
+    interval = seconds / 60;
+    if (interval > 1) {
+      return Math.floor(interval) + " minute" + (Math.floor(interval) === 1 ? "" : "s");
+    }
+    return Math.floor(seconds) + " second" + (Math.floor(seconds) === 1 ? "" : "s");
+  };
+
   const renderComment = ({ item: comment }) => {
+    // Ensure we get the profilePic from the correct location
+    const userWithProfile = comment.user || {};
     const imageSource = commentAvatarErrors[comment.id]
       ? require('../assets/icon.png')
-      : getProfileImageSource(comment.user, { fallbackKey: comment.profilePic });
+      : getProfileImageSource(userWithProfile, { 
+          fallbackKey: comment.profilePic || userWithProfile.profilePic || userWithProfile.profile?.profilePic 
+        });
     
     const userId = comment.user?.id || comment.userId;
     const currentUserId = authApi.getCurrentUserId();
@@ -237,49 +370,52 @@ const PostDetailScreen = ({ route, navigation }) => {
 
     return (
       <View style={styles.commentItem}>
-        <TouchableOpacity onPress={handleUserPress}>
-          <Image
-            source={imageSource}
-            style={styles.commentAvatar}
-            resizeMode="cover"
-            defaultSource={require('../assets/icon.png')}
-            onError={() => {
-              setCommentAvatarErrors((prev) => ({ ...prev, [comment.id]: true }));
-            }}
-          />
-        </TouchableOpacity>
-      <View style={styles.commentContent}>
-        <View style={styles.commentHeader}>
+        <View style={styles.commentLeftContainer}>
           <TouchableOpacity onPress={handleUserPress}>
-            <Text style={styles.commentAuthor}>
-              {comment.user?.profile?.name || 'Unknown User'}
-            </Text>
+            <Image
+              source={imageSource}
+              style={styles.commentAvatar}
+              resizeMode="cover"
+              defaultSource={require('../assets/icon.png')}
+              onError={() => {
+                setCommentAvatarErrors((prev) => ({ ...prev, [comment.id]: true }));
+              }}
+            />
           </TouchableOpacity>
-          <View style={styles.commentHeaderRight}>
-            <Text style={styles.commentTime}>
-              {new Date(comment.createdAt).toLocaleDateString()}
-            </Text>
-            {canDelete && (
-              <TouchableOpacity 
-                onPress={handleDeletePress}
-                style={styles.deleteButton}
-              >
-                <Icon name="delete-outline" size={18} color={colors.error} />
-              </TouchableOpacity>
-            )}
-          </View>
+          {/* Vertical gray line on the left - starts below profile pic */}
+          <View style={styles.commentLeftLine} />
         </View>
-        <Text style={styles.commentText}>{comment.content}</Text>
-
-        {comment._count?.replies > 0 && (
-          <TouchableOpacity style={styles.repliesButton}>
-            <Text style={styles.repliesText}>
-              View {comment._count.replies} {comment._count.replies === 1 ? 'reply' : 'replies'}
-            </Text>
-          </TouchableOpacity>
-        )}
+        
+        <View style={styles.commentContent}>
+          <View style={styles.commentHeader}>
+            <View style={styles.commentHeaderLeft}>
+              <TouchableOpacity onPress={handleUserPress}>
+                <Text style={styles.commentAuthor}>
+                  {comment.user?.profile?.name || 'Unknown User'}
+                </Text>
+              </TouchableOpacity>
+              <Text style={styles.commentProfession}>
+                {comment.user?.profile?.profession || 'Professional'}
+              </Text>
+            </View>
+            <View style={styles.commentHeaderRight}>
+              <Text style={styles.commentTime}>
+                {comment.createdAt ? timeAgo(comment.createdAt) : ''}
+              </Text>
+              {canDelete && (
+                <TouchableOpacity 
+                  onPress={handleDeletePress}
+                  style={styles.commentOptions}
+                >
+                  <Icon name="dots-vertical" size={18} color={colors.textMuted} />
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+          
+          <Text style={styles.commentText}>{comment.content}</Text>
+        </View>
       </View>
-    </View>
     );
   };
 
@@ -381,7 +517,20 @@ const PostDetailScreen = ({ route, navigation }) => {
           <Icon name="arrow-left" size={24} color={colors.white} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Post</Text>
-        <TouchableOpacity>
+        <TouchableOpacity
+          ref={menuButtonRef}
+          onPress={(e) => {
+            e.stopPropagation();
+            if (menuButtonRef.current) {
+              menuButtonRef.current.measureInWindow((x, y, width, height) => {
+                setMenuButtonLayout({ x, y, width, height });
+                setShowOptionsMenu(true);
+              });
+            } else {
+              setShowOptionsMenu(true);
+            }
+          }}
+        >
           <Icon name="dots-vertical" size={24} color={colors.white} />
         </TouchableOpacity>
       </View>
@@ -392,10 +541,11 @@ const PostDetailScreen = ({ route, navigation }) => {
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
         <ScrollView
+          ref={scrollViewRef}
           style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            <CustomRefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           }
           keyboardShouldPersistTaps="handled"
         >
@@ -403,18 +553,40 @@ const PostDetailScreen = ({ route, navigation }) => {
           <View style={styles.postCard}>
             {/* Author Info */}
             <View style={styles.postHeader}>
-              <Image
-                source={{
-                  uri: post.author?.profile?.profilePic
-                    ? postApi.getImageSource(post.author.profile.profilePic, authApi.getAccessToken()).uri
-                    : post.author?.profilePic || 'https://randomuser.me/api/portraits/men/1.jpg'
+              <TouchableOpacity
+                onPress={() => {
+                  const authorId = post.author?.id || post.userId;
+                  if (authorId === "1" || authorId === authApi.getCurrentUserId()) {
+                    navigation.navigate("ProfileTab");
+                  } else {
+                    navigation.navigate("UserProfile", { userId: authorId });
+                  }
                 }}
-                style={styles.avatar}
-              />
+              >
+                <Image
+                  source={{
+                    uri: post.author?.profile?.profilePic
+                      ? postApi.getImageSource(post.author.profile.profilePic, authApi.getAccessToken()).uri
+                      : post.author?.profilePic || 'https://randomuser.me/api/portraits/men/1.jpg'
+                  }}
+                  style={styles.avatar}
+                />
+              </TouchableOpacity>
               <View style={styles.authorInfo}>
-                <Text style={styles.authorName}>
-                  {post.author?.profile?.name || post.author?.name || 'Unknown User'}
-                </Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    const authorId = post.author?.id || post.userId;
+                    if (authorId === "1" || authorId === authApi.getCurrentUserId()) {
+                      navigation.navigate("ProfileTab");
+                    } else {
+                      navigation.navigate("UserProfile", { userId: authorId });
+                    }
+                  }}
+                >
+                  <Text style={styles.authorName}>
+                    {post.author?.profile?.name || post.author?.name || 'Unknown User'}
+                  </Text>
+                </TouchableOpacity>
                 <Text style={styles.postTime}>
                   {new Date(post.createdAt).toLocaleDateString()}
                 </Text>
@@ -440,21 +612,110 @@ const PostDetailScreen = ({ route, navigation }) => {
 
             {/* Engagement Stats */}
             <View style={styles.engagementStats}>
-              <View style={styles.statButton}>
-                <Text style={styles.statText}>
-                  {totalReactions} {totalReactions === 1 ? 'reaction' : 'reactions'}
-                </Text>
-              </View>
-              <View style={styles.statButton}>
-                <Text style={styles.statText}>
-                  {totalComments} {totalComments === 1 ? 'comment' : 'comments'}
-                </Text>
-              </View>
+              {totalReactions > 0 ? (
+                <View style={styles.statsRow}>
+                  <View style={styles.reactionDisplay}>
+                    <Text style={styles.reactionEmoji}>👍</Text>
+                    <Text style={styles.reactionCount}>
+                      {totalReactions} {totalReactions === 1 ? 'Like' : 'Likes'}
+                    </Text>
+                  </View>
+                </View>
+              ) : (
+                <Text style={styles.statsText}>Be the first to like</Text>
+              )}
+              {totalComments > 0 && (
+                <TouchableOpacity onPress={scrollToComments}>
+                  <Text style={styles.statsText}>
+                    {totalComments} {totalComments === 1 ? 'Comment' : 'Comments'}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* Action Buttons */}
+            <View style={styles.actionButtons}>
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={handleReaction}
+                disabled={reactionLoading}
+              >
+                {reactionLoading ? (
+                  <ActivityIndicator size="small" color={colors.primary} />
+                ) : (
+                  <View style={styles.actionContent}>
+                    {userReaction ? (
+                      <Text style={styles.reactionEmoji}>👍</Text>
+                    ) : (
+                      <PostIcon name="like" size={20} color={colors.textSecondary} />
+                    )}
+                    <Text style={[styles.actionButtonText, userReaction && styles.actionButtonTextActive, { marginLeft: 6 }]}>
+                      {userReaction ? 'Liked' : 'Like'}
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={scrollToComments}
+              >
+                <View style={styles.actionContent}>
+                  <PostIcon name="comment" size={20} color={colors.textSecondary} />
+                  <Text style={[styles.actionButtonText, { marginLeft: 6 }]}>Comment</Text>
+                </View>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={() => {
+                  // Check if user is trying to repost their own post
+                  const currentUserId = authApi.getCurrentUserId();
+                  const postAuthorId = post.author?.id || post.userId;
+                  
+                  if (String(currentUserId) === String(postAuthorId)) {
+                    showError('You cannot repost your own post');
+                    return;
+                  }
+                  
+                  // Check if this is already a repost - can only repost original posts
+                  if (post.isRepost && post.originalPost) {
+                    // Repost the original post instead
+                    setShowRepostModal(true);
+                  } else {
+                    setShowRepostModal(true);
+                  }
+                }}
+              >
+                <View style={styles.actionContent}>
+                  <PostIcon name="reshare" size={20} color={colors.textSecondary} />
+                  <Text style={[styles.actionButtonText, { marginLeft: 6 }]}>Repost</Text>
+                </View>
+              </TouchableOpacity>
             </View>
           </View>
 
           {/* Comments Section */}
-          <View style={styles.commentsSection}>
+          <View 
+            style={styles.commentsSection} 
+            ref={commentsSectionRef}
+            onLayout={(event) => {
+              const { y } = event.nativeEvent.layout;
+              // Get the absolute position by measuring from the ScrollView
+              if (commentsSectionRef.current && scrollViewRef.current) {
+                commentsSectionRef.current.measureLayout(
+                  scrollViewRef.current,
+                  (x, measuredY) => {
+                    setCommentsYPosition(measuredY);
+                  },
+                  () => {
+                    // Fallback: use layout y
+                    setCommentsYPosition(y);
+                  }
+                );
+              } else {
+                setCommentsYPosition(y);
+              }
+            }}
+          >
             {comments.length > 0 ? (
               <FlatList
                 data={comments}
@@ -503,8 +764,11 @@ const PostDetailScreen = ({ route, navigation }) => {
         animationType="fade"
         onRequestClose={() => setDeleteModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
+        <Pressable 
+          style={[styles.modalOverlay, { justifyContent: 'center', alignItems: 'center', padding: 20 }]}
+          onPress={() => setDeleteModalVisible(false)}
+        >
+          <Pressable style={styles.modalContainer} onPress={(e) => e.stopPropagation()}>
             {/* Icon */}
             <View style={styles.modalIconContainer}>
               <Icon name="delete-alert" size={48} color={colors.error} />
@@ -539,8 +803,216 @@ const PostDetailScreen = ({ route, navigation }) => {
                 <Text style={styles.deleteButtonText}>Delete</Text>
               </TouchableOpacity>
             </View>
-          </View>
-        </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Repost Modal */}
+      <Modal
+        visible={showRepostModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => {
+          setShowRepostModal(false);
+          setRepostCommentText('');
+        }}
+      >
+        <Pressable 
+          style={styles.repostModalOverlay}
+          onPress={() => {
+            setShowRepostModal(false);
+            setRepostCommentText('');
+          }}
+        >
+          <Pressable style={styles.repostModal} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.repostModalHeader}>
+              <Text style={styles.repostModalTitle}>Repost</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowRepostModal(false);
+                  setRepostCommentText('');
+                }}
+              >
+                <Icon name="close" size={24} color={colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
+            
+            <Text style={styles.repostModalSubtitle}>Add a comment (optional)</Text>
+            
+            <TextInput
+              style={styles.repostCommentInput}
+              placeholder="What are your thoughts?"
+              placeholderTextColor={colors.textMuted}
+              value={repostCommentText}
+              onChangeText={setRepostCommentText}
+              multiline
+              maxLength={500}
+              autoFocus
+            />
+            
+            <View style={styles.repostModalActions}>
+              <TouchableOpacity
+                style={[styles.repostModalButton, styles.repostCancelButton]}
+                onPress={() => {
+                  setShowRepostModal(false);
+                  setRepostCommentText('');
+                }}
+                disabled={repostLoading}
+              >
+                <Text style={styles.repostCancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.repostModalButton, styles.repostConfirmButton]}
+                onPress={async () => {
+                  const postToRepost = post.isRepost && post.originalPost ? post.originalPost.id : post.id;
+                  
+                  setRepostLoading(true);
+                  try {
+                    const result = await postApi.repostPost(postToRepost, repostCommentText);
+                    
+                    if (result.success) {
+                      showSuccess('Post reposted successfully!');
+                      setShowRepostModal(false);
+                      setRepostCommentText('');
+                      // Optionally refresh the post or navigate back
+                    } else {
+                      showError(result.message || 'Failed to repost');
+                    }
+                  } catch (error) {
+                    showError('Failed to repost. Please try again.');
+                  } finally {
+                    setRepostLoading(false);
+                  }
+                }}
+                disabled={repostLoading}
+              >
+                {repostLoading ? (
+                  <ActivityIndicator size="small" color={colors.white} />
+                ) : (
+                  <Text style={styles.repostConfirmButtonText}>Repost</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Options Menu Modal */}
+      <Modal
+        visible={showOptionsMenu}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowOptionsMenu(false)}
+      >
+        <Pressable 
+          style={styles.modalOverlay}
+          onPress={() => setShowOptionsMenu(false)}
+        >
+          <Pressable 
+            style={[
+              styles.optionsMenu,
+              {
+                position: 'absolute',
+                top: menuButtonLayout.y + menuButtonLayout.height + 8,
+                right: screenWidth - menuButtonLayout.x - menuButtonLayout.width + 20,
+              }
+            ]}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <TouchableOpacity
+              style={styles.optionItem}
+              onPress={() => {
+                setShowOptionsMenu(false);
+                const authorId = post.author?.id || post.userId;
+                if (authorId === "1" || authorId === authApi.getCurrentUserId()) {
+                  navigation.navigate("ProfileTab");
+                } else {
+                  navigation.navigate("UserProfile", { userId: authorId });
+                }
+              }}
+            >
+              <Text style={styles.optionText}>View Profile</Text>
+            </TouchableOpacity>
+            <View style={styles.optionDivider} />
+            <TouchableOpacity
+              style={styles.optionItem}
+              onPress={() => {
+                setShowOptionsMenu(false);
+                setShowReportSheet(true);
+              }}
+            >
+              <Text style={[styles.optionText, styles.reportOptionTextMenu]}>Report Post</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Report Bottom Sheet */}
+      <Modal
+        visible={showReportSheet}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowReportSheet(false)}
+      >
+        <Pressable 
+          style={styles.bottomSheetOverlay}
+          onPress={() => setShowReportSheet(false)}
+        >
+          <Pressable style={styles.bottomSheet} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.bottomSheetHandle} />
+            <Text style={styles.reportTitle}>Report</Text>
+            <Text style={styles.reportSubtitle}>
+              Why are you reporting this post?
+            </Text>
+            <Text style={styles.reportInfo}>
+              Your report is anonymous. If someone is in immediate danger, call the local emergency services – don't wait.
+            </Text>
+            
+            <ScrollView 
+              style={styles.reportOptionsList}
+              showsVerticalScrollIndicator={false}
+            >
+              {[
+                "I just don't like it",
+                "Bullying or unwanted contact",
+                "Suicide, self-injury or eating disorders",
+                "Violence, hate or exploitation",
+                "Selling or promoting restricted items",
+                "Nudity or sexual activity",
+                "Scam, fraud or spam",
+                "False information",
+                "Intellectual property"
+              ].map((option, index) => (
+                <TouchableOpacity
+                  key={index}
+                  style={styles.reportOption}
+                  onPress={async () => {
+                    try {
+                      setShowReportSheet(false);
+                      
+                      // Get the post ID to report (handle reposts correctly)
+                      const postToReport = post.isRepost && post.originalPost ? post.originalPost.id : post.id;
+                      
+                      // Call the report API
+                      const result = await postApi.reportPost(postToReport, option);
+                      
+                      if (result.success) {
+                        showSuccess(result.message || 'Report submitted successfully. Our team will review it.');
+                      } else {
+                        showError(result.message || 'Failed to submit report. Please try again.');
+                      }
+                    } catch (error) {
+                      console.error('Report error:', error);
+                      showError('Failed to submit report. Please try again.');
+                    }
+                  }}
+                >
+                  <Text style={styles.reportOptionText}>{option}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
       </Modal>
     </SafeAreaView>
   );
@@ -613,20 +1085,31 @@ const styles = StyleSheet.create({
   postCard: {
     backgroundColor: colors.card,
     margin: 16,
-    borderRadius: 16,
-    padding: 20,
-    borderWidth: 0,
+    borderRadius: 20,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: colors.border,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 4,
   },
   postHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
   },
   avatar: {
     width: 48,
     height: 48,
     borderRadius: 24,
     marginRight: 12,
+    borderWidth: 2,
+    borderColor: colors.border,
   },
   authorInfo: {
     flex: 1,
@@ -660,26 +1143,66 @@ const styles = StyleSheet.create({
   },
   engagementStats: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingTop: 16,
-    marginTop: 16,
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 12,
+    paddingBottom: 12,
     borderTopWidth: 1,
     borderTopColor: colors.border,
-    gap: 12,
+    marginTop: 12,
   },
-  statButton: {
-    flex: 1,
-    backgroundColor: colors.backgroundElevated,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 12,
+  statsRow: {
+    flexDirection: 'row',
     alignItems: 'center',
   },
-  statText: {
+  reactionDisplay: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  reactionCount: {
     fontSize: 14,
-    fontFamily: 'Gilroy-SemiBold',
-    color: colors.textPrimary,
-    textAlign: 'center',
+    fontFamily: 'Gilroy-Medium',
+    color: colors.textSecondary,
+    marginLeft: 6,
+  },
+  statsText: {
+    fontSize: 14,
+    fontFamily: 'Gilroy-Medium',
+    color: colors.textSecondary,
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 16,
+    paddingBottom: 4,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    marginTop: 0,
+    paddingHorizontal: 4,
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    flex: 1,
+  },
+  actionContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  actionButtonText: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    fontFamily: 'Gilroy-Medium',
+  },
+  actionButtonTextActive: {
+    color: colors.primary,
+  },
+  reactionEmoji: {
+    fontSize: 20,
   },
 
   // Tabs
@@ -711,22 +1234,29 @@ const styles = StyleSheet.create({
   // Comments
   commentsSection: {
     paddingHorizontal: 16,
+    marginTop: 8,
   },
   commentItem: {
     flexDirection: 'row',
-    marginBottom: 12,
-    backgroundColor: colors.card,
-    padding: 16,
-    borderRadius: 16,
+    marginBottom: 20,
+    position: 'relative',
+  },
+  commentLeftContainer: {
+    alignItems: 'center',
+    marginRight: 12,
   },
   commentAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    marginRight: 12,
-    borderWidth: 2,
-    borderColor: colors.border,
-    backgroundColor: colors.backgroundElevated,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+  },
+  commentLeftLine: {
+    position: 'absolute',
+    left: 19.5,
+    top: 40,
+    bottom: 0,
+    width: 1,
+    backgroundColor: colors.border,
   },
   commentContent: {
     flex: 1,
@@ -734,8 +1264,11 @@ const styles = StyleSheet.create({
   commentHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 6,
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  commentHeaderLeft: {
+    flex: 1,
   },
   commentHeaderRight: {
     flexDirection: 'row',
@@ -746,34 +1279,27 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontFamily: 'Gilroy-Bold',
     color: colors.textPrimary,
+    marginBottom: 2,
   },
-  commentTime: {
-    fontSize: 11,
-    fontFamily: 'Gilroy-Medium',
+  commentProfession: {
+    fontSize: 13,
+    fontFamily: 'Gilroy-Regular',
     color: colors.textMuted,
   },
-  deleteButton: {
+  commentTime: {
+    fontSize: 12,
+    fontFamily: 'Gilroy-Regular',
+    color: colors.textMuted,
+  },
+  commentOptions: {
     padding: 4,
-    marginLeft: 4,
   },
   commentText: {
     fontSize: 14,
-    fontFamily: 'Gilroy-Medium',
+    fontFamily: 'Gilroy-Regular',
     lineHeight: 20,
     color: colors.textSecondary,
-  },
-  repliesButton: {
-    marginTop: 8,
-    backgroundColor: colors.backgroundElevated,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    alignSelf: 'flex-start',
-  },
-  repliesText: {
-    fontSize: 12,
-    fontFamily: 'Gilroy-SemiBold',
-    color: colors.button,
+    marginBottom: 8,
   },
 
   // Reactions
@@ -883,10 +1409,7 @@ const styles = StyleSheet.create({
   // Delete Modal Styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
   modalContainer: {
     backgroundColor: colors.backgroundElevated,
@@ -959,6 +1482,178 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: 'Gilroy-SemiBold',
     color: colors.white,
+  },
+  repostModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  repostModal: {
+    backgroundColor: colors.card,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingTop: 12,
+    paddingBottom: 40,
+    paddingHorizontal: 20,
+    maxHeight: '80%',
+  },
+  repostModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+    paddingTop: 8,
+  },
+  repostModalTitle: {
+    fontSize: 20,
+    fontFamily: 'Gilroy-Bold',
+    color: colors.textPrimary,
+  },
+  repostModalSubtitle: {
+    fontSize: 15,
+    fontFamily: 'Gilroy-Medium',
+    color: colors.textSecondary,
+    marginBottom: 12,
+  },
+  repostCommentInput: {
+    backgroundColor: colors.backgroundElevated,
+    borderRadius: 12,
+    padding: 16,
+    minHeight: 120,
+    maxHeight: 200,
+    fontSize: 15,
+    fontFamily: 'Gilroy-Regular',
+    color: colors.textPrimary,
+    textAlignVertical: 'top',
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: 20,
+  },
+  repostModalActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  repostModalButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  repostCancelButton: {
+    backgroundColor: colors.backgroundElevated,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  repostCancelButtonText: {
+    fontSize: 16,
+    fontFamily: 'Gilroy-SemiBold',
+    color: colors.textPrimary,
+  },
+  repostConfirmButton: {
+    backgroundColor: colors.button,
+  },
+  repostConfirmButtonText: {
+    fontSize: 16,
+    fontFamily: 'Gilroy-SemiBold',
+    color: colors.white,
+  },
+  // Options Menu Styles
+  optionsMenu: {
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    width: 180,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: colors.border,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  optionItem: {
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+  },
+  optionText: {
+    color: colors.textPrimary,
+    fontSize: 16,
+    fontFamily: 'Gilroy-Medium',
+  },
+  reportOptionTextMenu: {
+    color: colors.error || '#ef4444',
+  },
+  optionDivider: {
+    height: 1,
+    backgroundColor: colors.border,
+  },
+  // Report Bottom Sheet Styles
+  bottomSheetOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  bottomSheet: {
+    backgroundColor: colors.card,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingTop: 12,
+    paddingBottom: 40,
+    maxHeight: '90%',
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderBottomWidth: 0,
+  },
+  bottomSheetHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: colors.textMuted,
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 20,
+  },
+  reportTitle: {
+    color: colors.textPrimary,
+    fontSize: 20,
+    fontFamily: 'Gilroy-Bold',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  reportSubtitle: {
+    color: colors.textPrimary,
+    fontSize: 16,
+    fontFamily: 'Gilroy-SemiBold',
+    textAlign: 'center',
+    marginBottom: 8,
+    paddingHorizontal: 20,
+  },
+  reportInfo: {
+    color: colors.textMuted,
+    fontSize: 13,
+    fontFamily: 'Gilroy-Regular',
+    textAlign: 'center',
+    marginBottom: 24,
+    paddingHorizontal: 20,
+    lineHeight: 18,
+  },
+  reportOptionsList: {
+    paddingHorizontal: 0,
+  },
+  reportOption: {
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  reportOptionText: {
+    color: colors.textPrimary,
+    fontSize: 16,
+    fontFamily: 'Gilroy-Regular',
   },
 });
 

@@ -1,12 +1,13 @@
 // screens/NotificationsScreen.js
 import React, { useState, useEffect } from 'react';
-import { FlatList, Text, StyleSheet, View, ActivityIndicator, RefreshControl, TouchableOpacity } from 'react-native';
+import { FlatList, Text, StyleSheet, View, ActivityIndicator, TouchableOpacity } from 'react-native';
 import Container from '../components/Container';
 import Card from '../components/Card';
 import colors from '../config/colors';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useNotification } from '../contexts/NotificationContext';
 import useScreenApiLogger from '../hooks/useScreenApiLogger';
+import CustomRefreshControl from '../components/CustomRefreshControl';
 
 const NotificationsScreen = () => {
   const [notifications, setNotifications] = useState([]);
@@ -101,11 +102,9 @@ const NotificationsScreen = () => {
         keyExtractor={(item) => item.id}
         renderItem={renderNotification}
         refreshControl={
-          <RefreshControl
+          <CustomRefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            colors={[colors.primary]}
-            tintColor={colors.primary}
           />
         }
         ListEmptyComponent={

@@ -1,6 +1,6 @@
 // screens/ProfileScreen.js
 import React, { useState, useEffect } from 'react';
-import { View, Text, Image, ScrollView, StyleSheet, TouchableOpacity, Alert, RefreshControl, TextInput, ActivityIndicator } from 'react-native';
+import { View, Text, Image, ScrollView, StyleSheet, TouchableOpacity, Alert, TextInput, ActivityIndicator } from 'react-native';
 import Container from '../components/Container';
 import colors from '../config/colors';
 import authManager from '../services/AuthManager';
@@ -12,6 +12,10 @@ import Header from '../components/Header';
 import { useLoader } from "../context/LoaderContext";
 import ConnectionApi from '../api/ConnectionApi';
 import useScreenApiLogger from '../hooks/useScreenApiLogger';
+import CustomRefreshControl from '../components/CustomRefreshControl';
+import profileApi from '../api/ProfileApi';
+import { getProfileImageSource } from '../utils/profileImage';
+import { useFocusEffect } from '@react-navigation/native';
 
 const ProfileScreen = ({ navigation }) => {
   const { showLoader, hideLoader } = useLoader();
@@ -24,7 +28,14 @@ const ProfileScreen = ({ navigation }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [skillModalVisible, setSkillModalVisible] = useState(false);
   const [experienceModalVisible, setExperienceModalVisible] = useState(false);
+  const [educationModalVisible, setEducationModalVisible] = useState(false);
+  const [topicModalVisible, setTopicModalVisible] = useState(false);
+  const [removeTopicModalVisible, setRemoveTopicModalVisible] = useState(false);
+  const [topicToRemove, setTopicToRemove] = useState(null);
+  const [removeSkillModalVisible, setRemoveSkillModalVisible] = useState(false);
+  const [skillToRemove, setSkillToRemove] = useState(null);
   const [newSkill, setNewSkill] = useState('');
+  const [newTopic, setNewTopic] = useState('');
   const [newExperience, setNewExperience] = useState({
     company: '',
     role: '',
@@ -33,7 +44,17 @@ const ProfileScreen = ({ navigation }) => {
     description: '',
     isCurrentRole: false
   });
+  const [newEducation, setNewEducation] = useState({
+    institution: '',
+    degree: '',
+    fieldOfStudy: '',
+    startDate: '',
+    endDate: '',
+    grade: '',
+    isCurrent: false
+  });
   const [editingExperience, setEditingExperience] = useState(null);
+  const [editingEducation, setEditingEducation] = useState(null);
   const [modalLoading, setModalLoading] = useState(false);
 
   useScreenApiLogger('Profile');
@@ -41,6 +62,17 @@ const ProfileScreen = ({ navigation }) => {
   useEffect(() => {
     initializeProfile();
   }, []);
+
+  // Reload data when screen comes into focus (e.g., after editing profile)
+  useFocusEffect(
+    React.useCallback(() => {
+      if (isAuthenticated && user) {
+        // Refresh user data from AuthManager first, then reload
+        authManager.refreshUserData();
+        loadCurrentUserData();
+      }
+    }, [isAuthenticated])
+  );
 
   const initializeProfile = async () => {
     showLoader();
@@ -131,15 +163,80 @@ const ProfileScreen = ({ navigation }) => {
         return;
       }
       
-      // Load user posts using PostApi
+      // Load user posts using PostApi (includes both posts and reposts)
       try {
         const userId = authManager.getCurrentUser()?.userId;
         if (userId) {
-          const postsResult = await postApi.getUserPosts(userId, 1, 10);
+          const postsResult = await postApi.getUserPosts(userId, 1, 50); // Increased limit to get more posts including reposts
           if (postsResult.success) {
             // Extract posts array from the response data structure
-            const postsArray = postsResult.data?.posts || postsResult.data || [];
-            setPosts(Array.isArray(postsArray) ? postsArray : []);
+            // The API should return both regular posts and reposts
+            let postsArray = postsResult.data?.posts || postsResult.data || [];
+            
+            // Handle different response structures
+            if (!Array.isArray(postsArray)) {
+              // If data is an object with posts array inside
+              postsArray = postsArray.posts || [];
+            }
+            
+            const allPosts = Array.isArray(postsArray) ? postsArray : [];
+            
+            // Process posts - backend now sends reposts with correct structure:
+            // - isRepost: true
+            // - repostComment: "..." (optional)
+            // - originalPost: { ... } (nested original post with full details)
+            // - author: { ... } (person who reposted - you)
+            // - counts: { ... } (repost's own counts)
+            const processedPosts = allPosts.map(post => {
+              // If it's a repost, ensure all fields are properly set
+              if (post.isRepost === true && post.originalPost) {
+                return {
+                  ...post,
+                  isRepost: true,
+                  originalPost: post.originalPost,
+                  repostComment: post.repostComment || null,
+                  // Ensure author is set (person who reposted)
+                  author: post.author || {
+                    id: userId,
+                    profile: {
+                      name: user?.name || 'You',
+                      profession: user?.designation || 'User',
+                      profilePic: user?.profilePic
+                    }
+                  },
+                  // Ensure counts are set
+                  counts: post.counts || {
+                    reactions: 0,
+                    comments: 0,
+                    reposts: 0
+                  }
+                };
+              }
+              // Regular post - return as is
+              return post;
+            });
+            
+            // Log to verify reposts are included
+            const repostsCount = processedPosts.filter(p => p.isRepost === true).length;
+            console.log(`[Profile] Loaded ${processedPosts.length} posts (${repostsCount} reposts)`);
+            if (repostsCount > 0) {
+              console.log('[Profile] Reposts found:', processedPosts.filter(p => p.isRepost === true).map(p => ({
+                id: p.id,
+                hasOriginalPost: !!p.originalPost,
+                repostComment: p.repostComment,
+                originalPostId: p.originalPost?.id,
+                originalAuthor: p.originalPost?.author?.profile?.name
+              })));
+            }
+            
+            // Sort by createdAt (newest first) to show reposts and posts chronologically
+            const sortedPosts = processedPosts.sort((a, b) => {
+              const dateA = new Date(a.createdAt || 0);
+              const dateB = new Date(b.createdAt || 0);
+              return dateB - dateA;
+            });
+            
+            setPosts(sortedPosts);
           } else {
             console.error('Failed to load user posts:', postsResult.message);
             setPosts([]);
@@ -265,7 +362,161 @@ const ProfileScreen = ({ navigation }) => {
   };
 
   const handleAddEducation = () => {
-    Alert.alert('Add Education', 'Education management will be available soon.');
+    setEditingEducation(null);
+    setNewEducation({
+      institution: '',
+      degree: '',
+      fieldOfStudy: '',
+      startDate: '',
+      endDate: '',
+      grade: '',
+      isCurrent: false
+    });
+    setEducationModalVisible(true);
+  };
+
+  const handleEditEducation = (education) => {
+    setEditingEducation(education);
+    setNewEducation({
+      institution: education.institution,
+      degree: education.degree,
+      fieldOfStudy: education.fieldOfStudy || '',
+      startDate: new Date(user.rawData.education.find(edu => edu.id === education.id)?.startDate || '').getFullYear().toString(),
+      endDate: education.isCurrent ? '' : new Date(user.rawData.education.find(edu => edu.id === education.id)?.endDate || '').getFullYear().toString(),
+      grade: education.grade || '',
+      isCurrent: education.isCurrent
+    });
+    setEducationModalVisible(true);
+  };
+
+  const handleSaveEducation = async () => {
+    if (!newEducation.institution.trim() || !newEducation.degree.trim() || !newEducation.startDate.trim()) {
+      Alert.alert('Error', 'Please fill in institution, degree, and start date');
+      return;
+    }
+
+    setModalLoading(true);
+    try {
+      let updatedEducation = [...(user.rawData.education || [])];
+      
+      const educationData = {
+        institution: newEducation.institution.trim(),
+        degree: newEducation.degree.trim(),
+        fieldOfStudy: newEducation.fieldOfStudy.trim(),
+        startDate: `${newEducation.startDate}-01-01T00:00:00.000Z`,
+        endDate: newEducation.isCurrent ? null : `${newEducation.endDate}-12-31T00:00:00.000Z`,
+        grade: newEducation.grade.trim(),
+        isCurrent: newEducation.isCurrent
+      };
+
+      if (editingEducation) {
+        // Update existing education
+        const index = updatedEducation.findIndex(edu => edu.id === editingEducation.id);
+        if (index !== -1) {
+          updatedEducation[index] = { ...updatedEducation[index], ...educationData };
+        }
+      } else {
+        // Add new education
+        updatedEducation.push({
+          ...educationData,
+          id: Date.now().toString(),
+          profileId: user.id,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+      }
+      
+      const updateData = {
+        ...user.rawData,
+        education: updatedEducation
+      };
+      
+      const result = await profileApi.updateProfile(updateData);
+      if (result.success) {
+        await loadCurrentUserData();
+        setEducationModalVisible(false);
+        Alert.alert('Success', `Education ${editingEducation ? 'updated' : 'added'} successfully!`);
+      } else {
+        Alert.alert('Error', result.message || 'Failed to save education');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to save education. Please try again.');
+    } finally {
+      setModalLoading(false);
+    }
+  };
+
+  const handleAddTopic = () => {
+    setNewTopic('');
+    setTopicModalVisible(true);
+  };
+
+  const handleSaveTopic = async () => {
+    if (!newTopic.trim()) {
+      Alert.alert('Error', 'Please enter a topic');
+      return;
+    }
+
+    // Check if topic already exists
+    if (user.topics && user.topics.includes(newTopic.trim())) {
+      Alert.alert('Error', 'This topic already exists');
+      return;
+    }
+
+    setModalLoading(true);
+    try {
+      const updatedTopics = [...(user.topics || []), newTopic.trim()];
+      const updateData = {
+        ...user.rawData,
+        topics: updatedTopics
+      };
+      
+      const result = await profileApi.updateProfile(updateData);
+      if (result.success) {
+        await loadCurrentUserData();
+        setTopicModalVisible(false);
+        setNewTopic('');
+        Alert.alert('Success', 'Topic added successfully!');
+      } else {
+        Alert.alert('Error', result.message || 'Failed to add topic');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to add topic. Please try again.');
+    } finally {
+      setModalLoading(false);
+    }
+  };
+
+  const handleRemoveTopic = (topic) => {
+    setTopicToRemove(topic);
+    setRemoveTopicModalVisible(true);
+  };
+
+  const confirmRemoveTopic = async () => {
+    if (!topicToRemove) return;
+
+    setModalLoading(true);
+    try {
+      const updatedTopics = user.topics.filter(topic => topic !== topicToRemove);
+      const updateData = {
+        ...user.rawData,
+        topics: updatedTopics
+      };
+      
+      const result = await profileApi.updateProfile(updateData);
+      if (result.success) {
+        await loadCurrentUserData();
+        setRemoveTopicModalVisible(false);
+        setTopicToRemove(null);
+        Alert.alert('Success', 'Topic removed successfully!');
+      } else {
+        Alert.alert('Error', result.message || 'Failed to remove topic');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to remove topic. Please try again.');
+    } finally {
+      setModalLoading(false);
+    }
   };
 
   const handleAddSkill = () => {
@@ -303,37 +554,36 @@ const ProfileScreen = ({ navigation }) => {
     }
   };
 
-  const handleRemoveSkill = async (skillToRemove) => {
-    Alert.alert(
-      'Remove Skill',
-      `Are you sure you want to remove "${skillToRemove}"?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const updatedTopics = user.skills.filter(skill => skill !== skillToRemove);
-              const updateData = {
-                ...user.rawData,
-                topics: updatedTopics
-              };
-              
-              const result = await profileApi.updateProfile(updateData);
-              if (result.success) {
-                await loadCurrentUserData();
-                Alert.alert('Success', 'Skill removed successfully!');
-              } else {
-                Alert.alert('Error', result.message || 'Failed to remove skill');
-              }
-            } catch (error) {
-              Alert.alert('Error', 'Failed to remove skill. Please try again.');
-            }
-          }
-        }
-      ]
-    );
+  const handleRemoveSkill = (skill) => {
+    setSkillToRemove(skill);
+    setRemoveSkillModalVisible(true);
+  };
+
+  const confirmRemoveSkill = async () => {
+    if (!skillToRemove) return;
+
+    setModalLoading(true);
+    try {
+      const updatedSkills = user.skills.filter(skill => skill !== skillToRemove);
+      const updateData = {
+        ...user.rawData,
+        skills: updatedSkills
+      };
+      
+      const result = await profileApi.updateProfile(updateData);
+      if (result.success) {
+        await loadCurrentUserData();
+        setRemoveSkillModalVisible(false);
+        setSkillToRemove(null);
+        Alert.alert('Success', 'Skill removed successfully!');
+      } else {
+        Alert.alert('Error', result.message || 'Failed to remove skill');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to remove skill. Please try again.');
+    } finally {
+      setModalLoading(false);
+    }
   };
 
 
@@ -368,16 +618,15 @@ const ProfileScreen = ({ navigation }) => {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background}}>
       {/* Header */}
-      <Header title="PROFILE" />
+      <Header title="Profile" />
       
       <ScrollView 
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingBottom: 120 }}
         refreshControl={
-          <RefreshControl
+          <CustomRefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            tintColor={colors.primary}
           />
         }
       >
@@ -412,13 +661,30 @@ const ProfileScreen = ({ navigation }) => {
 
         {/* Profile Header */}
         <View style={styles.profileHeader}>
-          <Image
-            source={user.profilePic ? { uri: user.profilePic } : require('../assets/icon.png')}
-            style={styles.avatar}
-          />
+          <View style={styles.avatarContainer}>
+            <Image
+              source={getProfileImageSource(user, { fallbackKey: user.profilePic })}
+              style={styles.avatar}
+              resizeMode="cover"
+            />
+            <View style={styles.avatarBorder} />
+          </View>
           <Text style={styles.name}>{user.name}</Text>
-          <Text style={styles.designation}>{user.designation}</Text>
-          <TouchableOpacity style={styles.editProfileButton} onPress={handleEditProfile}>
+          <Text style={styles.designation}>{user.designation || 'No designation'}</Text>
+          {user.connectionsCount !== undefined && (
+            <View style={styles.statsContainer}>
+              <View style={styles.statItem}>
+                <Text style={styles.statNumber}>{user.connectionsCount}</Text>
+                <Text style={styles.statLabel}>Connections</Text>
+              </View>
+              <View style={styles.statDivider} />
+              <View style={styles.statItem}>
+                <Text style={styles.statNumber}>{posts?.length || 0}</Text>
+                <Text style={styles.statLabel}>Posts</Text>
+              </View>
+            </View>
+          )}
+          <TouchableOpacity style={styles.editProfileButton} onPress={handleEditProfile} activeOpacity={0.8}>
             <Icon name="pencil" size={16} color={colors.white} />
             <Text style={styles.editProfileText}>Edit Profile</Text>
           </TouchableOpacity>
@@ -445,8 +711,11 @@ const ProfileScreen = ({ navigation }) => {
           <View style={styles.aboutSection}>
             {/* About Box */}
             <View style={styles.aboutBox}>
-              <Text style={styles.aboutLabel}>About</Text>
-              <Text style={styles.aboutText}>{user.bio}</Text>
+              <View style={styles.aboutHeader}>
+                <Icon name="information-outline" size={20} color={colors.button} />
+                <Text style={styles.aboutLabel}>About</Text>
+              </View>
+              <Text style={styles.aboutText}>{user.bio || 'No bio added yet. Tell others about yourself!'}</Text>
             </View>
 
             {/* Topics Section */}
@@ -458,15 +727,20 @@ const ProfileScreen = ({ navigation }) => {
                   <TouchableOpacity style={styles.headerIcon} onPress={handleEditProfile}>
                     <Icon name="pencil" size={20} color={colors.white} />
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.headerIcon}>
+                  <TouchableOpacity style={styles.headerIcon} onPress={handleAddTopic}>
                     <Icon name="plus" size={22} color={colors.white} />
                   </TouchableOpacity>
                 </View>
                 <View style={styles.skillsContainer}>
                   {user.topics.map((topic, index) => (
-                    <View key={index} style={styles.skillPill}>
+                    <TouchableOpacity 
+                      key={index} 
+                      style={styles.skillPill}
+                      onLongPress={() => handleRemoveTopic(topic)}
+                      activeOpacity={0.7}
+                    >
                       <Text style={styles.skillText}>{topic}</Text>
-                    </View>
+                    </TouchableOpacity>
                   ))}
                 </View>
               </View>
@@ -486,11 +760,20 @@ const ProfileScreen = ({ navigation }) => {
               </View>
               <View style={styles.skillsContainer}>
                 {user.skills?.length > 0 ? user.skills.map((skill, index) => (
-                  <View key={index} style={styles.skillPill}>
+                  <TouchableOpacity 
+                    key={index} 
+                    style={styles.skillPill}
+                    onLongPress={() => handleRemoveSkill(skill)}
+                    activeOpacity={0.7}
+                  >
                     <Text style={styles.skillText}>{skill}</Text>
-                  </View>
+                  </TouchableOpacity>
                 )) : (
-                  <Text style={styles.emptyText}>No skills added yet.</Text>
+                  <View style={styles.emptyStateContainer}>
+                    <Icon name="lightbulb-outline" size={32} color={colors.textMuted} />
+                    <Text style={styles.emptyText}>No skills added yet</Text>
+                    <Text style={styles.emptySubText}>Tap the + icon to add your skills</Text>
+                  </View>
                 )}
               </View>
             </View>
@@ -508,7 +791,12 @@ const ProfileScreen = ({ navigation }) => {
                 </TouchableOpacity>
               </View>
               {user.workExperience?.length > 0 ? user.workExperience.map((work) => (
-                <View key={work.id} style={styles.experienceCard}>
+                <TouchableOpacity 
+                  key={work.id} 
+                  style={styles.experienceCard}
+                  onPress={() => handleEditExperience(work)}
+                  activeOpacity={0.8}
+                >
                   <View style={styles.companyIconContainer}>
                     <Icon name="domain" size={24} color={colors.white} />
                   </View>
@@ -518,10 +806,18 @@ const ProfileScreen = ({ navigation }) => {
                     </View>
                     <Text style={styles.experiencePosition}>{work.position}</Text>
                     <Text style={styles.experienceDuration}>{work.duration}</Text>
+                    {work.description && (
+                      <Text style={styles.experienceDescription} numberOfLines={2}>{work.description}</Text>
+                    )}
                   </View>
-                </View>
+                  <Icon name="chevron-right" size={20} color={colors.textMuted} />
+                </TouchableOpacity>
               )) : (
-                <Text style={styles.emptyText}>No work experience added yet.</Text>
+                <View style={styles.emptyStateContainer}>
+                  <Icon name="briefcase-outline" size={32} color={colors.textMuted} />
+                  <Text style={styles.emptyText}>No work experience added yet</Text>
+                  <Text style={styles.emptySubText}>Tap the + icon to add your experience</Text>
+                </View>
               )}
             </View>
 
@@ -538,7 +834,12 @@ const ProfileScreen = ({ navigation }) => {
                 </TouchableOpacity>
               </View>
               {user.education?.length > 0 ? user.education.map((edu) => (
-                <View key={edu.id} style={styles.experienceCard}>
+                <TouchableOpacity 
+                  key={edu.id} 
+                  style={styles.experienceCard}
+                  onPress={() => handleEditEducation(edu)}
+                  activeOpacity={0.8}
+                >
                   <View style={styles.companyIconContainer}>
                     <Icon name="school" size={24} color={colors.white} />
                   </View>
@@ -551,19 +852,31 @@ const ProfileScreen = ({ navigation }) => {
                       {edu.fieldOfStudy && ` in ${edu.fieldOfStudy}`}
                     </Text>
                     <Text style={styles.experienceDuration}>{edu.duration}</Text>
+                    {edu.grade && (
+                      <Text style={styles.experienceDescription}>Grade: {edu.grade}</Text>
+                    )}
                   </View>
-                </View>
+                  <Icon name="chevron-right" size={20} color={colors.textMuted} />
+                </TouchableOpacity>
               )) : (
-                <Text style={styles.emptyText}>No education added yet.</Text>
+                <View style={styles.emptyStateContainer}>
+                  <Icon name="school-outline" size={32} color={colors.textMuted} />
+                  <Text style={styles.emptyText}>No education added yet</Text>
+                  <Text style={styles.emptySubText}>Tap the + icon to add your education</Text>
+                </View>
               )}
             </View>
           </View>
         ) : (
           <View style={styles.postsContainer}>
-            {posts && Array.isArray(posts) ? posts.map(post => (
+            {posts && Array.isArray(posts) && posts.length > 0 ? posts.map(post => (
               <PostCard key={post.id} post={post} style={styles.postCard} />
             )) : (
-              <Text style={styles.emptyText}>No posts yet</Text>
+              <View style={styles.emptyStateContainer}>
+                <Icon name="newspaper-variant-outline" size={48} color={colors.textMuted} />
+                <Text style={styles.emptyText}>No posts yet</Text>
+                <Text style={styles.emptySubText}>Start sharing your thoughts with the community</Text>
+              </View>
             )}
           </View>
         )}
@@ -719,6 +1032,276 @@ const ProfileScreen = ({ navigation }) => {
           </View>
         </View>
       </Modal>
+
+      {/* Topic Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={topicModalVisible}
+        onRequestClose={() => setTopicModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Add Topic</Text>
+              <TouchableOpacity onPress={() => setTopicModalVisible(false)}>
+                <Icon name="close" size={24} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+            
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Enter topic (e.g., React Native, AI, Blockchain)"
+              placeholderTextColor={colors.textMuted}
+              value={newTopic}
+              onChangeText={setNewTopic}
+              autoFocus={true}
+            />
+            
+            <View style={styles.modalButtons}>
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.cancelButton]} 
+                onPress={() => setTopicModalVisible(false)}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.saveButton]} 
+                onPress={handleSaveTopic}
+                disabled={modalLoading}
+              >
+                {modalLoading ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.saveButtonText}>Add Topic</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Education Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={educationModalVisible}
+        onRequestClose={() => setEducationModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                {editingEducation ? 'Edit Education' : 'Add Education'}
+              </Text>
+              <TouchableOpacity onPress={() => setEducationModalVisible(false)}>
+                <Icon name="close" size={24} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+            
+            <ScrollView style={styles.modalScrollView}>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Institution/University Name"
+                placeholderTextColor={colors.textMuted}
+                value={newEducation.institution}
+                onChangeText={(text) => setNewEducation({...newEducation, institution: text})}
+              />
+              
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Degree (e.g., Bachelor's, Master's)"
+                placeholderTextColor={colors.textMuted}
+                value={newEducation.degree}
+                onChangeText={(text) => setNewEducation({...newEducation, degree: text})}
+              />
+              
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Field of Study (optional)"
+                placeholderTextColor={colors.textMuted}
+                value={newEducation.fieldOfStudy}
+                onChangeText={(text) => setNewEducation({...newEducation, fieldOfStudy: text})}
+              />
+              
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Start Year (e.g., 2020)"
+                placeholderTextColor={colors.textMuted}
+                value={newEducation.startDate}
+                onChangeText={(text) => setNewEducation({...newEducation, startDate: text})}
+                keyboardType="numeric"
+              />
+              
+              <TouchableOpacity 
+                style={styles.checkboxContainer}
+                onPress={() => setNewEducation({...newEducation, isCurrent: !newEducation.isCurrent})}
+              >
+                <Icon 
+                  name={newEducation.isCurrent ? "checkbox-marked" : "checkbox-blank-outline"} 
+                  size={24} 
+                  color={colors.primary} 
+                />
+                <Text style={styles.checkboxText}>I currently study here</Text>
+              </TouchableOpacity>
+              
+              {!newEducation.isCurrent && (
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="End Year (e.g., 2024)"
+                  placeholderTextColor={colors.textMuted}
+                  value={newEducation.endDate}
+                  onChangeText={(text) => setNewEducation({...newEducation, endDate: text})}
+                  keyboardType="numeric"
+                />
+              )}
+              
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Grade/CGPA (optional)"
+                placeholderTextColor={colors.textMuted}
+                value={newEducation.grade}
+                onChangeText={(text) => setNewEducation({...newEducation, grade: text})}
+              />
+            </ScrollView>
+            
+            <View style={styles.modalButtons}>
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.cancelButton]} 
+                onPress={() => setEducationModalVisible(false)}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.saveButton]} 
+                onPress={handleSaveEducation}
+                disabled={modalLoading}
+              >
+                {modalLoading ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.saveButtonText}>
+                    {editingEducation ? 'Update' : 'Add'} Education
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Remove Topic Confirmation Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={removeTopicModalVisible}
+        onRequestClose={() => setRemoveTopicModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Remove Topic</Text>
+              <TouchableOpacity onPress={() => {
+                setRemoveTopicModalVisible(false);
+                setTopicToRemove(null);
+              }}>
+                <Icon name="close" size={24} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.removeModalContent}>
+              <Icon name="alert-circle-outline" size={48} color={colors.button} style={styles.removeModalIcon} />
+              <Text style={styles.removeModalText}>
+                Are you sure you want to remove "{topicToRemove}"?
+              </Text>
+              <Text style={styles.removeModalSubtext}>
+                This action cannot be undone.
+              </Text>
+            </View>
+            
+            <View style={styles.modalButtons}>
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.cancelButton]} 
+                onPress={() => {
+                  setRemoveTopicModalVisible(false);
+                  setTopicToRemove(null);
+                }}
+                disabled={modalLoading}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.removeButton]} 
+                onPress={confirmRemoveTopic}
+                disabled={modalLoading}
+              >
+                {modalLoading ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.removeButtonText}>Remove</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Remove Skill Confirmation Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={removeSkillModalVisible}
+        onRequestClose={() => setRemoveSkillModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Remove Skill</Text>
+              <TouchableOpacity onPress={() => {
+                setRemoveSkillModalVisible(false);
+                setSkillToRemove(null);
+              }}>
+                <Icon name="close" size={24} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.removeModalContent}>
+              <Icon name="alert-circle-outline" size={48} color={colors.button} style={styles.removeModalIcon} />
+              <Text style={styles.removeModalText}>
+                Are you sure you want to remove "{skillToRemove}"?
+              </Text>
+              <Text style={styles.removeModalSubtext}>
+                This action cannot be undone.
+              </Text>
+            </View>
+            
+            <View style={styles.modalButtons}>
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.cancelButton]} 
+                onPress={() => {
+                  setRemoveSkillModalVisible(false);
+                  setSkillToRemove(null);
+                }}
+                disabled={modalLoading}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.removeButton]} 
+                onPress={confirmRemoveSkill}
+                disabled={modalLoading}
+              >
+                {modalLoading ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.removeButtonText}>Remove</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
     </View>
   );
 };
@@ -765,25 +1348,70 @@ const styles = StyleSheet.create({
   profileHeader: {
     alignItems: 'center',
     paddingHorizontal: 15,
-    paddingBottom: 20,
+    paddingTop: 8,
+    paddingBottom: 24,
+  },
+  avatarContainer: {
+    position: 'relative',
+    marginBottom: 16,
   },
   avatar: { 
     width: 120, 
     height: 120, 
-    borderRadius: 60, 
-    marginBottom: 12 
+    borderRadius: 60,
+    backgroundColor: colors.backgroundElevated,
+    borderWidth: 3,
+    borderColor: colors.border,
+  },
+  avatarBorder: {
+    position: 'absolute',
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    borderWidth: 2,
+    borderColor: colors.button,
+    opacity: 0.3,
   },
   name: { 
-    fontSize: 24, 
+    fontSize: 26, 
     fontFamily: 'Gilroy-Bold', 
-    color: colors.primary,
-    marginBottom: 4,
+    color: colors.textPrimary,
+    marginBottom: 6,
+    textAlign: 'center',
   },
   designation: { 
-    fontSize: 16, 
-    color: colors.secondary,
+    fontSize: 15, 
+    color: colors.textMuted,
+    fontFamily: 'Gilroy-Medium',
     textAlign: 'center',
     marginBottom: 16,
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+    paddingHorizontal: 20,
+  },
+  statItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  statNumber: {
+    fontSize: 20,
+    fontFamily: 'Gilroy-Bold',
+    color: colors.textPrimary,
+    marginBottom: 4,
+  },
+  statLabel: {
+    fontSize: 13,
+    fontFamily: 'Gilroy-Regular',
+    color: colors.textMuted,
+  },
+  statDivider: {
+    width: 1,
+    height: 30,
+    backgroundColor: colors.border,
+    marginHorizontal: 16,
   },
   editProfileButton: {
     flexDirection: 'row',
@@ -829,26 +1457,53 @@ const styles = StyleSheet.create({
   },
   aboutBox: {
     backgroundColor: colors.card,
-    borderRadius: 16,
-    padding: 20,
+    borderRadius: 18,
+    padding: 24,
     marginBottom: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  aboutHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
   },
   aboutLabel: {
     fontSize: 18,
     fontFamily: 'Gilroy-Bold',
-    color: colors.white,
-    marginBottom: 12,
+    color: colors.textPrimary,
+    marginLeft: 8,
   },
   aboutText: {
-    fontSize: 14,
+    fontSize: 15,
     color: colors.textSecondary,
-    lineHeight: 22,
+    fontFamily: 'Gilroy-Regular',
+    lineHeight: 24,
+    textAlign: 'left',
   },
   sectionContainer: {
     marginBottom: 20,
     backgroundColor: colors.card,
-    borderRadius: 16,
-    padding: 20,
+    borderRadius: 18,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: colors.border,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 3,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -858,7 +1513,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontFamily: 'Gilroy-Bold',
-    color: colors.white,
+    color: colors.textPrimary,
     flex: 1,
     marginLeft: 10,
   },
@@ -869,13 +1524,16 @@ const styles = StyleSheet.create({
   skillsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
   },
   skillPill: {
     backgroundColor: colors.backgroundElevated,
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginRight: 8,
+    marginBottom: 8,
   },
   skillText: {
     fontSize: 14,
@@ -889,6 +1547,8 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     flexDirection: 'row',
     alignItems: 'flex-start',
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   companyIconContainer: {
     width: 48,
@@ -922,15 +1582,39 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   experienceDuration: {
-    fontSize: 12,
+    fontSize: 13,
+    color: colors.textMuted,
+    fontFamily: 'Gilroy-Regular',
+    marginBottom: 4,
+  },
+  experienceDescription: {
+    fontSize: 13,
     color: colors.textSecondary,
+    fontFamily: 'Gilroy-Regular',
+    marginTop: 6,
+    lineHeight: 18,
+  },
+  emptyStateContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 32,
+    width: '100%',
   },
   emptyText: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    fontStyle: 'italic',
+    fontSize: 16,
+    fontFamily: 'Gilroy-SemiBold',
+    color: colors.textPrimary,
+    marginTop: 12,
     textAlign: 'center',
-    marginVertical: 12,
+    width: '100%',
+  },
+  emptySubText: {
+    fontSize: 13,
+    fontFamily: 'Gilroy-Regular',
+    color: colors.textMuted,
+    marginTop: 6,
+    textAlign: 'center',
+    width: '100%',
   },
   postsContainer: {
     paddingHorizontal: 15,
@@ -990,6 +1674,14 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
     paddingTop: 16,
   },
+  charCount: {
+    fontSize: 12,
+    fontFamily: 'Gilroy-Regular',
+    color: colors.textMuted,
+    textAlign: 'right',
+    marginTop: -12,
+    marginBottom: 8,
+  },
   checkboxContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1035,6 +1727,36 @@ const styles = StyleSheet.create({
     fontFamily: 'Gilroy-SemiBold',
   },
   saveButtonText: {
+    fontSize: 16,
+    color: colors.white,
+    fontFamily: 'Gilroy-SemiBold',
+  },
+  removeModalContent: {
+    alignItems: 'center',
+    paddingVertical: 20,
+  },
+  removeModalIcon: {
+    marginBottom: 16,
+  },
+  removeModalText: {
+    fontSize: 16,
+    fontFamily: 'Gilroy-SemiBold',
+    color: colors.textPrimary,
+    textAlign: 'center',
+    marginBottom: 8,
+    paddingHorizontal: 20,
+  },
+  removeModalSubtext: {
+    fontSize: 14,
+    fontFamily: 'Gilroy-Regular',
+    color: colors.textMuted,
+    textAlign: 'center',
+    paddingHorizontal: 20,
+  },
+  removeButton: {
+    backgroundColor: '#ef4444',
+  },
+  removeButtonText: {
     fontSize: 16,
     color: colors.white,
     fontFamily: 'Gilroy-SemiBold',
