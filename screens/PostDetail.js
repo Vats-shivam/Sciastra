@@ -506,6 +506,8 @@ const PostDetailScreen = ({ route, navigation }) => {
     );
   }
 
+  console.log(" ??? POST AUTHOR IMAGE",post.author?.profile?.profilePic)
+
   const totalReactions = reactions.length;
   const totalComments = comments.length;
 
@@ -564,11 +566,10 @@ const PostDetailScreen = ({ route, navigation }) => {
                 }}
               >
                 <Image
-                  source={{
-                    uri: post.author?.profile?.profilePic
-                      ? postApi.getImageSource(post.author.profile.profilePic, authApi.getAccessToken()).uri
-                      : post.author?.profilePic || 'https://randomuser.me/api/portraits/men/1.jpg'
-                  }}
+                  source={getProfileImageSource(post.author, { 
+                                 fallbackKey: post.author?.profile?.profilePic 
+                                 || post.author?.profilePic 
+                               })}
                   style={styles.avatar}
                 />
               </TouchableOpacity>
