@@ -18,7 +18,8 @@ class ChatApiService {
     this.isConnected = false;
     this.messageListeners = new Map();
     this.typingListeners = new Map();
-    this.statusListeners = new Map(); // Add status listeners
+    this.statusListeners = new Map();
+    this.onlineUserIds = new Set(); // Track who's online (from server)
     console.log('ChatApi: Initialized with baseUrl:', this.baseUrl);
   }
 
@@ -222,6 +223,12 @@ class ChatApiService {
         this.handleUserStatusEvent({ ...data, status: 'offline' });
       });
 
+      // Initial online users list (sent when we connect)
+      this.socket.on('online:users', (data) => {
+        console.log('Online users received:', data?.userIds?.length);
+        this.handleOnlineUsersEvent(data);
+      });
+
       // Notifications
       this.socket.on('notification', (data) => {
         console.log('Notification received:', data);
@@ -289,11 +296,27 @@ class ChatApiService {
   handleUserStatusEvent(statusData) {
     console.log('User status changed:', statusData);
     const userId = statusData.userId;
+    if (statusData.status === 'online') {
+      this.onlineUserIds.add(userId);
+    } else {
+      this.onlineUserIds.delete(userId);
+    }
     const listeners = this.statusListeners.get(userId);
-    
     if (listeners) {
       listeners.forEach(callback => callback(statusData));
     }
+  }
+
+  // Handle initial online users list (sent when connecting)
+  handleOnlineUsersEvent(data) {
+    const userIds = data?.userIds || [];
+    this.onlineUserIds = new Set(userIds);
+    userIds.forEach(userId => {
+      const listeners = this.statusListeners.get(userId);
+      if (listeners) {
+        listeners.forEach(callback => callback({ userId, status: 'online' }));
+      }
+    });
   }
 
   // Handle notification events
@@ -375,13 +398,13 @@ class ChatApiService {
     }
 
     const listeners = this.statusListeners.get(userId);
-
-    // Remove any existing identical callback to prevent duplicates
     listeners.delete(callback);
-
-    // Add the callback
     listeners.add(callback);
 
+    // If we already know this user is online, notify immediately
+    if (this.onlineUserIds.has(userId)) {
+      callback({ userId, status: 'online' });
+    }
     console.log(`👤 Added status listener for user ${userId}. Total listeners: ${listeners.size}`);
   }
 
@@ -430,7 +453,7 @@ class ChatApiService {
       }
 
       // Use the new find-or-create endpoint to prevent duplicates
-      const response = await this.makeRequest(`${this.baseUrl}/chat/chat/rooms/find/${participantUserId}`, {
+      const response = await this.makeRequest(`${this.baseUrl}/chat/rooms/find/${participantUserId}`, {
         method: 'GET',
       });
       console.log('ChatApi',response);
@@ -471,7 +494,7 @@ class ChatApiService {
         name: groupName,
       };
 
-      const response = await this.makeRequest(`${this.baseUrl}/chat/chat/rooms`, {
+      const response = await this.makeRequest(`${this.baseUrl}/chat/rooms`, {
         method: 'POST',
         body: JSON.stringify(payload),
       });
@@ -503,7 +526,7 @@ class ChatApiService {
       }
 
 
-      const url = `${this.baseUrl}/chat/chat/rooms?page=${page}&limit=${limit}`;
+      const url = `${this.baseUrl}/chat/rooms?page=${page}&limit=${limit}`;
 
       const response = await this.makeRequest(url, {
         method: 'GET',
@@ -575,7 +598,7 @@ class ChatApiService {
       }
 
       // Fallback to HTTP API
-      const response = await this.makeRequest(`${this.baseUrl}/chat/chat/rooms/${roomId}/messages`, {
+      const response = await this.makeRequest(`${this.baseUrl}/chat/rooms/${roomId}/messages`, {
         method: 'POST',
         body: JSON.stringify(payload),
       });
@@ -610,7 +633,7 @@ class ChatApiService {
       }
 
 
-      const url = `${this.baseUrl}/chat/chat/rooms/${roomId}/messages?page=${page}&limit=${limit}`;
+      const url = `${this.baseUrl}/chat/rooms/${roomId}/messages?page=${page}&limit=${limit}`;
 
       const response = await this.makeRequest(url, {
         method: 'GET',
@@ -783,7 +806,7 @@ class ChatApiService {
         roomId: roomId
       };
 
-      const response = await this.makeRequest(`${this.baseUrl}/chat/chat/media/upload-url`, {
+      const response = await this.makeRequest(`${this.baseUrl}/chat/media/upload-url`, {
         method: 'POST',
         body: JSON.stringify(payload),
       });
@@ -945,7 +968,7 @@ class ChatApiService {
       }
 
       // Fallback to HTTP API
-      const response = await this.makeRequest(`${this.baseUrl}/chat/chat/rooms/${roomId}/messages`, {
+      const response = await this.makeRequest(`${this.baseUrl}/chat/rooms/${roomId}/messages`, {
         method: 'POST',
         body: JSON.stringify(payload),
       });
@@ -981,7 +1004,7 @@ class ChatApiService {
       formData.append('roomId', roomId);
 
       // Don't set Content-Type for FormData - let the browser set it with proper boundary
-      const response = await this.makeRequest(`${this.baseUrl}/chat/chat/media/upload`, {
+      const response = await this.makeRequest(`${this.baseUrl}/chat/media/upload`, {
         method: 'POST',
         body: formData,
         // Remove Content-Type header to let FormData set it properly with boundary
@@ -1140,10 +1163,36 @@ class ChatApiService {
   // Get media display URL for rendering in chat
   getMediaDisplayUrl(mediaKey) {
     // Use the proxy endpoint instead of direct S3 URL
-    return `${this.baseUrl}/chat/chat/media/proxy?key=${encodeURIComponent(mediaKey)}`;
+    return `${this.baseUrl}/chat/media/proxy?key=${encodeURIComponent(mediaKey)}`;
   }
 
-  // Helper method to get image source with headers
+  // Signed URL cache - React Native Image doesn't reliably send auth headers, so we use signed URLs
+  _signedUrlCache = new Map();
+
+  /**
+   * Fetch signed URL for chat media - works without auth headers (unlike proxy).
+   * Caches results since signed URLs expire in ~1 hour.
+   */
+  async getMediaSignedUrl(mediaKey) {
+    if (!mediaKey) return null;
+    const cached = this._signedUrlCache.get(mediaKey);
+    if (cached) return cached;
+
+    try {
+      const url = `${this.baseUrl}/chat/media/download?key=${encodeURIComponent(mediaKey)}`;
+      const data = await this.makeRequest(url, { method: 'GET' });
+      const signedUrl = data?.data?.downloadUrl;
+      if (signedUrl) {
+        this._signedUrlCache.set(mediaKey, signedUrl);
+        return signedUrl;
+      }
+    } catch (e) {
+      if (__DEV__) console.warn('ChatApi: Failed to get signed URL for', mediaKey, e.message);
+    }
+    return null;
+  }
+
+  // Helper method to get image source with headers (proxy - can 401 on RN Image)
   getImageSource(mediaKey, userToken) {
     return {
       uri: this.getMediaDisplayUrl(mediaKey),

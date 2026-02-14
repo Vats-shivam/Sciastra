@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -12,7 +12,6 @@ import {
   StatusBar,
   ActivityIndicator,
 } from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { useNavigation } from "@react-navigation/native";
 import colors from "../config/colors";
@@ -22,9 +21,10 @@ import Header from "../components/Header";
 import { useLoader } from "../context/LoaderContext";
 import useScreenApiLogger from "../hooks/useScreenApiLogger";
 import CustomRefreshControl from "../components/CustomRefreshControl";
+import { getProfileImageSource } from "../utils/profileImage";
 
 const trendingSearches = ["React Native", "AI", "Blockchain", "Jobs", "Events"];
-const POSTS_PER_PAGE = 50;
+const POSTS_PER_PAGE = 20;
 
 // Fisher-Yates shuffle algorithm
 const shuffleArray = (array) => {
@@ -39,13 +39,13 @@ const shuffleArray = (array) => {
 const HomeScreen = () => {
   const navigation = useNavigation();
   const { showLoader, hideLoader } = useLoader();
-  const insets = useSafeAreaInsets();
   const [searching, setSearching] = useState(false);
   const [searchText, setSearchText] = useState("");
   const [searchLoading, setSearchLoading] = useState(false);
   const [feedPosts, setFeedPosts] = useState([]);
   const [searchResultsPosts, setSearchResultsPosts] = useState([]);
   const [searchResultsPeople, setSearchResultsPeople] = useState([]);
+  const [searchAvatarErrors, setSearchAvatarErrors] = useState({});
   const [nextCursor, setNextCursor] = useState(null);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -53,6 +53,7 @@ const HomeScreen = () => {
   const loadingMoreRef = useRef(false);
   const lastCursorRef = useRef(null);
   const seenPostIdsRef = useRef(new Set());
+  const lastLoadMoreAtRef = useRef(0);
 
   useScreenApiLogger("Home");
 
@@ -61,7 +62,9 @@ const HomeScreen = () => {
   }, []);
 
   useEffect(() => {
-    console.log(`[Feed] Total posts rendered: ${feedPosts.length}`);
+    if (__DEV__) {
+      console.log(`[Feed] Total posts rendered: ${feedPosts.length}`);
+    }
   }, [feedPosts]);
 
   // Debounced search effect
@@ -81,20 +84,20 @@ const HomeScreen = () => {
     const isLoadMore = Boolean(cursor);
 
     if (isLoadMore) {
-      console.log(`[Feed] Load-more requested with lastPostId=${cursor}`);
+      if (__DEV__) console.log(`[Feed] Load-more requested with lastPostId=${cursor}`);
       if (loadingMoreRef.current || loadingMore || !hasMore) {
-        console.log("[Feed] Skipping load-more (already loading or no more data)");
+        if (__DEV__) console.log("[Feed] Skipping load-more (already loading or no more data)");
         return;
       }
       if (cursor === lastCursorRef.current) {
-        console.log(`[Feed] Skipping load-more, cursor ${cursor} already processed`);
+        if (__DEV__) console.log(`[Feed] Skipping load-more, cursor ${cursor} already processed`);
         return;
       }
       loadingMoreRef.current = true;
       setLoadingMore(true);
       lastCursorRef.current = cursor;
     } else {
-      console.log("[Feed] Initial feed load");
+      if (__DEV__) console.log("[Feed] Initial feed load");
       // Reset bookkeeping for a fresh load
       seenPostIdsRef.current = new Set();
       lastCursorRef.current = null;
@@ -104,14 +107,16 @@ const HomeScreen = () => {
     }
 
     try {
-      console.log(`[Feed] Fetching posts (${isLoadMore ? `cursor=${cursor}` : "initial"})`);
+      if (__DEV__) console.log(`[Feed] Fetching posts (${isLoadMore ? `cursor=${cursor}` : "initial"})`);
       const result = await postApi.getFeedPosts(cursor, POSTS_PER_PAGE);
       if (result.success) {
         const posts = result.data.posts || [];
-        console.log(
-          `[Feed] API returned ${posts.length} post(s) for ${isLoadMore ? "load-more" : "initial"}:`,
-          posts.map((p) => p.id)
-        );
+        if (__DEV__) {
+          console.log(
+            `[Feed] API returned ${posts.length} post(s) for ${isLoadMore ? "load-more" : "initial"}:`,
+            posts.map((p) => p.id)
+          );
+        }
         const pagination = result.data.pagination || {};
         let appendedCount = posts.length;
 
@@ -128,10 +133,12 @@ const HomeScreen = () => {
             uniqueNew.push(post);
           });
           appendedCount = uniqueNew.length;
-          console.log(
-            "[Feed] Unique new post IDs (after dedup):",
-            uniqueNew.map((p) => p.id)
-          );
+          if (__DEV__) {
+            console.log(
+              "[Feed] Unique new post IDs (after dedup):",
+              uniqueNew.map((p) => p.id)
+            );
+          }
           setFeedPosts((prev) =>
             uniqueNew.length ? [...prev, ...uniqueNew] : prev
           );
@@ -140,16 +147,13 @@ const HomeScreen = () => {
           seenPostIdsRef.current = new Set(
             posts.filter((p) => p?.id).map((p) => p.id)
           );
-          // Shuffle posts on refresh/initial load
-          const shuffledPosts = shuffleArray(posts);
-          setFeedPosts(shuffledPosts);
+          // Keep server order for predictable pagination and less work.
+          setFeedPosts(posts);
         }
 
         const newCursor = pagination.nextCursor || null;
         setNextCursor(newCursor);
-        console.log(
-          `[Feed] Updated next cursor: ${newCursor ?? "null"}`
-        );
+        if (__DEV__) console.log(`[Feed] Updated next cursor: ${newCursor ?? "null"}`);
 
         let nextHasMore = pagination.hasMore;
         if (nextHasMore === undefined) {
@@ -186,12 +190,16 @@ const HomeScreen = () => {
     }
   };
 
-  const handleLoadMore = () => {
-    if (loadingMore || !hasMore || !nextCursor) {
-      return;
-    }
+  const handleLoadMore = useCallback(() => {
+    if (loadingMoreRef.current || loadingMore || !hasMore || !nextCursor) return;
+
+    // Throttle to avoid repeated triggers during fast scrolling.
+    const now = Date.now();
+    if (now - lastLoadMoreAtRef.current < 800) return;
+    lastLoadMoreAtRef.current = now;
+
     loadFeedPosts(nextCursor);
-  };
+  }, [loadingMore, hasMore, nextCursor]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -204,16 +212,18 @@ const HomeScreen = () => {
 
   const performSearch = async (query) => {
     if (!query.trim()) {
-      setSearchResultsPosts([]);
-      setSearchResultsPeople([]);
+        setSearchResultsPosts([]);
+        setSearchResultsPeople([]);
+        setSearchAvatarErrors({});
       setSearchLoading(false);
       return;
     }
 
     // Don't search if query is less than 2 characters
     if (query.trim().length < 2) {
-      setSearchResultsPosts([]);
-      setSearchResultsPeople([]);
+        setSearchResultsPosts([]);
+        setSearchResultsPeople([]);
+        setSearchAvatarErrors({});
       setSearchLoading(false);
       return;
     }
@@ -227,12 +237,14 @@ const HomeScreen = () => {
         const data = searchResult.data;
         setSearchResultsPosts(data.posts || []);
         setSearchResultsPeople(data.users || []);
+        setSearchAvatarErrors({});
       } else {
         // Don't log short query validation as an error
         if (searchResult.message?.includes('at least 2 characters')) {
           // Just clear results for short queries - this is expected behavior
-          setSearchResultsPosts([]);
-          setSearchResultsPeople([]);
+        setSearchResultsPosts([]);
+        setSearchResultsPeople([]);
+        setSearchAvatarErrors({});
           setSearchLoading(false);
           return;
         }
@@ -248,6 +260,7 @@ const HomeScreen = () => {
         );
         
         setSearchResultsPeople([]);
+        setSearchAvatarErrors({});
       }
     } catch (error) {
       // Fallback to local search
@@ -262,6 +275,7 @@ const HomeScreen = () => {
       );
       
       setSearchResultsPeople([]);
+      setSearchAvatarErrors({});
     } finally {
       setSearchLoading(false);
     }
@@ -269,47 +283,48 @@ const HomeScreen = () => {
 
   const clearSearch = () => {
     setSearchText("");
-    setSearchResultsPosts([]);
-    setSearchResultsPeople([]);
+        setSearchResultsPosts([]);
+        setSearchResultsPeople([]);
+        setSearchAvatarErrors({});
     setSearchLoading(false);
   };
 
-  const handlePostClick = async (postId) => {
-    showLoader();
-    try {
-      await postApi.getPostById(postId);
-    } catch (error) {
-      console.error('Error preloading post details:', error);
-    } finally {
-      navigation.navigate("PostDetail", { postId });
-      hideLoader();
-    }
-  };
+  const keyExtractor = useCallback((item) => String(item?.id ?? ""), []);
+  const feedContentContainerStyle = useMemo(
+    () => ({ paddingHorizontal: 12, paddingBottom: 100 }),
+    []
+  );
+  const renderFeedItem = useCallback(({ item }) => <PostCard post={item} />, []);
+  const feedFooter = useMemo(() => {
+    if (!loadingMore) return null;
+    return (
+      <View style={styles.footerLoader}>
+        <ActivityIndicator size="small" color={colors.primary} />
+      </View>
+    );
+  }, [loadingMore]);
 
   const renderFeed = () => (
     <FlatList
       data={feedPosts}
-      keyExtractor={(item) => item.id}
-      renderItem={({ item }) => (
-        <PostCard post={item} onPress={() => handlePostClick(item.id)} />
-      )}
+      keyExtractor={keyExtractor}
+      renderItem={renderFeedItem}
       showsVerticalScrollIndicator={false}
-      contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 100 }}
+      contentContainerStyle={feedContentContainerStyle}
       onEndReached={handleLoadMore}
-      onEndReachedThreshold={0.5}
+      onEndReachedThreshold={0.2}
+      initialNumToRender={10}
+      maxToRenderPerBatch={10}
+      windowSize={5}
+      updateCellsBatchingPeriod={50}
+      removeClippedSubviews={Platform.OS === "android"}
       refreshControl={
         <CustomRefreshControl
           refreshing={refreshing}
           onRefresh={handleRefresh}
         />
       }
-      ListFooterComponent={() =>
-        loadingMore ? (
-          <View style={styles.footerLoader}>
-            <ActivityIndicator size="small" color={colors.primary} />
-          </View>
-        ) : null
-      }
+      ListFooterComponent={feedFooter}
     />
   );
 
@@ -341,7 +356,7 @@ const HomeScreen = () => {
                   <Text style={styles.sectionHeader}>Posts</Text>
                   <FlatList
                     data={searchResultsPosts}
-                    keyExtractor={(item) => item.id}
+                    keyExtractor={keyExtractor}
                     renderItem={({ item }) => <PostCard post={item} />}
                     showsVerticalScrollIndicator={false}
                   />
@@ -352,7 +367,7 @@ const HomeScreen = () => {
                   <Text style={styles.sectionHeader}>People</Text>
                   <FlatList
                     data={searchResultsPeople}
-                    keyExtractor={(item) => item.id}
+                    keyExtractor={keyExtractor}
                     renderItem={({ item }) => (
                       <TouchableOpacity
                         style={styles.peopleCard}
@@ -368,15 +383,20 @@ const HomeScreen = () => {
                       >
                         <Image
                           source={
-                            item.profilePic
-                              ? { uri: item.profilePic }
-                              : require("../assets/icon.png")
+                            searchAvatarErrors[item.id]
+                              ? require("../assets/icon.png")
+                              : getProfileImageSource(item, { fallbackKey: item.profilePic })
                           }
                           style={styles.avatarSmall}
+                          resizeMode="cover"
+                          defaultSource={require("../assets/icon.png")}
+                          onError={() =>
+                            setSearchAvatarErrors((prev) => ({ ...prev, [item.id]: true }))
+                          }
                         />
                         <View style={{ flex: 1, marginLeft: 8 }}>
                           <Text style={styles.personName}>{item.name}</Text>
-                          <Text style={styles.subTitle}>{item.bio}</Text>
+                          <Text style={styles.subTitle}>{item.profession || item.bio || ''}</Text>
                         </View>
                       </TouchableOpacity>
                     )}

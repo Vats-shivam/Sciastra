@@ -676,7 +676,6 @@ class EventsApiService {
 
   // Create default sample events for demo
   async createDefaultSampleEvents() {
-    const AsyncStorage = require('@react-native-async-storage/async-storage').default;
     
     const now = new Date();
     const sampleEvents = [
@@ -898,7 +897,6 @@ class EventsApiService {
       },
     ];
 
-    await AsyncStorage.setItem('sample_events', JSON.stringify(sampleEvents));
     return sampleEvents;
   }
 }

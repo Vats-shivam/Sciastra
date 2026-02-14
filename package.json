@@ -40,7 +40,8 @@
     "react-native-swiper": "^1.6.0",
     "react-native-vector-icons": "^10.3.0",
     "socket.io-client": "^4.8.1",
-    "expo-blur": "~14.1.5"
+    "expo-blur": "~14.1.5",
+    "expo-file-system": "~18.1.11"
   },
   "devDependencies": {
     "@babel/core": "^7.20.0",

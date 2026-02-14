@@ -26,7 +26,8 @@
       "usesCleartextTraffic": true,
       "allowBackup": false,
       "requestLegacyExternalStorage": true,
-      "networkSecurityConfig": "network_security_config"
+      "networkSecurityConfig": "network_security_config",
+      "softwareKeyboardLayoutMode": "resize"
     },
     "web": {
       "favicon": "./assets/icon.png"

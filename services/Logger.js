@@ -1,38 +1,11 @@
 // services/Logger.js
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 
 class Logger {
   constructor() {
     this.logs = [];
     this.maxLogs = 1000; // Keep last 1000 logs
-    this.logKey = 'app_production_logs';
     this.isProduction = !__DEV__;
-
-    // Load existing logs on startup
-    this.loadLogs();
-  }
-
-  async loadLogs() {
-    try {
-      const storedLogs = await AsyncStorage.getItem(this.logKey);
-      if (storedLogs) {
-        this.logs = JSON.parse(storedLogs);
-      }
-    } catch (error) {
-      console.warn('Failed to load stored logs:', error);
-    }
-  }
-
-  async saveLogs() {
-    try {
-      // Keep only the latest logs to prevent storage overflow
-      const logsToSave = this.logs.slice(-this.maxLogs);
-      await AsyncStorage.setItem(this.logKey, JSON.stringify(logsToSave));
-      this.logs = logsToSave;
-    } catch (error) {
-      console.warn('Failed to save logs:', error);
-    }
   }
 
   createLogEntry(level, message, extra = {}) {
@@ -55,10 +28,9 @@ class Logger {
     // Add to internal logs array
     this.logs.push(logEntry);
 
-    // Save to AsyncStorage (debounced)
-    clearTimeout(this.saveTimeout);
-    this.saveTimeout = setTimeout(() => this.saveLogs(), 1000);
-
+    if (this.logs.length > this.maxLogs) {
+      this.logs = this.logs.slice(-this.maxLogs);
+    }
     return logEntry;
   }
 
@@ -136,21 +108,16 @@ class Logger {
   }
 
   // Export logs as text
-  async exportLogs() {
-    const logs = await this.getLogs(null, 500);
+  exportLogs() {
+    const logs = this.getLogs(null, 500);
     return logs.map(log =>
       `${log.timestamp} [${log.level.toUpperCase()}] ${log.message} ${JSON.stringify(log.extra)}`
     ).join('\n');
   }
 
   // Clear logs
-  async clearLogs() {
+  clearLogs() {
     this.logs = [];
-    try {
-      await AsyncStorage.removeItem(this.logKey);
-    } catch (error) {
-      console.warn('Failed to clear logs:', error);
-    }
   }
 
   // Sanitize sensitive data

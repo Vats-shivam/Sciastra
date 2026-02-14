@@ -5,6 +5,52 @@ class ApiLogger {
     this.currentScreen = null;
   }
 
+  summarizeResponseData(responseData) {
+    // Avoid storing/serializing huge API payloads (e.g. feed posts) in logs.
+    if (!responseData || typeof responseData !== 'object') return responseData;
+
+    try {
+      const success = responseData.success;
+      const data = responseData.data;
+
+      // Common pattern in this app: { success, data: { posts, pagination } }
+      if (data && typeof data === 'object') {
+        const pagination = data.pagination;
+        const posts = Array.isArray(data.posts) ? data.posts : null;
+
+        if (posts) {
+          return {
+            success,
+            data: {
+              postsCount: posts.length,
+              postIdsPreview: posts.slice(0, 10).map((p) => p?.id),
+              pagination,
+            },
+          };
+        }
+      }
+
+      // Default: shallow copy with data truncated
+      return {
+        success,
+        data: data ? '[data omitted for log size]' : data,
+      };
+    } catch {
+      return '[Unable to summarize response data]';
+    }
+  }
+
+  safePreview(responseData, maxLen = 800) {
+    try {
+      if (typeof responseData === 'string') return responseData.slice(0, maxLen);
+      const summarized = this.summarizeResponseData(responseData);
+      const s = JSON.stringify(summarized);
+      return s.length > maxLen ? `${s.slice(0, maxLen)}…` : s;
+    } catch (e) {
+      return '[Unable to serialize response preview]';
+    }
+  }
+
   setCurrentScreen(screenName) {
     if (!screenName) {
       return;
@@ -12,7 +58,7 @@ class ApiLogger {
 
     this.currentScreen = screenName;
     const message = `Screen visited: ${screenName}`;
-    console.log(message);
+    if (__DEV__) console.log(message);
     logger.info(message, { screen: screenName, type: 'screen_visit' });
   }
 
@@ -29,7 +75,7 @@ class ApiLogger {
   logApiCall(url, method = 'GET') {
     const screen = this.currentScreen;
     const message = `API called: ${method.toUpperCase()} ${url}`;
-    console.log(`${message} | Screen: ${screen || 'unknown'}`);
+    if (__DEV__) console.log(`${message} | Screen: ${screen || 'unknown'}`);
 
     logger.info(message, {
       screen: screen || 'unknown',
@@ -42,40 +88,31 @@ class ApiLogger {
   logApiResponse(url, method = 'GET', status, responseData, error = null) {
     const screen = this.currentScreen;
     const normalizedMethod = method.toUpperCase();
-
-    let responsePreview;
-    try {
-      if (typeof responseData === 'string') {
-        responsePreview = responseData;
-      } else {
-        responsePreview = JSON.stringify(responseData, null, 2);
-      }
-    } catch (serializationError) {
-      responsePreview = '[Unable to serialize response data]';
-    }
+    const responsePreview = this.safePreview(responseData);
+    const responseForLog = this.summarizeResponseData(responseData);
 
     const baseMessage = `API response: ${normalizedMethod} ${url} -> ${status}`;
     const consoleMessage = `${baseMessage} | Screen: ${screen || 'unknown'}`;
 
     if (error) {
-      console.warn(consoleMessage, '\nResponse:', responsePreview, '\nError:', error);
+      if (__DEV__) console.warn(consoleMessage, '\nResponse:', responsePreview, '\nError:', error);
       logger.error(baseMessage, {
         screen: screen || 'unknown',
         method: normalizedMethod,
         url,
         status,
-        response: responseData,
+        response: responseForLog,
         error: typeof error === 'string' ? error : error?.message || error,
         type: 'api_response',
       });
     } else {
-      console.log(consoleMessage, '\nResponse:', responsePreview);
+      if (__DEV__) console.log(consoleMessage, '\nResponse:', responsePreview);
       logger.info(baseMessage, {
         screen: screen || 'unknown',
         method: normalizedMethod,
         url,
         status,
-        response: responseData,
+        response: responseForLog,
         type: 'api_response',
       });
     }

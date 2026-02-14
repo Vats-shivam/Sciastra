@@ -46,7 +46,7 @@ const DebugLogsScreen = ({ navigation }) => {
   const loadLogs = async () => {
     try {
       setLoading(true);
-      const allLogs = await logger.getLogs(null, 200);
+      const allLogs = logger.getLogs(null, 200);
       setLogs(allLogs);
     } catch (error) {
       console.error('Failed to load logs:', error);
@@ -77,7 +77,7 @@ const DebugLogsScreen = ({ navigation }) => {
 
   const exportLogs = async () => {
     try {
-      const logText = await logger.exportLogs();
+      const logText = logger.exportLogs();
       const deviceInfo = logger.getDeviceInfo();
 
       const fullExport = `=== DEBUG LOGS EXPORT ===

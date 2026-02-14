@@ -150,7 +150,7 @@ class PostApiService {
         privacy: postData.privacy || 'PUBLIC',
       };
 
-      const response = await this.makeRequest(`${this.baseUrl}/post/posts`, {
+      const response = await this.makeRequest(`${this.baseUrl}/posts`, {
         method: 'POST',
         body: JSON.stringify(payload),
       });
@@ -284,7 +284,7 @@ class PostApiService {
       console.log('📝 Post payload:', JSON.stringify(postPayload, null, 2));
 
       // Use the standard createPost method but bypass mock mode for real creation
-      const response = await this.makeRequest(`${this.baseUrl}/post/posts`, {
+      const response = await this.makeRequest(`${this.baseUrl}/posts`, {
         method: 'POST',
         body: JSON.stringify(postPayload),
       });
@@ -365,13 +365,13 @@ class PostApiService {
         };
       }
 
-      let url = `${this.baseUrl}/post/posts/feed?limit=${limit}`;
+      let url = `${this.baseUrl}/posts/feed?limit=${limit}`;
       if (cursor) {
         // Backend expects the last fetched post id in `lastPostId`
         url += `&lastPostId=${encodeURIComponent(cursor)}`;
       }
 
-      console.log('📰 Fetching feed from:', url);
+      if (__DEV__) console.log('📰 Fetching feed from:', url);
 
       const response = await this.makeRequest(url, {
         method: 'GET',
@@ -396,7 +396,7 @@ class PostApiService {
 
       // Handle "Post not found" as empty feed (expected for new users/systems)
       if (error.message.includes('Post not found') || error.message.includes('not found')) {
-        console.log('No posts found, returning empty feed');
+        if (__DEV__) console.log('No posts found, returning empty feed');
         return {
           success: true,
           data: {
@@ -652,9 +652,11 @@ class PostApiService {
       });
 
       if (response.success) {
+        // Process post media (same as feed) so media has proper url/uri for rendering
+        const processedPosts = await this.processPostsWithMedia([response.data]);
         return {
           success: true,
-          data: response.data,
+          data: processedPosts[0] || response.data,
         };
       } else {
         throw new Error(response.message || 'Post not found');
@@ -764,7 +766,7 @@ class PostApiService {
 
       console.log('📸 Cleaned upload request:', JSON.stringify(payload, null, 2));
 
-      const response = await this.makeRequest(`${this.baseUrl}/post/posts/media/upload-urls`, {
+      const response = await this.makeRequest(`${this.baseUrl}/posts/media/upload-urls`, {
         method: 'POST',
         body: JSON.stringify(payload),
       });
@@ -808,7 +810,7 @@ class PostApiService {
       formData.append('file', fileData);
 
       // Try the post media direct upload endpoint (matching the script pattern)
-      const directUploadEndpoint = `${this.baseUrl}/post/posts/media/upload-direct`;
+      const directUploadEndpoint = `${this.baseUrl}/posts/media/upload-direct`;
 
       console.log('📤 Trying direct upload endpoint:', directUploadEndpoint);
 
@@ -845,7 +847,7 @@ class PostApiService {
         console.log('📤 Direct upload endpoint failed, trying fallback approaches...');
 
         // Try alternative post media upload endpoint
-        const altEndpoint = `${this.baseUrl}/post/posts/media/upload`;
+        const altEndpoint = `${this.baseUrl}/posts/media/upload`;
 
         console.log('📤 Trying alternative media endpoint:', altEndpoint);
 
@@ -1033,9 +1035,37 @@ class PostApiService {
         // Process media to get proxy URL and signed URL (with fallback)
         const processedMedia = await Promise.all(post.media.map(async (mediaItem) => {
           try {
+            // Prefer signedUrl when available - S3 signed URLs work directly without proxy
+            const signedUrl = mediaItem.signedUrl;
+            if (signedUrl && typeof signedUrl === 'string' && signedUrl.startsWith('http')) {
+              return {
+                ...mediaItem,
+                url: signedUrl,
+                uri: signedUrl,
+                displayUrl: signedUrl,
+                signedUrl,
+                mediaType: mediaItem.mediaType || mediaItem.type || 'image',
+                key: mediaItem.key || mediaItem.mediaKey
+              };
+            }
+
+            // If media already has a valid URL (from Feed CDN or backend), preserve it
+            const existingUrl = mediaItem.url || mediaItem.uri || mediaItem.displayUrl;
+            if (existingUrl && typeof existingUrl === 'string' && existingUrl.startsWith('http')) {
+              const correctedUrl = this.correctBaseUrl(existingUrl);
+              return {
+                ...mediaItem,
+                url: correctedUrl,
+                uri: correctedUrl,
+                displayUrl: correctedUrl,
+                signedUrl: mediaItem.signedUrl ? this.correctBaseUrl(mediaItem.signedUrl) : correctedUrl,
+                mediaType: mediaItem.mediaType || mediaItem.type || 'image',
+                key: mediaItem.key || mediaItem.mediaKey
+              };
+            }
+
             // If media already has both URLs, check if they need base URL correction
             if (mediaItem.url && mediaItem.signedUrl) {
-              // Fix any localhost:8080 URLs with correct base URL
               const correctedUrl = this.correctBaseUrl(mediaItem.url);
               const correctedSignedUrl = this.correctBaseUrl(mediaItem.signedUrl);
 
@@ -1043,21 +1073,23 @@ class PostApiService {
                 ...mediaItem,
                 url: correctedUrl,
                 signedUrl: correctedSignedUrl,
-                uri: correctedUrl, // Add uri for compatibility
-                mediaType: mediaItem.type || 'image'
+                uri: correctedUrl,
+                mediaType: mediaItem.mediaType || mediaItem.type || 'image'
               };
             }
 
             // If we have a key, generate media URLs (chat service pattern)
-            if (mediaItem.key) {
-              const displayUrl = this.getMediaDisplayUrl(mediaItem.key);
+            if (mediaItem.key || mediaItem.mediaKey) {
+              const key = mediaItem.key || mediaItem.mediaKey;
+              const displayUrl = this.getMediaDisplayUrl(key);
 
               return {
                 ...mediaItem,
-                url: displayUrl, // PRIMARY: Display URL (proxy endpoint)
-                uri: displayUrl, // Add uri for compatibility
-                displayUrl: displayUrl, // Chat service compatibility
-                mediaType: mediaItem.type || 'image'
+                key,
+                url: displayUrl,
+                uri: displayUrl,
+                displayUrl,
+                mediaType: mediaItem.mediaType || mediaItem.type || 'image'
               };
             }
 
@@ -1067,9 +1099,9 @@ class PostApiService {
               return {
                 ...mediaItem,
                 url: correctedUrl,
-                uri: correctedUrl, // Add uri for compatibility
-                signedUrl: correctedUrl, // Use same URL as fallback
-                mediaType: mediaItem.type || 'image'
+                uri: correctedUrl,
+                signedUrl: correctedUrl,
+                mediaType: mediaItem.mediaType || mediaItem.type || 'image'
               };
             }
 
@@ -1111,13 +1143,13 @@ class PostApiService {
   async getMediaProxyUrl(mediaKey) {
     try {
       // Use proxy URL (similar to chat service pattern)
-      const proxyUrl = `${this.baseUrl}/post/posts/media/proxy?key=${encodeURIComponent(mediaKey)}`;
+      const proxyUrl = `${this.baseUrl}/posts/media/proxy?key=${encodeURIComponent(mediaKey)}`;
       console.log('📰 Generated proxy URL (chat pattern):', proxyUrl);
       return proxyUrl;
     } catch (error) {
       console.error('📰 Error generating proxy URL for media:', error);
       // Fallback: return direct media endpoint
-      return `${this.baseUrl}/post/posts/media/${encodeURIComponent(mediaKey)}`;
+      return `${this.baseUrl}/posts/media/${encodeURIComponent(mediaKey)}`;
     }
   }
 
@@ -1134,14 +1166,14 @@ class PostApiService {
   // Get media display URL for rendering (following chat service pattern)
   getMediaDisplayUrl(mediaKey) {
     // Use the proxy endpoint similar to chat service
-    return `${this.baseUrl}/post/posts/media/proxy?key=${encodeURIComponent(mediaKey)}`;
+    return `${this.baseUrl}/posts/media/proxy?key=${encodeURIComponent(mediaKey)}`;
   }
 
   // Get signed URL for media (FALLBACK method)
   async getMediaSignedUrl(mediaKey) {
     try {
       // Try to get a direct signed URL from backend that doesn't require auth headers
-      const response = await this.makeRequest(`${this.baseUrl}/post/posts/media/signed-url?key=${encodeURIComponent(mediaKey)}`, {
+      const response = await this.makeRequest(`${this.baseUrl}/posts/media/signed-url?key=${encodeURIComponent(mediaKey)}`, {
         method: 'GET',
       });
 
@@ -1157,7 +1189,7 @@ class PostApiService {
 
       // Last resort: try to fetch the media directly with auth and create blob URL
       try {
-        const directUrl = `${this.baseUrl}/post/posts/media/${encodeURIComponent(mediaKey)}`;
+        const directUrl = `${this.baseUrl}/posts/media/${encodeURIComponent(mediaKey)}`;
         console.log('📰 Trying direct media fetch with auth:', directUrl);
 
         const accessToken = authApi.getAccessToken();
@@ -1213,7 +1245,7 @@ class PostApiService {
 
       console.log('👍 Adding reaction:', { postId, reactionType });
 
-      const response = await this.makeRequest(`${this.baseUrl}/post/posts/reactions`, {
+      const response = await this.makeRequest(`${this.baseUrl}/posts/reactions`, {
         method: 'POST',
         body: JSON.stringify({
           postId: postId,
@@ -1273,7 +1305,7 @@ class PostApiService {
 
       console.log('👎 Removing reaction from post:', postId);
 
-      const response = await this.makeRequest(`${this.baseUrl}/post/posts/reactions`, {
+      const response = await this.makeRequest(`${this.baseUrl}/posts/reactions`, {
         method: 'DELETE',
         body: JSON.stringify({
           postId: postId
@@ -1330,7 +1362,7 @@ class PostApiService {
         payload.parentId = parentId;
       }
 
-      const response = await this.makeRequest(`${this.baseUrl}/post/posts/comments`, {
+      const response = await this.makeRequest(`${this.baseUrl}/posts/comments`, {
         method: 'POST',
         body: JSON.stringify(payload),
         signal: controller.signal
@@ -1381,7 +1413,7 @@ class PostApiService {
 
       console.log('📝 Getting comments for post:', postId);
 
-      const response = await this.makeRequest(`${this.baseUrl}/post/posts/${postId}/comments?page=${page}&limit=${limit}`, {
+      const response = await this.makeRequest(`${this.baseUrl}/posts/${postId}/comments?page=${page}&limit=${limit}`, {
         method: 'GET'
       });
 
@@ -1418,7 +1450,7 @@ class PostApiService {
 
       console.log('🗑️ Deleting comment:', commentId);
 
-      const response = await this.makeRequest(`${this.baseUrl}/post/posts/comments`, {
+      const response = await this.makeRequest(`${this.baseUrl}/posts/comments`, {
         method: 'DELETE',
         body: JSON.stringify({ commentId })
       });
@@ -1452,7 +1484,7 @@ class PostApiService {
 
       console.log('👥 Getting reactions for post:', postId);
 
-      const response = await this.makeRequest(`${this.baseUrl}/post/posts/${postId}/reactions?page=${page}&limit=${limit}`, {
+      const response = await this.makeRequest(`${this.baseUrl}/posts/${postId}/reactions?page=${page}&limit=${limit}`, {
         method: 'GET'
       });
 
@@ -1584,7 +1616,7 @@ class PostApiService {
         payload.comment = comment.trim();
       }
 
-      const response = await this.makeRequest(`${this.baseUrl}/post/posts/repost`, {
+      const response = await this.makeRequest(`${this.baseUrl}/posts/repost`, {
         method: 'POST',
         body: JSON.stringify(payload)
       });
@@ -1634,7 +1666,7 @@ class PostApiService {
         payload.description = description.trim();
       }
 
-      const response = await this.makeRequest(`${this.baseUrl}/post/posts/${postId}/report`, {
+      const response = await this.makeRequest(`${this.baseUrl}/posts/${postId}/report`, {
         method: 'POST',
         body: JSON.stringify(payload)
       });

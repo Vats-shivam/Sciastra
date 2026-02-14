@@ -1225,7 +1225,7 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   datePickerModal: {
-    backgroundColor: '#1a1a1a',
+    backgroundColor: colors.card,
     borderRadius: 24,
     width: '100%',
     maxWidth: 420,

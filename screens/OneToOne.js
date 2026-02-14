@@ -9,14 +9,14 @@ import {
   Platform,
   StyleSheet,
   Alert,
-  SafeAreaView,
   StatusBar,
   Image,
   Keyboard,
   Modal,
-  Dimensions
+  Dimensions,
+  ActivityIndicator
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import * as ImagePicker from 'expo-image-picker';
 import Animated, {
@@ -34,6 +34,49 @@ import authApi from '../api/AuthApi';
 import { useLoader } from '../context/LoaderContext';
 import { useNotification } from '../contexts/NotificationContext';
 import useScreenApiLogger from '../hooks/useScreenApiLogger';
+
+// Chat media image - uses signed URLs (proxy + auth headers fail on RN Image)
+const ChatMediaImage = ({ media, style, onPress, onError, onLoad }) => {
+  const [resolvedUri, setResolvedUri] = useState(null);
+
+  const directUri = media?.uri || media?.displayUrl;
+  const isDirectUrl = directUri && typeof directUri === 'string' &&
+    (directUri.includes('amazonaws.com') || directUri.includes('X-Amz-') ||
+     directUri.startsWith('file://') || directUri.startsWith('content://'));
+
+  useEffect(() => {
+    if (isDirectUrl) {
+      setResolvedUri(directUri);
+      return;
+    }
+    if (media?.key) {
+      chatApi.getMediaSignedUrl(media.key).then((url) => {
+        if (url) setResolvedUri(url);
+      });
+    }
+  }, [media?.key, directUri, isDirectUrl]);
+
+  const uri = isDirectUrl ? directUri : resolvedUri;
+  if (!uri && !media?.isUploading) {
+    return (
+      <View style={[style, { backgroundColor: colors.backgroundElevated, justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="small" color={colors.textMuted} />
+      </View>
+    );
+  }
+
+  return (
+    <TouchableOpacity onPress={onPress} activeOpacity={0.9} disabled={media?.isUploading}>
+      <Image
+        source={{ uri: uri || media?.uri }}
+        style={style}
+        resizeMode="cover"
+        onError={onError}
+        onLoad={onLoad}
+      />
+    </TouchableOpacity>
+  );
+};
 
 const OneToOneChatScreen = ({ route, navigation }) => {
   const { userId, userName, avatar, isOnline: initialIsOnline = true } = route.params;
@@ -488,17 +531,19 @@ const OneToOneChatScreen = ({ route, navigation }) => {
     );
   };
 
-  // Full screen image viewer functions
-  const openFullScreenImage = (mediaItem) => {
-    const userToken = authApi.getAccessToken();
-    const imageSource = mediaItem.key && userToken
-      ? chatApi.getImageSource(mediaItem.key, userToken)
-      : { uri: mediaItem.uri || mediaItem.displayUrl };
-
-    setFullScreenImage({
-      ...mediaItem,
-      source: imageSource
-    });
+  // Full screen image viewer - use signed URL (proxy + auth fails on RN Image)
+  const openFullScreenImage = async (mediaItem) => {
+    let uri = mediaItem.uri || mediaItem.displayUrl;
+    const isDirect = uri && (uri.includes('amazonaws.com') || uri.includes('X-Amz-') || uri.startsWith('file://') || uri.startsWith('content://'));
+    if (!isDirect && mediaItem.key) {
+      uri = await chatApi.getMediaSignedUrl(mediaItem.key);
+    }
+    if (uri) {
+      setFullScreenImage({
+        ...mediaItem,
+        source: { uri }
+      });
+    }
   };
 
   const closeFullScreenImage = () => {
@@ -588,65 +633,30 @@ const OneToOneChatScreen = ({ route, navigation }) => {
         {item.media && (
           <View style={styles.mediaContainer}>
             {item.media.type === 'image' && (
-              <TouchableOpacity
-                onPress={() => openFullScreenImage(item.media)}
-              >
-                {(() => {
-                  const userToken = authApi.getAccessToken();
-                  const imageSource = item.media.key && userToken
-                    ? chatApi.getImageSource(item.media.key, userToken)
-                    : { uri: item.media.uri || item.media.displayUrl };
-
-                  console.log('🖼️ Rendering image:', {
-                    messageId: item.id,
-                    mediaKey: item.media.key,
-                    userToken: userToken ? 'present' : 'missing',
-                    imageSource: imageSource,
-                    mediaType: item.media.type
-                  });
-
-                  return (
-                    <Image
-                      source={imageSource}
-                      style={styles.messageImage}
-                      resizeMode="cover"
-                      onError={(error) => {
-                        console.log('🚨 Image load error:', error.nativeEvent.error);
-                        console.log('🚨 Failed image source:', imageSource);
-                      }}
-                      onLoad={() => {
-                        console.log('✅ Image loaded successfully:', imageSource.uri);
-                      }}
-                    />
-                  );
-                })()}
+              <View style={{ position: 'relative' }}>
+                <ChatMediaImage
+                  media={item.media}
+                  style={styles.messageImage}
+                  onPress={() => openFullScreenImage(item.media)}
+                />
                 {item.media.isUploading && (
                   <View style={styles.uploadingOverlay}>
                     <Icon name="loading" size={24} color="white" />
                     <Text style={styles.uploadingText}>Uploading...</Text>
                   </View>
                 )}
-              </TouchableOpacity>
+              </View>
             )}
             {item.media.type === 'video' && (
               <TouchableOpacity
                 style={styles.videoContainer}
                 onPress={() => openFullScreenImage(item.media)}
               >
-                {(() => {
-                  const userToken = authApi.getAccessToken();
-                  const videoSource = item.media.key && userToken
-                    ? chatApi.getImageSource(item.media.key, userToken)
-                    : { uri: item.media.uri || item.media.displayUrl };
-
-                  return (
-                    <Image
-                      source={videoSource}
-                      style={styles.messageImage}
-                      resizeMode="cover"
-                    />
-                  );
-                })()}
+                <ChatMediaImage
+                  media={item.media}
+                  style={styles.messageImage}
+                  onPress={() => openFullScreenImage(item.media)}
+                />
                 <View style={styles.videoPlayButton}>
                   <Icon name="play" size={32} color="white" />
                 </View>
@@ -689,12 +699,19 @@ const OneToOneChatScreen = ({ route, navigation }) => {
     </View>
   );
 
+  const Wrapper = Platform.OS === 'ios' ? KeyboardAvoidingView : View;
+  const wrapperProps = Platform.OS === 'ios' ? {
+    behavior: 'padding',
+    keyboardVerticalOffset: insets.top + 88,
+  } : {};
+
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={colors.backgroundSecondary} />
-      
-      {/* Header */}
-      <View style={styles.header}>
+    <Wrapper style={styles.flex1} {...wrapperProps}>
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <StatusBar barStyle="light-content" backgroundColor={colors.backgroundSecondary} />
+        
+        {/* Header */}
+        <View style={styles.header}>
         <TouchableOpacity 
           style={styles.backButton}
           onPress={() => navigation.goBack()}
@@ -716,11 +733,7 @@ const OneToOneChatScreen = ({ route, navigation }) => {
       </View>
 
       {/* Messages and Input Container */}
-      <KeyboardAvoidingView 
-        style={styles.keyboardAvoidingView}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-      >
+      <View style={styles.keyboardAvoidingView}>
         {/* Messages List */}
         <FlatList
           ref={flatListRef}
@@ -733,6 +746,7 @@ const OneToOneChatScreen = ({ route, navigation }) => {
           onLayout={() => flatListRef.current?.scrollToEnd({ animated: true })}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
         />
 
         {/* Typing Indicator */}
@@ -772,7 +786,7 @@ const OneToOneChatScreen = ({ route, navigation }) => {
             <Icon name="send" size={24} color={colors.white} />
           </TouchableOpacity>
         </View>
-      </KeyboardAvoidingView>
+      </View>
 
       {/* Full Screen Image Modal */}
       <Modal
@@ -827,11 +841,13 @@ const OneToOneChatScreen = ({ route, navigation }) => {
           </TouchableOpacity>
         </View>
       </Modal>
-    </SafeAreaView>
+      </SafeAreaView>
+    </Wrapper>
   );
 };
 
 const styles = StyleSheet.create({
+  flex1: { flex: 1 },
   container: {
     flex: 1,
     backgroundColor: colors.background,

@@ -32,27 +32,33 @@ const ChatListScreen = ({ navigation }) => {
 
   useScreenApiLogger('ChatList');
   
-  // Helper functions - defined before useEffect
+  // Helper - backend returns members as User[] directly, not [{ user }]
+  const getMemberId = (member) => member?.id ?? member?.user?.id;
+  const getMemberProfile = (member) => member?.profile ?? member?.user?.profile;
+
   const getOtherParticipantId = (room) => {
-    if (!room.isGroup && room.members) {
-      const otherMember = room.members.find(member => member.user.id !== chatApi.getCurrentUserId?.());
-      return otherMember?.user?.id || null;
+    if (!room.isGroup && room.members?.length) {
+      const currentUserId = chatApi.getCurrentUserId?.();
+      const other = room.members.find(m => getMemberId(m) !== currentUserId);
+      return getMemberId(other) || null;
     }
     return null;
   };
 
   const getOtherParticipantName = (room) => {
-    if (!room.isGroup && room.members) {
-      const otherMember = room.members.find(member => member.user.id !== chatApi.getCurrentUserId?.());
-      return otherMember?.user?.profile?.name || 'Unknown User';
+    if (!room.isGroup && room.members?.length) {
+      const currentUserId = chatApi.getCurrentUserId?.();
+      const other = room.members.find(m => getMemberId(m) !== currentUserId);
+      return getMemberProfile(other)?.name || 'Unknown User';
     }
     return room.name || 'Chat Room';
   };
 
   const getOtherParticipantAvatar = (room) => {
-    if (!room.isGroup && room.members) {
-      const otherMember = room.members.find(member => member.user.id !== chatApi.getCurrentUserId?.());
-      return otherMember?.user?.profile?.profilePic || null;
+    if (!room.isGroup && room.members?.length) {
+      const currentUserId = chatApi.getCurrentUserId?.();
+      const other = room.members.find(m => getMemberId(m) !== currentUserId);
+      return getMemberProfile(other)?.profilePic || null;
     }
     return null;
   };
@@ -83,24 +89,23 @@ const ChatListScreen = ({ navigation }) => {
     if (chats.length === 0) return;
 
     const handleUserStatusChange = (statusData) => {
-      console.log('📡 ChatList: User status changed:', statusData);
       const { userId, status } = statusData;
+      const uid = String(userId);
       
       setOnlineUsers(prev => {
         const newSet = new Set(prev);
         if (status === 'online') {
-          newSet.add(userId);
+          newSet.add(uid);
         } else {
-          newSet.delete(userId);
+          newSet.delete(uid);
         }
         return newSet;
       });
 
-      // Update the specific chat item
       setChats(prevChats => 
         prevChats.map(chat => {
           const participantId = getOtherParticipantId(chat.room);
-          if (participantId === userId) {
+          if (participantId && String(participantId) === uid) {
             return { ...chat, isOnline: status === 'online' };
           }
           return chat;
@@ -108,7 +113,6 @@ const ChatListScreen = ({ navigation }) => {
       );
     };
 
-    // Add status listener for each chat participant
     const participantIds = chats
       .map(chat => getOtherParticipantId(chat.room))
       .filter(Boolean);
@@ -117,16 +121,61 @@ const ChatListScreen = ({ navigation }) => {
       chatApi.addStatusListener(participantId, handleUserStatusChange);
     });
 
-    console.log('📡 ChatList: Set up status listeners for:', participantIds);
-
-    // Cleanup listeners on unmount or when chats change
     return () => {
       participantIds.forEach(participantId => {
         chatApi.removeStatusListener(participantId, handleUserStatusChange);
       });
-      console.log('🧹 ChatList: Cleaned up status listeners');
     };
-  }, [chats.map(c => c.id).join(',')]); // Only re-run when chat IDs change
+  }, [chats.map(c => c?.id).filter(Boolean).join(',')]);
+
+  // Set up message listeners to update last message in real-time
+  useEffect(() => {
+    if (chats.length === 0) return;
+
+    const handleNewMessage = (messageData) => {
+      const roomId = messageData.chatRoomId || messageData.roomId;
+      if (!roomId) return;
+
+      let lastMessageText = messageData.content || messageData.text || '';
+      if (!lastMessageText?.trim() && messageData.media) {
+        lastMessageText = messageData.media?.type === 'image' ? 'Photo' : 'Media';
+      }
+      if (!lastMessageText?.trim()) lastMessageText = 'New message';
+
+      const timeStr = messageData.createdAt
+        ? new Date(messageData.createdAt).toLocaleDateString()
+        : new Date().toLocaleDateString();
+
+      setChats(prevChats =>
+        prevChats.map(chat => {
+          if (chat.id === roomId) {
+            return {
+              ...chat,
+              lastMessage: lastMessageText,
+              time: timeStr,
+            };
+          }
+          return chat;
+        })
+      );
+    };
+
+    chats.forEach(chat => {
+      if (chat.id) {
+        chatApi.addMessageListener(chat.id, handleNewMessage);
+        chatApi.joinRoom(chat.id);
+      }
+    });
+
+    return () => {
+      chats.forEach(chat => {
+        if (chat.id) {
+          chatApi.removeMessageListener(chat.id, handleNewMessage);
+          chatApi.leaveRoom(chat.id);
+        }
+      });
+    };
+  }, [chats.map(c => c?.id).filter(Boolean).join(',')]);
 
   const initializeChat = async () => {
     try {
@@ -158,29 +207,33 @@ const ChatListScreen = ({ navigation }) => {
 
         const formattedChats = rooms.map(room => {
           const participantId = getOtherParticipantId(room);
-          const participant = !room.isGroup && room.members
-            ? room.members.find(member => member.user.id !== chatApi.getCurrentUserId?.())
+          const currentUserId = chatApi.getCurrentUserId?.();
+          const participantMember = !room.isGroup && room.members?.length
+            ? room.members.find(m => getMemberId(m) !== currentUserId)
             : null;
-          const participantUser = participant?.user || null;
-          const avatarKey = participantUser?.profile?.profilePic || participantUser?.profilePic || null;
-          
-          // Debug logging
-          if (avatarKey) {
-            console.log('ChatList: Avatar key found for room', room.id, ':', avatarKey);
-          } else {
-            console.log('ChatList: No avatar key for room', room.id, 'participantUser:', participantUser);
+          const participantUser = participantMember
+            ? (participantMember.user || participantMember)
+            : null;
+          const avatarKey = getMemberProfile(participantMember)?.profilePic || participantUser?.profilePic || null;
+
+          const latestMsg = room.messages?.[0] ?? room.lastMessage;
+          let lastMessageText = latestMsg?.content ?? latestMsg?.text ?? '';
+          if (!lastMessageText?.trim() && latestMsg?.media) {
+            lastMessageText = latestMsg.media?.type === 'image' ? 'Photo' : 'Media';
           }
-          
+          if (!lastMessageText?.trim()) lastMessageText = 'No messages yet';
+
+          const lastMsgTime = latestMsg?.createdAt;
+          const timeStr = lastMsgTime ? new Date(lastMsgTime).toLocaleDateString() : '';
+
           return {
             id: room.id,
             name: getOtherParticipantName(room),
-            lastMessage: room.messages?.[0]?.content || room.lastMessage?.content || 'No messages yet',
-            time: room.messages?.[0] 
-              ? new Date(room.messages[0].createdAt).toLocaleDateString() 
-              : (room.lastMessage?.createdAt ? new Date(room.lastMessage.createdAt).toLocaleDateString() : ''),
+            lastMessage: lastMessageText,
+            time: timeStr,
             unread: room.unreadCount || 0,
             avatar: avatarKey,
-            isOnline: onlineUsers.has(participantId), // Use actual online status
+            isOnline: onlineUsers.has(participantId),
             room: room,
             participant: participantUser,
           };

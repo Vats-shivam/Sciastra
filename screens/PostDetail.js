@@ -25,7 +25,6 @@ import { useLoader } from '../context/LoaderContext';
 import { useNotification } from '../contexts/NotificationContext';
 import useScreenApiLogger from '../hooks/useScreenApiLogger';
 import { getProfileImageSource } from '../utils/profileImage';
-import PostIcon from '../components/PostIcon';
 import CustomRefreshControl from '../components/CustomRefreshControl';
 
 // Reaction types from backend enum
@@ -88,42 +87,41 @@ const PostDetailScreen = ({ route, navigation }) => {
 
   const loadPostDetails = async () => {
     try {
-      setLoading(true);
+      // Avoid full-screen loading flicker when we already have postData.
+      setLoading(!postData);
 
       // Debug log the postData structure
       if (postData) {
         console.log('PostDetail - Using passed postData:', JSON.stringify(postData, null, 2));
       }
 
-      // Only fetch post data if not already provided from previous screen
+      // Always fetch the latest post as well (postData from feed can be stale/missing userReaction/counts).
       const promises = [
+        postApi.getPostById(postId),
         postApi.getPostComments(postId, 1, 20),
-        postApi.getPostReactions(postId, 1, 50)
+        postApi.getPostReactions(postId, 1, 50),
       ];
-
-      // Add post fetch only if we don't have post data already
-      if (!postData) {
-        promises.unshift(postApi.getPostById(postId));
-      }
 
       const results = await Promise.all(promises);
 
-      let postResult, commentsResult, reactionsResult;
+      const [postResult, commentsResult, reactionsResult] = results;
 
-      if (!postData) {
-        // If we fetched post data, it's the first result
-        [postResult, commentsResult, reactionsResult] = results;
-        if (postResult.success) {
-          console.log('PostDetail - Using API postResult:', JSON.stringify(postResult.data, null, 2));
-          setPost(postResult.data);
-        } else {
-          showError('Failed to load post details');
-          navigation.goBack();
-          return;
-        }
-      } else {
-        // If we already have post data, skip to comments and reactions
-        [commentsResult, reactionsResult] = results;
+      if (postResult?.success) {
+        const apiPost = postResult.data;
+        // Preserve media from postData when it has valid URLs - API response can overwrite with
+        // proxy URLs that may not work, causing the image to vanish after the fetch completes
+        const hasValidMedia = postData?.media?.length > 0 && postData.media.some(
+          (m) => (m.url || m.uri || m.signedUrl) && String(m.url || m.uri || m.signedUrl).startsWith('http')
+        );
+        const mergedPost = hasValidMedia && postData
+          ? { ...apiPost, media: postData.media, mediaUrls: postData.mediaUrls }
+          : apiPost;
+        setPost(mergedPost);
+      } else if (!postData) {
+        // If we don't even have fallback postData, we can't render.
+        showError('Failed to load post details');
+        navigation.goBack();
+        return;
       }
 
       if (commentsResult.success) {
@@ -131,12 +129,33 @@ const PostDetailScreen = ({ route, navigation }) => {
       }
 
       if (reactionsResult.success) {
-        setReactions(reactionsResult.data.reactions || []);
-      }
+        // Backend payloads vary; support both { reactions: [] } and direct [].
+        const payload = reactionsResult.data;
+        const reactionList = Array.isArray(payload?.reactions)
+          ? payload.reactions
+          : Array.isArray(payload)
+            ? payload
+            : [];
 
-      // Set user reaction if available
-      if (post?.userReaction) {
-        setUserReaction(post.userReaction);
+        setReactions(reactionList);
+
+        // Derive current user's reaction from the reaction list so the Like button
+        // stays correct even if post.userReaction isn't present.
+        const currentUserId = authApi.getCurrentUserId();
+        const myReaction = reactionList.find((r) => {
+          const rid = r?.user?.id ?? r?.userId;
+          return currentUserId && rid && String(rid) === String(currentUserId);
+        });
+        setUserReaction(myReaction ? (myReaction.type || 'LIKE') : null);
+
+        // Keep post counts consistent (optional UI consistency).
+        setPost((prev) => prev ? ({
+          ...prev,
+          counts: {
+            ...(prev.counts || {}),
+            reactions: reactionList.length,
+          },
+        }) : prev);
       }
 
     } catch (error) {
@@ -305,11 +324,21 @@ const PostDetailScreen = ({ route, navigation }) => {
   const getImageSource = (mediaItem) => {
     const userToken = authApi.getAccessToken();
 
+    // Prefer backend-provided URL when available (CDN or proxy URL from API)
+    const existingUrl = mediaItem.uri || mediaItem.url || mediaItem.displayUrl;
+    if (existingUrl && typeof existingUrl === 'string' && existingUrl.startsWith('http')) {
+      return {
+        uri: existingUrl,
+        headers: userToken ? { Authorization: `Bearer ${userToken}` } : undefined,
+      };
+    }
+
+    // Fallback: use key with post proxy when we have S3 key
     if (mediaItem.key && userToken) {
       return postApi.getImageSource(mediaItem.key, userToken);
     }
 
-    return { uri: mediaItem.uri || mediaItem.url || mediaItem.displayUrl };
+    return { uri: existingUrl || '' };
   };
 
   const timeAgo = (date) => {
@@ -338,13 +367,15 @@ const PostDetailScreen = ({ route, navigation }) => {
   };
 
   const renderComment = ({ item: comment }) => {
-    // Ensure we get the profilePic from the correct location
+    // Ensure we get the profilePic from the correct location - backend may nest under user.profile
     const userWithProfile = comment.user || {};
+    const profilePicKey = userWithProfile.profile?.profilePic 
+      || userWithProfile.profilePic 
+      || comment.profilePic 
+      || comment.user?.profilePic;
     const imageSource = commentAvatarErrors[comment.id]
       ? require('../assets/icon.png')
-      : getProfileImageSource(userWithProfile, { 
-          fallbackKey: comment.profilePic || userWithProfile.profilePic || userWithProfile.profile?.profilePic 
-        });
+      : getProfileImageSource(userWithProfile, { fallbackKey: profilePicKey });
     
     const userId = comment.user?.id || comment.userId;
     const currentUserId = authApi.getCurrentUserId();
@@ -422,10 +453,14 @@ const PostDetailScreen = ({ route, navigation }) => {
   const renderReaction = ({ item: reaction }) => {
     const reactionConfig = REACTIONS.find(r => r.type === reaction.type);
     
-    // Get profile picture - use user's profilePic if available, otherwise use default icon
+    // Get profile picture - backend formats via formatAuthorProfile, may have profilePic at user.profile
+    const userWithProfile = reaction.user || {};
+    const profilePicKey = userWithProfile.profile?.profilePic 
+      || userWithProfile.profilePic 
+      || reaction.profilePic;
     const imageSource = reactionAvatarErrors[reaction.id]
       ? require('../assets/icon.png')
-      : getProfileImageSource(reaction.user, { fallbackKey: reaction.profilePic });
+      : getProfileImageSource(userWithProfile, { fallbackKey: profilePicKey });
     
     const userId = reaction.user?.id || reaction.userId;
     const currentUserId = authApi.getCurrentUserId();
@@ -506,7 +541,7 @@ const PostDetailScreen = ({ route, navigation }) => {
     );
   }
 
-  const totalReactions = reactions.length;
+  const totalReactions = Math.max(reactions.length, userReaction ? 1 : 0);
   const totalComments = comments.length;
 
   return (
@@ -564,12 +599,12 @@ const PostDetailScreen = ({ route, navigation }) => {
                 }}
               >
                 <Image
-                  source={{
-                    uri: post.author?.profile?.profilePic
-                      ? postApi.getImageSource(post.author.profile.profilePic, authApi.getAccessToken()).uri
-                      : post.author?.profilePic || 'https://randomuser.me/api/portraits/men/1.jpg'
-                  }}
+                  source={getProfileImageSource(post.author, { 
+                    fallbackKey: post.author?.profile?.profilePic || post.author?.profilePic 
+                  })}
                   style={styles.avatar}
+                  resizeMode="cover"
+                  defaultSource={require('../assets/icon.png')}
                 />
               </TouchableOpacity>
               <View style={styles.authorInfo}>
@@ -596,19 +631,24 @@ const PostDetailScreen = ({ route, navigation }) => {
             {/* Post Content */}
             <Text style={styles.postContent}>{post.content}</Text>
 
-            {/* Post Media */}
-            {post.media && post.media.length > 0 && (
-              <View style={styles.mediaContainer}>
-                {post.media.map((mediaItem, index) => (
-                  <Image
-                    key={index}
-                    source={getImageSource(mediaItem)}
-                    style={styles.postImage}
-                    resizeMode="cover"
-                  />
-                ))}
-              </View>
-            )}
+            {/* Post Media - filter for images only (matches PostCard) */}
+            {(() => {
+              const displayImages = Array.isArray(post.media)
+                ? post.media.filter((item) => (item.mediaType === 'image' || item.type === 'image' || (!item.type && !item.mediaType)))
+                : [];
+              return displayImages.length > 0 ? (
+                <View style={styles.mediaContainer}>
+                  {displayImages.map((mediaItem, index) => (
+                    <Image
+                      key={index}
+                      source={getImageSource(mediaItem)}
+                      style={styles.postImage}
+                      resizeMode="cover"
+                    />
+                  ))}
+                </View>
+              ) : null;
+            })()}
 
             {/* Engagement Stats */}
             <View style={styles.engagementStats}>
@@ -645,9 +685,14 @@ const PostDetailScreen = ({ route, navigation }) => {
                 ) : (
                   <View style={styles.actionContent}>
                     {userReaction ? (
-                      <Text style={styles.reactionEmoji}>👍</Text>
+                      <Icon name="thumb-up" size={20} color={colors.primary} />
                     ) : (
-                      <PostIcon name="like" size={20} color={colors.textSecondary} />
+                      <Icon
+                        name="thumb-up-outline"
+                        size={20}
+                        color={colors.textSecondary}
+                        style={{ transform: [{ scaleX: -1 }] }}
+                      />
                     )}
                     <Text style={[styles.actionButtonText, userReaction && styles.actionButtonTextActive, { marginLeft: 6 }]}>
                       {userReaction ? 'Liked' : 'Like'}
@@ -660,7 +705,7 @@ const PostDetailScreen = ({ route, navigation }) => {
                 onPress={scrollToComments}
               >
                 <View style={styles.actionContent}>
-                  <PostIcon name="comment" size={20} color={colors.textSecondary} />
+                  <Icon name="comment-outline" size={20} color={colors.textSecondary} />
                   <Text style={[styles.actionButtonText, { marginLeft: 6 }]}>Comment</Text>
                 </View>
               </TouchableOpacity>
@@ -686,7 +731,7 @@ const PostDetailScreen = ({ route, navigation }) => {
                 }}
               >
                 <View style={styles.actionContent}>
-                  <PostIcon name="reshare" size={20} color={colors.textSecondary} />
+                  <Icon name="repeat" size={20} color={colors.textSecondary} />
                   <Text style={[styles.actionButtonText, { marginLeft: 6 }]}>Repost</Text>
                 </View>
               </TouchableOpacity>

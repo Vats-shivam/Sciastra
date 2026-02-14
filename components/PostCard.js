@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { memo, useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -12,7 +12,10 @@ import {
   ActivityIndicator,
   ScrollView,
   TextInput,
+  Platform,
 } from "react-native";
+import { BlurView } from "expo-blur";
+import { LinearGradient } from "expo-linear-gradient";
 import colors from "../config/colors";
 import { useNavigation } from "@react-navigation/native";
 import postApi from "../api/PostApi";
@@ -31,7 +34,7 @@ const REACTIONS = [
   { type: "LIKE", icon: "👍", label: "Like" },
 ];
 
-const PostCard = ({ post }) => {
+const PostCard = memo(({ post }) => {
   // Early return if post is undefined or null
   if (!post) {
     return null;
@@ -44,7 +47,11 @@ const PostCard = ({ post }) => {
   const [reactionLoading, setReactionLoading] = useState(false);
   const [imageLoading, setImageLoading] = useState({});
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  const [totalReactions, setTotalReactions] = useState(post.counts?.reactions || 0);
+  // Some backend responses include `userReaction` but omit/underreport `counts.reactions`.
+  // Avoid showing "Be the first to like" when the current user has already liked.
+  const [totalReactions, setTotalReactions] = useState(
+    Math.max(post.counts?.reactions || 0, post.userReaction ? 1 : 0)
+  );
   const [imageHeights, setImageHeights] = useState({}); // Track image heights dynamically
 
   // Fullscreen image modal
@@ -67,13 +74,21 @@ const PostCard = ({ post }) => {
   const getImageSource = (mediaItem) => {
     const userToken = authApi.getAccessToken();
 
-    // If we have a media key and token, use authenticated approach
+    // Prefer backend-provided URL when available (CDN or proxy URL from API)
+    const existingUrl = mediaItem.uri || mediaItem.url || mediaItem.displayUrl;
+    if (existingUrl && typeof existingUrl === 'string' && existingUrl.startsWith('http')) {
+      return {
+        uri: existingUrl,
+        headers: userToken ? { Authorization: `Bearer ${userToken}` } : undefined,
+      };
+    }
+
+    // Fallback: use key with post proxy when we have S3 key
     if (mediaItem.key && userToken) {
       return postApi.getImageSource(mediaItem.key, userToken);
     }
 
-    // Otherwise use the URL directly
-    return { uri: mediaItem.uri || mediaItem.url || mediaItem.displayUrl };
+    return { uri: existingUrl || '' };
   };
 
   const handleReaction = async () => {
@@ -125,8 +140,9 @@ const PostCard = ({ post }) => {
     }
   };
   
+  const effectiveReactionsCount = Math.max(totalReactions, userReaction ? 1 : 0);
   // Determine which reaction icon to show - always LIKE if there are reactions
-  const displayReactionType = totalReactions > 0 ? 'LIKE' : null;
+  const displayReactionType = effectiveReactionsCount > 0 ? 'LIKE' : null;
 
   // Determine if this is a repost and get the original post
   const isRepost = post.isRepost || false;
@@ -187,9 +203,10 @@ const PostCard = ({ post }) => {
     const statsPost = isRepost && originalPost ? originalPost : post;
     // Only update if we're not in the middle of a reaction update
     if (!reactionLoading) {
-      setTotalReactions(statsPost?.counts?.reactions || 0);
+      const nextFromCounts = statsPost?.counts?.reactions || 0;
+      setTotalReactions(Math.max(nextFromCounts, userReaction ? 1 : 0));
     }
-  }, [post?.counts?.reactions, isRepost, originalPost]);
+  }, [post?.counts?.reactions, isRepost, originalPost, reactionLoading, userReaction]);
 
   const timeAgo = (date) => {
     const seconds = Math.floor((new Date() - new Date(date)) / 1000);
@@ -217,7 +234,15 @@ const PostCard = ({ post }) => {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={styles.cardWrapper}>
+      <BlurView intensity={Platform.OS === 'ios' ? 45 : 60} tint="dark" style={styles.glassBlur} />
+      <LinearGradient
+        colors={[colors.glassBg, 'rgba(26, 45, 55, 0.45)']}
+        style={styles.glassGradient}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+      />
+      <View style={styles.container}>
       {/* Repost Header - Shows who reposted */}
       {isRepost && reposter && (
         <View style={styles.repostHeader}>
@@ -333,7 +358,7 @@ const PostCard = ({ post }) => {
             }}
             onScrollToIndexFailed={(info) => {
               // Handle scroll to index failure gracefully
-              console.log('Scroll to index failed:', info);
+              if (__DEV__) console.log('Scroll to index failed:', info);
             }}
             renderItem={({ item, index }) => {
               const imageSource = getImageSource(item);
@@ -397,7 +422,7 @@ const PostCard = ({ post }) => {
           {(() => {
             const statsPost = isRepost && originalPost ? originalPost : post;
             // Use totalReactions state for instant updates instead of reading from post prop
-            const reactionsCount = totalReactions;
+            const reactionsCount = effectiveReactionsCount;
             const commentsCount = statsPost.counts?.comments || 0;
             
             return (
@@ -449,17 +474,16 @@ const PostCard = ({ post }) => {
           ) : (
             <View style={styles.actionContent}>
               {userReaction ? (
-                <Text style={styles.reactionEmoji}>
-                  {REACTIONS.find((x) => x.type === userReaction)?.icon || '👍'}
-                </Text>
+                <Icon name="thumb-up" size={20} color={colors.primary} />
               ) : (
-                <PostIcon
-                  name="like"
+                <Icon
+                  name="thumb-up-outline"
                   size={20}
                   color={colors.textSecondary}
+                  style={{ transform: [{ scaleX: -1 }] }}
                 />
               )}
-              <Text style={[styles.actionText, { marginLeft: 6 }]}>
+              <Text style={[styles.actionText, { marginLeft: 6 }, userReaction && { color: colors.primary }]}>
                 {userReaction ? 'Liked' : 'Like'}
               </Text>
             </View>
@@ -470,7 +494,7 @@ const PostCard = ({ post }) => {
           onPress={() => navigation.navigate("PostDetail", { postId: post.id, postData: post })}
         >
           <View style={styles.actionContent}>
-            <PostIcon name="comment" size={20} color={colors.textSecondary} />
+            <Icon name="comment-outline" size={20} color={colors.textSecondary} />
             <Text style={[styles.actionText, { marginLeft: 6 }]}>Comment</Text>
           </View>
         </TouchableOpacity>
@@ -491,7 +515,7 @@ const PostCard = ({ post }) => {
           }}
         >
           <View style={styles.actionContent}>
-            <PostIcon name="reshare" size={20} color={colors.textSecondary} />
+            <Icon name="repeat" size={20} color={colors.textSecondary} />
             <Text style={[styles.actionText, { marginLeft: 6 }]}>Repost</Text>
           </View>
         </TouchableOpacity>
@@ -705,29 +729,38 @@ const PostCard = ({ post }) => {
         </Pressable>
       </Modal>
 
+      </View>
     </View>
   );
-};
+});
 
 const styles = StyleSheet.create({
-  container: {
-    backgroundColor: colors.card,
-    padding: 20,
+  cardWrapper: {
     marginVertical: 6,
     marginHorizontal: 0,
+    marginBottom: 12,
     width: "100%",
     borderRadius: 20,
+    overflow: 'hidden',
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.glassBorder,
     shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
     elevation: 4,
-    marginBottom: 12,
+  },
+  glassBlur: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 20,
+  },
+  glassGradient: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 20,
+  },
+  container: {
+    backgroundColor: 'transparent',
+    padding: 20,
   },
   header: { flexDirection: "row", alignItems: "center" },
   avatar: { width: 48, height: 48, borderRadius: 24 },
@@ -817,7 +850,7 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     paddingBottom: 4,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
+    borderTopColor: colors.glassBorder,
     marginTop: 12,
     paddingHorizontal: 4,
   },
@@ -975,7 +1008,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: colors.glassBorder,
   },
   repostIndicator: {
     flexDirection: 'row',
@@ -1012,12 +1045,12 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   originalPostContainer: {
-    backgroundColor: colors.backgroundElevated,
+    backgroundColor: colors.glassInner,
     borderRadius: 12,
     padding: 12,
     marginTop: 8,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.glassBorder,
   },
   repostModalOverlay: {
     flex: 1,

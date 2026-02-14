@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as FileSystem from 'expo-file-system';
 import { 
   API_ENDPOINTS, 
   STORAGE_KEYS, 
@@ -159,21 +160,49 @@ class ProfileApiService {
     console.log('Uploading image to URL:', uploadUrl);
     console.log('Image URI:', imageUri);
 
-    // Convert local file URI to blob
-    const fileBlob = await fetch(imageUri).then(res => res.blob());
+    // Prefer Expo FileSystem uploader for reliability on Android/iOS.
+    // This performs a raw PUT (binary) upload (not multipart), which is required for S3 presigned PUT URLs.
+    try {
+      const uploadResult = await FileSystem.uploadAsync(uploadUrl, imageUri, {
+        httpMethod: 'PUT',
+        uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
+        headers: {
+          'Content-Type': fileType, // Must match the type used to generate presigned URL
+        },
+      });
 
-    const response = await fetch(uploadUrl, {
-      method: 'PUT',       // Must be PUT
-      body: fileBlob,      // Raw binary
-      headers: {
-        'Content-Type': fileType, // Must match the type used to generate presigned URL
-      },
-    });
+      if (uploadResult.status >= 200 && uploadResult.status < 300) {
+        return { success: true };
+      }
 
-    if (response.ok) {
-      return { success: true };
-    } else {
+      // S3 returns useful XML error details in the body (e.g. AccessDenied, SignatureDoesNotMatch).
+      const errorBodyPreview = typeof uploadResult.body === 'string'
+        ? uploadResult.body.slice(0, 1000)
+        : '';
+      console.error('S3 Upload Response Status:', uploadResult.status);
+      console.error('S3 Upload Response Body (preview):', errorBodyPreview);
+      throw new Error(`Failed to upload image. Status: ${uploadResult.status}`);
+    } catch (fsError) {
+      // Fallback for environments where FileSystem upload isn't supported (e.g. web),
+      // or if the underlying upload implementation fails unexpectedly.
+      console.warn('FileSystem upload failed, falling back to fetch upload:', fsError?.message || fsError);
+
+      const fileBlob = await fetch(imageUri).then(res => res.blob());
+      const response = await fetch(uploadUrl, {
+        method: 'PUT',
+        body: fileBlob,
+        headers: {
+          'Content-Type': fileType,
+        },
+      });
+
+      if (response.ok) {
+        return { success: true };
+      }
+
+      const s3ErrorText = await response.text().catch(() => '');
       console.error('S3 Upload Response Status:', response.status);
+      console.error('S3 Upload Response Body (preview):', s3ErrorText.slice(0, 1000));
       throw new Error(`Failed to upload image. Status: ${response.status}`);
     }
   } catch (error) {

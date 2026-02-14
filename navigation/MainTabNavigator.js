@@ -4,8 +4,8 @@ import { View, Platform, StyleSheet, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-
+import authManager from '../services/AuthManager';
+import profileApi from '../api/ProfileApi';
 // Import screens
 import HomeScreen from '../screens/Home';
 import PeopleScreen from '../screens/People';
@@ -28,16 +28,19 @@ const MainTabNavigator = () => {
   useEffect(() => {
     const loadUserProfile = async () => {
       try {
-        const userData = await AsyncStorage.getItem('user');
-        if (userData) {
-          const user = JSON.parse(userData);
-          setUserProfile(user);
+        const profile = authManager.getCurrentUser?.() ?? null;
+        if (profile) {
+          setUserProfile(profile);
+          return;
+        }
+        const res = await profileApi.getProfile();
+        if (res?.success && res?.data) {
+          setUserProfile(res.data);
         }
       } catch (error) {
         console.log('Error loading user profile:', error);
       }
     };
-    
     loadUserProfile();
   }, []);
   

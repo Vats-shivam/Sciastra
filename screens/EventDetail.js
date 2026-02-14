@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
 import { View, Text, Image, StyleSheet, ScrollView, TouchableOpacity, Modal, ActivityIndicator, Linking } from "react-native";
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import colors from "../config/colors";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import Header from "../components/Header";
@@ -196,16 +195,10 @@ const EventDetailScreen = ({ route, navigation }) => {
         return;
       }
 
-      // Gather user data from profile/cache as fallbacks
       const currentUserProfile = authManager.getCurrentUser?.() || {};
-      const storedEmail = await AsyncStorage.getItem('userEmail');
-      const storedName = await AsyncStorage.getItem('userName');
-      const storedPhone = await AsyncStorage.getItem('userPhone');
-
-      const userEmail = (currentUserProfile.email || storedEmail || '').trim();
-      const userName = currentUserProfile.name || storedName || 'User';
-      const userPhone = currentUserProfile.phoneNumber || currentUserProfile.phone || storedPhone || '';
-
+      const userEmail = (currentUserProfile.email || '').trim();
+      const userName = currentUserProfile.name || 'User';
+      const userPhone = currentUserProfile.phoneNumber || currentUserProfile.phone || '';
       if (!userEmail) {
         showError('Please add an email to your profile before registering for events.');
         return;
