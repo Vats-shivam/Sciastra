@@ -4,7 +4,7 @@ import { FlatList, Text, StyleSheet, View, ActivityIndicator, TouchableOpacity }
 import Container from '../components/Container';
 import Card from '../components/Card';
 import colors from '../config/colors';
-import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { useNotification } from '../contexts/NotificationContext';
 import useScreenApiLogger from '../hooks/useScreenApiLogger';
 import CustomRefreshControl from '../components/CustomRefreshControl';

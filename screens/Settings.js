@@ -1,7 +1,7 @@
 // screens/SettingsScreen.js
 import React, { useState } from 'react';
 import { View, Text, Switch, StyleSheet, TouchableOpacity, ScrollView, Linking, Modal } from 'react-native';
-import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import colors from '../config/colors';
 import authManager from '../services/AuthManager';
 import { useNotification } from '../contexts/NotificationContext';
@@ -10,7 +10,6 @@ import useScreenApiLogger from '../hooks/useScreenApiLogger';
 
 const SettingsScreen = ({ navigation }) => {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
-  const [privacyEnabled, setPrivacyEnabled] = useState(false);
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
   const [contactModalVisible, setContactModalVisible] = useState(false);
   const [contactModalType, setContactModalType] = useState('about');
@@ -48,7 +47,12 @@ const SettingsScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      <Header title="SETTINGS" />
+      <Header 
+        title="SETTINGS" 
+        showTitle={true} 
+        showBackButton={true} 
+        onBackPress={() => navigation.goBack()} 
+      />
       
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
         {/* Account Section */}
@@ -68,23 +72,6 @@ const SettingsScreen = ({ navigation }) => {
               </View>
               <Icon name="chevron-right" size={24} color={colors.textMuted} />
             </TouchableOpacity>
-
-            <View style={styles.divider} />
-
-            <View style={styles.settingRow}>
-              <View style={styles.settingLeft}>
-                <View style={[styles.iconContainer, { backgroundColor: '#4CAF50' }]}>
-                  <Icon name="shield-lock" size={22} color={colors.white} />
-                </View>
-                <Text style={styles.settingLabel}>Private Account</Text>
-              </View>
-              <Switch 
-                value={privacyEnabled} 
-                onValueChange={setPrivacyEnabled}
-                trackColor={{ false: colors.border, true: colors.button }}
-                thumbColor={privacyEnabled ? colors.white : colors.textMuted}
-              />
-            </View>
           </View>
         </View>
 
@@ -161,20 +148,6 @@ const SettingsScreen = ({ navigation }) => {
               <Icon name="chevron-right" size={24} color={colors.textMuted} />
             </TouchableOpacity>
 
-            <View style={styles.divider} />
-
-            <TouchableOpacity 
-              style={styles.settingRow}
-              onPress={() => navigation.navigate('DebugLogs')}
-            >
-              <View style={styles.settingLeft}>
-                <View style={[styles.iconContainer, { backgroundColor: colors.warning }]}>
-                  <Icon name="bug" size={22} color={colors.white} />
-                </View>
-                <Text style={styles.settingLabel}>Debug Logs</Text>
-              </View>
-              <Icon name="chevron-right" size={24} color={colors.textMuted} />
-            </TouchableOpacity>
           </View>
         </View>
 

@@ -14,7 +14,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import colors from '../config/colors';
 import Container from '../components/Container';
 import Header from '../components/Header';
-import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import ConnectionApi from '../api/ConnectionApi';
 import { useLoader } from '../context/LoaderContext';
 import useScreenApiLogger from '../hooks/useScreenApiLogger';

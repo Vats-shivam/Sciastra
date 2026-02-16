@@ -1,5 +1,6 @@
 import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
+import { FeedRefreshProvider } from '../contexts/FeedRefreshContext';
 
 // Import navigators
 import MainTabNavigator from './MainTabNavigator';
@@ -24,6 +25,7 @@ const Stack = createStackNavigator();
 
 const AppNavigator = () => {
   return (
+    <FeedRefreshProvider>
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       {/* Main app tabs */}
       <Stack.Screen name="MainTabs" component={MainTabNavigator} />
@@ -51,6 +53,7 @@ const AppNavigator = () => {
       {/* Debug screens */}
       <Stack.Screen name="DebugLogs" component={DebugLogsScreen} />
     </Stack.Navigator>
+    </FeedRefreshProvider>
   );
 };
 

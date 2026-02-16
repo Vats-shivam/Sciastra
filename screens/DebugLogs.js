@@ -15,7 +15,7 @@ import Container from '../components/Container';
 import Header from '../components/Header';
 import colors from '../config/colors';
 import logger from '../services/Logger';
-import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import useScreenApiLogger from '../hooks/useScreenApiLogger';
 
 const DebugLogsScreen = ({ navigation }) => {

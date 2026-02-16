@@ -17,16 +17,14 @@ import {
   ActivityIndicator
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
-  useAnimatedGestureHandler,
   withSpring,
-  runOnJS,
 } from 'react-native-reanimated';
-import { PinchGestureHandler, PanGestureHandler, State } from 'react-native-gesture-handler';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Container from '../components/Container';
 import colors from '../config/colors';
 import chatApi from '../api/ChatApi';
@@ -558,40 +556,39 @@ const OneToOneChatScreen = ({ route, navigation }) => {
     setFullScreenImage(null);
   };
 
-  // Gesture handlers for zoom and pan
-  const pinchHandler = useAnimatedGestureHandler({
-    onStart: () => {
+  // Gesture handlers for zoom and pan (Reanimated v4 / RNGH v2 API)
+  const pinchGesture = Gesture.Pinch()
+    .onStart(() => {
       baseScale.value = scale.value;
-    },
-    onActive: (event) => {
-      scale.value = Math.max(0.5, Math.min(baseScale.value * event.scale, 5));
-    },
-    onEnd: () => {
+    })
+    .onUpdate((e) => {
+      scale.value = Math.max(0.5, Math.min(baseScale.value * e.scale, 5));
+    })
+    .onEnd(() => {
       if (scale.value < 1) {
         scale.value = withSpring(1);
         translateX.value = withSpring(0);
         translateY.value = withSpring(0);
       }
-    },
-  });
+    });
 
-  const panHandler = useAnimatedGestureHandler({
-    onStart: () => {
+  const panGesture = Gesture.Pan()
+    .onStart(() => {
       baseTranslateX.value = translateX.value;
       baseTranslateY.value = translateY.value;
-    },
-    onActive: (event) => {
-      translateX.value = baseTranslateX.value + event.translationX;
-      translateY.value = baseTranslateY.value + event.translationY;
-    },
-    onEnd: () => {
-      // Add boundary constraints if needed
+    })
+    .onUpdate((e) => {
+      translateX.value = baseTranslateX.value + e.translationX;
+      translateY.value = baseTranslateY.value + e.translationY;
+    })
+    .onEnd(() => {
       if (scale.value <= 1) {
         translateX.value = withSpring(0);
         translateY.value = withSpring(0);
       }
-    },
-  });
+    });
+
+  const composedGesture = Gesture.Simultaneous(pinchGesture, panGesture);
 
   const animatedStyle = useAnimatedStyle(() => {
     return {
@@ -814,10 +811,8 @@ const OneToOneChatScreen = ({ route, navigation }) => {
             {/* Full screen image */}
             {fullScreenImage && (
               <View style={styles.fullScreenImageContainer}>
-                <PanGestureHandler onGestureEvent={panHandler}>
-                  <Animated.View style={styles.gestureContainer}>
-                    <PinchGestureHandler onGestureEvent={pinchHandler}>
-                      <Animated.View style={[styles.imageWrapper, animatedStyle]}>
+                <GestureDetector gesture={composedGesture}>
+                  <Animated.View style={[styles.gestureContainer, styles.imageWrapper, animatedStyle]}>
                         <Animated.Image
                           source={fullScreenImage.source}
                           style={styles.fullScreenImage}
@@ -829,10 +824,8 @@ const OneToOneChatScreen = ({ route, navigation }) => {
                             console.log('✅ Full screen image loaded successfully');
                           }}
                         />
-                      </Animated.View>
-                    </PinchGestureHandler>
                   </Animated.View>
-                </PanGestureHandler>
+                </GestureDetector>
 
                 {/* Image info */}
                 

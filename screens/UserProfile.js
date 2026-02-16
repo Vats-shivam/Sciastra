@@ -7,7 +7,7 @@ import ConnectionApi from '../api/ConnectionApi';
 import ProfileApi from '../api/ProfileApi';
 import chatApi from '../api/ChatApi';
 import PostCard from '../components/PostCard';
-import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import Header from '../components/Header';
 import { useLoader } from "../context/LoaderContext";
 import { useNotification } from '../contexts/NotificationContext';
@@ -132,30 +132,20 @@ const UserProfileScreen = ({ navigation, route }) => {
       
       setConnectionData(connectionInfo);
       
-      // Fetch actual connections count for this user
-      // Note: The API endpoint might not support getting connections for other users
-      // So we'll try to fetch it, but gracefully handle 404 errors
-      try {
-        const connectionsResult = await ConnectionApi.getUserConnections(userId, 1, 1);
-        if (connectionsResult.success && connectionsResult.data) {
-          const totalConnections = connectionsResult.data.pagination?.total || 0;
-          profileResult.data.connectionsCount = totalConnections;
-        } else {
-          // If API call fails (e.g., 404), set to 0 or undefined
-          // Don't log 404 errors as they're expected if the endpoint doesn't support it
-          if (connectionsResult.status !== 404) {
-            console.log('Could not fetch connections count:', connectionsResult.error);
+      // connectionsCount is now included in the profile API response from the backend
+      // Only fetch separately if not present (backward compatibility)
+      if (profileResult.data.connectionsCount === undefined) {
+        try {
+          const connectionsResult = await ConnectionApi.getUserConnections(userId, 1, 1);
+          if (connectionsResult.success && connectionsResult.data) {
+            profileResult.data.connectionsCount =
+              connectionsResult.data.pagination?.total ?? 0;
+          } else {
+            profileResult.data.connectionsCount = 0;
           }
+        } catch {
           profileResult.data.connectionsCount = 0;
         }
-      } catch (error) {
-        // Silently handle errors - the connections count is optional
-        // Only log non-404 errors
-        if (error?.response?.status !== 404 && error?.status !== 404) {
-          console.log('Could not fetch connections count:', error);
-        }
-        // Set default to 0 if can't fetch
-        profileResult.data.connectionsCount = 0;
       }
       
       // Transform profile data to match UI expectations
@@ -532,12 +522,16 @@ const UserProfileScreen = ({ navigation, route }) => {
     </ScrollView>
   );
 
+  const handlePostDeleted = (postId) => {
+    setPosts((prev) => prev.filter((p) => p?.id !== postId));
+  };
+
   const renderPostsSection = () => (
     <ScrollView style={styles.tabContent}>
       <View style={styles.postsContainer}>
         {posts.length > 0 ? (
           posts.map(post => (
-            <PostCard key={post.id} post={post} style={styles.postCard} />
+            <PostCard key={post.id} post={post} style={styles.postCard} onPostDeleted={handlePostDeleted} />
           ))
         ) : (
           <View style={styles.noPosts}>
@@ -792,7 +786,7 @@ const UserProfileScreen = ({ navigation, route }) => {
             <View style={styles.postsContainer}>
               {posts.length > 0 ? (
                 posts.map(post => (
-                  <PostCard key={post.id} post={post} style={styles.postCard} />
+                  <PostCard key={post.id} post={post} style={styles.postCard} onPostDeleted={handlePostDeleted} />
                 ))
               ) : (
                 <View style={styles.noPosts}>

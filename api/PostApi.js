@@ -365,9 +365,8 @@ class PostApiService {
         };
       }
 
-      let url = `${this.baseUrl}/posts/feed?limit=${limit}`;
+      let url = `${this.baseUrl}/posts/feed?limit=${limit}&_t=${Date.now()}`;
       if (cursor) {
-        // Backend expects the last fetched post id in `lastPostId`
         url += `&lastPostId=${encodeURIComponent(cursor)}`;
       }
 
@@ -378,8 +377,9 @@ class PostApiService {
       });
 
       if (response.success) {
+        const rawPosts = response.data.posts || [];
         // Process posts to include signed media URLs
-        const processedPosts = await this.processPostsWithMedia(response.data.posts || []);
+        const processedPosts = await this.processPostsWithMedia(rawPosts);
 
         return {
           success: true,
@@ -1028,7 +1028,9 @@ class PostApiService {
           return {
             ...post,
             media: [],
-            mediaUrls: [] // Legacy compatibility
+            mediaUrls: [],
+            userReaction: post.userReaction,
+            counts: post.counts
           };
         }
 
@@ -1122,7 +1124,9 @@ class PostApiService {
         return {
           ...post,
           media: processedMedia,
-          mediaUrls: mediaUrls // Legacy compatibility
+          mediaUrls: mediaUrls,
+          userReaction: post.userReaction,
+          counts: post.counts
         };
       }));
 
@@ -1636,6 +1640,39 @@ class PostApiService {
       return {
         success: false,
         message: error.message || 'Failed to repost. Please try again.'
+      };
+    }
+  }
+
+  // Delete a post (author only)
+  async deletePost(postId) {
+    try {
+      const userId = authApi.getCurrentUserId();
+      if (!userId) {
+        throw new Error(ERROR_MESSAGES.UNAUTHORIZED);
+      }
+
+      if (!postId) {
+        throw new Error('Post ID is required');
+      }
+
+      const response = await this.makeRequest(`${this.baseUrl}/posts/${postId}`, {
+        method: 'DELETE'
+      });
+
+      if (response.success && response.data?.deleted) {
+        return {
+          success: true,
+          data: response.data,
+          message: 'Post deleted successfully'
+        };
+      }
+      throw new Error(response.message || 'Failed to delete post');
+    } catch (error) {
+      console.error('Delete Post Error:', error);
+      return {
+        success: false,
+        message: error.message || 'Failed to delete post. Please try again.'
       };
     }
   }

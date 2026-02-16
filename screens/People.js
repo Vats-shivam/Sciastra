@@ -13,7 +13,7 @@ import {
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import colors from "../config/colors";
 import Header from "../components/Header";
-import Icon from "react-native-vector-icons/MaterialCommunityIcons";
+import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import ConnectionApi from "../api/ConnectionApi";
 import chatApi from "../api/ChatApi";
 import postApi from "../api/PostApi";
@@ -257,7 +257,7 @@ const ConnectionsScreen = () => {
         onPress={() => {
           // Check if this is the current user
           if (item.id === '1') { // Current user ID is '1'
-            navigation.navigate("Profile");
+            navigation.navigate("ProfileTab");
           } else {
             navigation.navigate("UserProfile", { userId: item.id });
           }
@@ -357,7 +357,7 @@ const ConnectionsScreen = () => {
         onPress={() => {
           // Check if this is the current user
           if (item.id === '1') { // Current user ID is '1'
-            navigation.navigate("Profile");
+            navigation.navigate("ProfileTab");
           } else {
             navigation.navigate("UserProfile", { userId: item.id });
           }

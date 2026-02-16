@@ -13,7 +13,7 @@ import {
   Platform
 } from 'react-native';
 // Navigation prop is now passed directly to the component
-import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import colors from '../config/colors';
 import chatApi from '../api/ChatApi';
 import { useLoader } from '../context/LoaderContext';

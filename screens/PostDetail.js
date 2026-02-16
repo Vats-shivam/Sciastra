@@ -17,7 +17,7 @@ import {
   Dimensions
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import colors from '../config/colors';
 import postApi from '../api/PostApi';
 import authApi from '../api/AuthApi';
@@ -26,6 +26,7 @@ import { useNotification } from '../contexts/NotificationContext';
 import useScreenApiLogger from '../hooks/useScreenApiLogger';
 import { getProfileImageSource } from '../utils/profileImage';
 import CustomRefreshControl from '../components/CustomRefreshControl';
+import { useFeedRefresh } from '../contexts/FeedRefreshContext';
 
 // Reaction types from backend enum
 const REACTIONS = [
@@ -40,8 +41,9 @@ const REACTIONS = [
 const { width: screenWidth } = Dimensions.get("window");
 
 const PostDetailScreen = ({ route, navigation }) => {
-  const { postId, postData } = route.params;
+  const { postId, postData } = route.params || {};
   const { showLoader, hideLoader } = useLoader();
+  const { updatePostReaction } = useFeedRefresh() || {};
   const { showError, showSuccess } = useNotification();
   const insets = useSafeAreaInsets();
 
@@ -68,6 +70,8 @@ const PostDetailScreen = ({ route, navigation }) => {
   const [repostLoading, setRepostLoading] = useState(false);
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
   const [showReportSheet, setShowReportSheet] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
   const [menuButtonLayout, setMenuButtonLayout] = useState({ x: 0, y: 0, width: 0, height: 0 });
   
   const scrollViewRef = useRef(null);
@@ -168,10 +172,10 @@ const PostDetailScreen = ({ route, navigation }) => {
   const handleReaction = async () => {
     if (reactionLoading) return;
 
+    const previousReaction = userReaction;
+
     try {
       setReactionLoading(true);
-
-      const previousReaction = userReaction;
 
       // Optimistic update
       if (previousReaction) {
@@ -211,9 +215,13 @@ const PostDetailScreen = ({ route, navigation }) => {
           setReactions(prev => prev.filter(r => r.user?.id !== authApi.getCurrentUserId()));
         }
         showError('Failed to update reaction. Please try again.');
-      } else if (result.success && result.data) {
-        // Update post counts if API returns updated data
-        if (result.data.counts) {
+      } else if (result.success) {
+        // removeReaction returns { success, message } without data; addReaction returns { success, data }
+        const wasRemoved = previousReaction || result.data?.removed === true;
+        if (result.data?.removed === true && !previousReaction) {
+          setUserReaction(null);
+          setReactions(prev => prev.filter(r => r.user?.id !== authApi.getCurrentUserId()));
+        } else if (result.data?.counts) {
           setPost(prev => ({
             ...prev,
             counts: {
@@ -222,8 +230,21 @@ const PostDetailScreen = ({ route, navigation }) => {
             }
           }));
         }
+        // Update feed post in place based on response (add vs remove)
+        updatePostReaction?.(postId, { added: !wasRemoved, reactionType: 'LIKE' });
       }
     } catch (error) {
+      setUserReaction(previousReaction);
+      if (previousReaction) {
+        const currentUser = authApi.getCurrentUserId();
+        setReactions(prev => [...prev, {
+          id: `temp_${Date.now()}`,
+          type: "LIKE",
+          user: { id: currentUser, profile: { name: "You" } }
+        }]);
+      } else {
+        setReactions(prev => prev.filter(r => r.user?.id !== authApi.getCurrentUserId()));
+      }
       showError('Something went wrong. Please try again.');
     } finally {
       setReactionLoading(false);
@@ -388,7 +409,7 @@ const PostDetailScreen = ({ route, navigation }) => {
       if (!userId) return;
       
       if (userId === currentUserId || userId === '1') {
-        navigation.navigate('ProfileTab');
+        navigation.navigate('MainTabs', { screen: 'ProfileTab' });
       } else {
         navigation.navigate('UserProfile', { userId: userId });
       }
@@ -469,7 +490,7 @@ const PostDetailScreen = ({ route, navigation }) => {
       if (!userId) return;
       
       if (userId === currentUserId || userId === '1') {
-        navigation.navigate('ProfileTab');
+        navigation.navigate('MainTabs', { screen: 'ProfileTab' });
       } else {
         navigation.navigate('UserProfile', { userId: userId });
       }
@@ -544,6 +565,10 @@ const PostDetailScreen = ({ route, navigation }) => {
   const totalReactions = Math.max(reactions.length, userReaction ? 1 : 0);
   const totalComments = comments.length;
 
+  // For reposts: display original post's content/author, but comments/likes are for the repost
+  const isRepost = post?.isRepost && post?.originalPost;
+  const displayPost = isRepost ? post.originalPost : post;
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
@@ -586,21 +611,36 @@ const PostDetailScreen = ({ route, navigation }) => {
         >
           {/* Post Content */}
           <View style={styles.postCard}>
-            {/* Author Info */}
+            {/* Repost header */}
+            {isRepost && post.author && (
+              <View style={styles.repostHeader}>
+                <Icon name="repeat" size={16} color={colors.button} />
+                <Text style={styles.repostHeaderText}>
+                  <Text style={styles.reposterName}>{post.author?.profile?.name || post.author?.name || 'Someone'}</Text>
+                  {' reposted'}
+                </Text>
+              </View>
+            )}
+            {isRepost && post.repostComment ? (
+              <View style={styles.repostCommentContainer}>
+                <Text style={styles.repostCommentText}>{post.repostComment}</Text>
+              </View>
+            ) : null}
+            {/* Author Info - show original author for reposts */}
             <View style={styles.postHeader}>
               <TouchableOpacity
                 onPress={() => {
-                  const authorId = post.author?.id || post.userId;
-                  if (authorId === "1" || authorId === authApi.getCurrentUserId()) {
-                    navigation.navigate("ProfileTab");
-                  } else {
+                  const authorId = displayPost?.author?.id || displayPost?.userId;
+                  if (authorId && (authorId === "1" || authorId === authApi.getCurrentUserId())) {
+                    navigation.navigate('MainTabs', { screen: 'ProfileTab' });
+                  } else if (authorId) {
                     navigation.navigate("UserProfile", { userId: authorId });
                   }
                 }}
               >
                 <Image
-                  source={getProfileImageSource(post.author, { 
-                    fallbackKey: post.author?.profile?.profilePic || post.author?.profilePic 
+                  source={getProfileImageSource(displayPost?.author, { 
+                    fallbackKey: displayPost?.author?.profile?.profilePic || displayPost?.author?.profilePic 
                   })}
                   style={styles.avatar}
                   resizeMode="cover"
@@ -610,31 +650,32 @@ const PostDetailScreen = ({ route, navigation }) => {
               <View style={styles.authorInfo}>
                 <TouchableOpacity
                   onPress={() => {
-                    const authorId = post.author?.id || post.userId;
-                    if (authorId === "1" || authorId === authApi.getCurrentUserId()) {
-                      navigation.navigate("ProfileTab");
-                    } else {
+                    const authorId = displayPost?.author?.id || displayPost?.userId;
+                    if (authorId && (authorId === "1" || authorId === authApi.getCurrentUserId())) {
+                      navigation.navigate('MainTabs', { screen: 'ProfileTab' });
+                    } else if (authorId) {
                       navigation.navigate("UserProfile", { userId: authorId });
                     }
                   }}
                 >
                   <Text style={styles.authorName}>
-                    {post.author?.profile?.name || post.author?.name || 'Unknown User'}
+                    {displayPost?.author?.profile?.name || displayPost?.author?.name || 'Unknown User'}
                   </Text>
                 </TouchableOpacity>
                 <Text style={styles.postTime}>
-                  {new Date(post.createdAt).toLocaleDateString()}
+                  {displayPost?.createdAt ? new Date(displayPost.createdAt).toLocaleDateString() : (post.createdAt ? new Date(post.createdAt).toLocaleDateString() : '')}
                 </Text>
               </View>
             </View>
 
             {/* Post Content */}
-            <Text style={styles.postContent}>{post.content}</Text>
+            <Text style={styles.postContent}>{displayPost?.content || ''}</Text>
 
             {/* Post Media - filter for images only (matches PostCard) */}
             {(() => {
-              const displayImages = Array.isArray(post.media)
-                ? post.media.filter((item) => (item.mediaType === 'image' || item.type === 'image' || (!item.type && !item.mediaType)))
+              const media = displayPost?.media || post?.media;
+              const displayImages = Array.isArray(media)
+                ? media.filter((item) => (item.mediaType === 'image' || item.type === 'image' || (!item.type && !item.mediaType)))
                 : [];
               return displayImages.length > 0 ? (
                 <View style={styles.mediaContainer}>
@@ -676,29 +717,25 @@ const PostDetailScreen = ({ route, navigation }) => {
             {/* Action Buttons */}
             <View style={styles.actionButtons}>
               <TouchableOpacity
-                style={styles.actionButton}
+                style={[styles.actionButton, reactionLoading && { opacity: 0.8 }]}
                 onPress={handleReaction}
                 disabled={reactionLoading}
               >
-                {reactionLoading ? (
-                  <ActivityIndicator size="small" color={colors.primary} />
-                ) : (
-                  <View style={styles.actionContent}>
-                    {userReaction ? (
-                      <Icon name="thumb-up" size={20} color={colors.primary} />
-                    ) : (
-                      <Icon
-                        name="thumb-up-outline"
-                        size={20}
-                        color={colors.textSecondary}
-                        style={{ transform: [{ scaleX: -1 }] }}
-                      />
-                    )}
-                    <Text style={[styles.actionButtonText, userReaction && styles.actionButtonTextActive, { marginLeft: 6 }]}>
-                      {userReaction ? 'Liked' : 'Like'}
-                    </Text>
-                  </View>
-                )}
+                <View style={styles.actionContent}>
+                  {userReaction ? (
+                    <Icon name="thumb-up" size={20} color={colors.primary} />
+                  ) : (
+                    <Icon
+                      name="thumb-up-outline"
+                      size={20}
+                      color={colors.textSecondary}
+                      style={{ transform: [{ scaleX: -1 }] }}
+                    />
+                  )}
+                  <Text style={[styles.actionButtonText, userReaction && styles.actionButtonTextActive, { marginLeft: 6 }]}>
+                    {userReaction ? 'Liked' : 'Like'}
+                  </Text>
+                </View>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.actionButton}
@@ -968,9 +1005,9 @@ const PostDetailScreen = ({ route, navigation }) => {
               style={styles.optionItem}
               onPress={() => {
                 setShowOptionsMenu(false);
-                const authorId = post.author?.id || post.userId;
+                const authorId = post?.author?.id || post?.authorId || post?.userId;
                 if (authorId === "1" || authorId === authApi.getCurrentUserId()) {
-                  navigation.navigate("ProfileTab");
+                  navigation.navigate('MainTabs', { screen: 'ProfileTab' });
                 } else {
                   navigation.navigate("UserProfile", { userId: authorId });
                 }
@@ -979,6 +1016,25 @@ const PostDetailScreen = ({ route, navigation }) => {
               <Text style={styles.optionText}>View Profile</Text>
             </TouchableOpacity>
             <View style={styles.optionDivider} />
+            {(post?.author?.id || post?.authorId || post?.userId) === authApi.getCurrentUserId() ? (
+              <>
+                <TouchableOpacity
+                  style={styles.optionItem}
+                  onPress={() => {
+                    setShowOptionsMenu(false);
+                    setShowDeleteConfirm(true);
+                  }}
+                  disabled={deleteLoading}
+                >
+                  {deleteLoading ? (
+                    <ActivityIndicator size="small" color={colors.error} />
+                  ) : (
+                    <Text style={[styles.optionText, { color: colors.error }]}>Delete Post</Text>
+                  )}
+                </TouchableOpacity>
+                <View style={styles.optionDivider} />
+              </>
+            ) : null}
             <TouchableOpacity
               style={styles.optionItem}
               onPress={() => {
@@ -988,6 +1044,57 @@ const PostDetailScreen = ({ route, navigation }) => {
             >
               <Text style={[styles.optionText, styles.reportOptionTextMenu]}>Report Post</Text>
             </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Delete confirmation */}
+      <Modal
+        visible={showDeleteConfirm}
+        transparent
+        animationType="fade"
+        onRequestClose={() => !deleteLoading && setShowDeleteConfirm(false)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => !deleteLoading && setShowDeleteConfirm(false)}>
+          <Pressable style={[styles.optionsMenu, { alignSelf: 'center', marginTop: '40%', minWidth: 280}]} onPress={(e) => e.stopPropagation()}>
+            <Text style={[styles.optionText, { marginBottom: 12, textAlign: 'center' }]}>Delete this post?</Text>
+            <Text style={[styles.optionText, styles.reportOptionTextMenu, { marginBottom: 16, fontSize: 14, textAlign: 'center' }]}>This cannot be undone.</Text>
+            <View style={{ flexDirection: 'row', gap: 16, justifyContent: 'center' }}>
+              <TouchableOpacity
+                style={[styles.optionItem, { flex: 1 }]}
+                onPress={() => setShowDeleteConfirm(false)}
+                disabled={deleteLoading}
+              >
+                <Text style={styles.optionText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.optionItem, { flex: 1 }]}
+                onPress={async () => {
+                  setDeleteLoading(true);
+                  try {
+                    const result = await postApi.deletePost(post?.id);
+                    setShowDeleteConfirm(false);
+                    if (result.success) {
+                      showSuccess(result.message || 'Post deleted');
+                      navigation.goBack();
+                    } else {
+                      showError(result.message || 'Failed to delete post');
+                    }
+                  } catch (err) {
+                    showError('Failed to delete post');
+                  } finally {
+                    setDeleteLoading(false);
+                  }
+                }}
+                disabled={deleteLoading}
+              >
+                {deleteLoading ? (
+                  <ActivityIndicator size="small" color={colors.error} />
+                ) : (
+                  <Text style={[styles.optionText, { color: colors.error }]}>Delete</Text>
+                )}
+              </TouchableOpacity>
+            </View>
           </Pressable>
         </Pressable>
       </Modal>
@@ -1454,13 +1561,15 @@ const styles = StyleSheet.create({
   // Delete Modal Styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
   },
   modalContainer: {
     backgroundColor: colors.backgroundElevated,
     borderRadius: 20,
     padding: 24,
-    width: '90%',
+    width: '100%',
     maxWidth: 380,
     alignItems: 'center',
     borderWidth: 1,
@@ -1528,18 +1637,48 @@ const styles = StyleSheet.create({
     fontFamily: 'Gilroy-SemiBold',
     color: colors.white,
   },
+  repostHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  repostHeaderText: {
+    fontSize: 14,
+    fontFamily: 'Gilroy-Medium',
+    color: colors.textSecondary,
+    marginLeft: 6,
+  },
+  reposterName: {
+    fontFamily: 'Gilroy-SemiBold',
+    color: colors.textPrimary,
+  },
+  repostCommentContainer: {
+    backgroundColor: colors.backgroundElevated,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.button,
+  },
+  repostCommentText: {
+    fontSize: 14,
+    fontFamily: 'Gilroy-Regular',
+    color: colors.textPrimary,
+    lineHeight: 20,
+  },
   repostModalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
     justifyContent: 'flex-end',
   },
   repostModal: {
     backgroundColor: colors.card,
     borderTopLeftRadius: 20,
+    opacity: 1,
     borderTopRightRadius: 20,
-    paddingTop: 12,
+    paddingTop: 24,
     paddingBottom: 40,
-    paddingHorizontal: 20,
+    paddingHorizontal: 24,
     maxHeight: '80%',
   },
   repostModalHeader: {
@@ -1547,7 +1686,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 20,
-    paddingTop: 8,
+    paddingTop: 0,
   },
   repostModalTitle: {
     fontSize: 20,
@@ -1558,7 +1697,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontFamily: 'Gilroy-Medium',
     color: colors.textSecondary,
-    marginBottom: 12,
+    marginBottom: 16,
   },
   repostCommentInput: {
     backgroundColor: colors.backgroundElevated,
@@ -1572,15 +1711,15 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
     borderWidth: 1,
     borderColor: colors.border,
-    marginBottom: 20,
+    marginBottom: 24,
   },
   repostModalActions: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 16,
   },
   repostModalButton: {
     flex: 1,
-    paddingVertical: 14,
+    paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1607,7 +1746,10 @@ const styles = StyleSheet.create({
   optionsMenu: {
     backgroundColor: colors.card,
     borderRadius: 12,
-    width: 180,
+    opacity: 1,
+    minWidth: 200,
+    paddingVertical: 8,
+    paddingHorizontal: 0,
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: colors.border,
@@ -1640,15 +1782,17 @@ const styles = StyleSheet.create({
   // Report Bottom Sheet Styles
   bottomSheetOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
     justifyContent: 'flex-end',
   },
   bottomSheet: {
     backgroundColor: colors.card,
     borderTopLeftRadius: 20,
+    opacity: 1,
     borderTopRightRadius: 20,
-    paddingTop: 12,
+    paddingTop: 24,
     paddingBottom: 40,
+    paddingHorizontal: 24,
     maxHeight: '90%',
     borderWidth: 1,
     borderColor: colors.border,
@@ -1660,22 +1804,22 @@ const styles = StyleSheet.create({
     backgroundColor: colors.textMuted,
     borderRadius: 2,
     alignSelf: 'center',
-    marginBottom: 20,
+    marginBottom: 24,
   },
   reportTitle: {
     color: colors.textPrimary,
     fontSize: 20,
     fontFamily: 'Gilroy-Bold',
     textAlign: 'center',
-    marginBottom: 8,
+    marginBottom: 12,
   },
   reportSubtitle: {
     color: colors.textPrimary,
     fontSize: 16,
     fontFamily: 'Gilroy-SemiBold',
     textAlign: 'center',
-    marginBottom: 8,
-    paddingHorizontal: 20,
+    marginBottom: 12,
+    paddingHorizontal: 0,
   },
   reportInfo: {
     color: colors.textMuted,
@@ -1683,8 +1827,9 @@ const styles = StyleSheet.create({
     fontFamily: 'Gilroy-Regular',
     textAlign: 'center',
     marginBottom: 24,
-    paddingHorizontal: 20,
-    lineHeight: 18,
+    paddingHorizontal: 0,
+    lineHeight: 20,
+    opacity: 1,
   },
   reportOptionsList: {
     paddingHorizontal: 0,

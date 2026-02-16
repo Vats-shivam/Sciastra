@@ -5,7 +5,7 @@ const getBaseUrl = (port) => {
 
   // Production API URL - Temporarily use HTTP due to self-signed SSL certificate const PRODUCTION_URL = "https://Xcience.in";
   // const PRODUCTION_URL = "https://6ce2-2406-9e00-112f-d8b4-a1af-5895-7643-7549.ngrok-free.app";
-  const PRODUCTION_URL = "https://Xcience.in";
+  const PRODUCTION_URL = "http://192.168.1.33:8000";
   // Development URLs
   const DEVELOPMENT_URL = "http://Xcience.in"; // Use HTTP for both environments
 
@@ -97,12 +97,12 @@ export const API_ENDPOINTS = {
     GET_BY_ID: '/events',
     SEARCH: '/events/search',
     GET_STATS: '/events/stats',
-    // Registration
-    REGISTER: '/events/registrations/events',
-    GET_REGISTERED: '/events/registrations',
-    GET_REGISTRATION_BY_ID: '/events/registrations',
-    CANCEL_REGISTRATION: '/events/registrations',
-    GET_REGISTRATION_STATS: '/events/registrations/stats',
+    // Registration (backend uses /registrations, not /events/registrations)
+    REGISTER: '/registrations/events',
+    GET_REGISTERED: '/registrations',
+    GET_REGISTRATION_BY_ID: '/registrations',
+    CANCEL_REGISTRATION: '/registrations',
+    GET_REGISTRATION_STATS: '/registrations/stats',
     // Payment
     GET_PAYMENT_STATUS: '/events/payments/registration',
     GET_PAYMENT_HISTORY: '/events/payments/history',

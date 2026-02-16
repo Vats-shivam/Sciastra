@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, TextInput, StyleSheet, Image, TouchableOpacity, Text, ScrollView, KeyboardAvoidingView, Platform, Modal, Alert } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import Container from '../components/Container';
 import Button from '../components/Button';
 import Header from '../components/Header';

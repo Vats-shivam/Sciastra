@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, ScrollView } from "react-native";
 import colors from "../config/colors";
-import Icon from "react-native-vector-icons/MaterialCommunityIcons";
+import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import EventCard from "../components/EventCard";
 import Header from "../components/Header";
 import eventsApi from "../api/EventsApi";

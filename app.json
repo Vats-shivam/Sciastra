@@ -23,10 +23,7 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "usesCleartextTraffic": true,
       "allowBackup": false,
-      "requestLegacyExternalStorage": true,
-      "networkSecurityConfig": "network_security_config",
       "softwareKeyboardLayoutMode": "resize"
     },
     "web": {
@@ -41,10 +38,14 @@
         "expo-build-properties",
         {
           "android": {
-            "usesCleartextTraffic": true
+            "usesCleartextTraffic": true,
+            "requestLegacyExternalStorage": true
           }
         }
-      ]
+      ],
+      "./plugins/android-network-security.js",
+      "expo-font",
+      "expo-secure-store"
     ],
     "extra": {
       "eas": {

@@ -12,7 +12,7 @@ import {
   StatusBar,
   ActivityIndicator,
 } from "react-native";
-import Icon from "react-native-vector-icons/MaterialCommunityIcons";
+import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { useNavigation } from "@react-navigation/native";
 import colors from "../config/colors";
 import postApi from "../api/PostApi";
@@ -22,6 +22,7 @@ import { useLoader } from "../context/LoaderContext";
 import useScreenApiLogger from "../hooks/useScreenApiLogger";
 import CustomRefreshControl from "../components/CustomRefreshControl";
 import { getProfileImageSource } from "../utils/profileImage";
+import { useFeedRefresh } from "../contexts/FeedRefreshContext";
 
 const trendingSearches = ["React Native", "AI", "Blockchain", "Jobs", "Events"];
 const POSTS_PER_PAGE = 20;
@@ -39,6 +40,7 @@ const shuffleArray = (array) => {
 const HomeScreen = () => {
   const navigation = useNavigation();
   const { showLoader, hideLoader } = useLoader();
+  const { registerUpdatePostReaction } = useFeedRefresh() || {};
   const [searching, setSearching] = useState(false);
   const [searchText, setSearchText] = useState("");
   const [searchLoading, setSearchLoading] = useState(false);
@@ -190,6 +192,37 @@ const HomeScreen = () => {
     }
   };
 
+  const updatePostReactionInFeed = useCallback((postId, { added, reactionType = 'LIKE' }) => {
+    setFeedPosts((prev) =>
+      prev.map((p) => {
+        if (p?.id !== postId) return p;
+        const currentCount = p.counts?.reactions ?? 0;
+        const newCount = Math.max(0, currentCount + (added ? 1 : -1));
+        return {
+          ...p,
+          counts: { ...p.counts, reactions: newCount },
+          userReaction: added ? reactionType : null,
+        };
+      })
+    );
+    setSearchResultsPosts((prev) =>
+      prev.map((p) => {
+        if (p?.id !== postId) return p;
+        const currentCount = p.counts?.reactions ?? 0;
+        const newCount = Math.max(0, currentCount + (added ? 1 : -1));
+        return {
+          ...p,
+          counts: { ...p.counts, reactions: newCount },
+          userReaction: added ? reactionType : null,
+        };
+      })
+    );
+  }, []);
+
+  useEffect(() => {
+    return registerUpdatePostReaction?.(updatePostReactionInFeed);
+  }, [registerUpdatePostReaction, updatePostReactionInFeed]);
+
   const handleLoadMore = useCallback(() => {
     if (loadingMoreRef.current || loadingMore || !hasMore || !nextCursor) return;
 
@@ -294,7 +327,18 @@ const HomeScreen = () => {
     () => ({ paddingHorizontal: 12, paddingBottom: 100 }),
     []
   );
-  const renderFeedItem = useCallback(({ item }) => <PostCard post={item} />, []);
+  const handlePostDeleted = useCallback((postId) => {
+    setFeedPosts((prev) => prev.filter((p) => p?.id !== postId));
+  }, []);
+
+  const handleSearchPostDeleted = useCallback((postId) => {
+    setSearchResultsPosts((prev) => prev.filter((p) => p?.id !== postId));
+  }, []);
+
+  const renderFeedItem = useCallback(
+    ({ item }) => <PostCard post={item} onPostDeleted={handlePostDeleted} />,
+    [handlePostDeleted]
+  );
   const feedFooter = useMemo(() => {
     if (!loadingMore) return null;
     return (
@@ -357,7 +401,7 @@ const HomeScreen = () => {
                   <FlatList
                     data={searchResultsPosts}
                     keyExtractor={keyExtractor}
-                    renderItem={({ item }) => <PostCard post={item} />}
+                    renderItem={({ item }) => <PostCard post={item} onPostDeleted={handleSearchPostDeleted} />}
                     showsVerticalScrollIndicator={false}
                   />
                 </>
@@ -375,7 +419,7 @@ const HomeScreen = () => {
                           // Check if this is the current user
                           if (item.id === "1") {
                             // Current user ID is '1'
-                            navigation.navigate("Profile");
+                            navigation.navigate("ProfileTab");
                           } else {
                             navigation.navigate("UserProfile", { userId: item.id });
                           }

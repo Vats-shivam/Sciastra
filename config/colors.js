@@ -17,7 +17,7 @@ export default {
   textInverse: '#000000',   // When text on light surfaces
 
   // Surfaces & Borders
-  card: 'rgba(20, 37, 45, 0.55)',   // Card surfaces (glass)
+  card: 'rgba(20, 37, 45, 0.65)',   // Card surfaces (glass)
   border: 'rgba(255, 255, 255, 0.08)',  // Glass border
   borderSolid: 'rgba(255, 255, 255, 0.12)',  // Slightly stronger divider when needed
   borderLight: 'rgba(255,255,255,0.1)',

@@ -5,7 +5,7 @@ import Container from '../components/Container';
 import Card from '../components/Card';
 import colors from '../config/colors';
 import chatApi from '../api/ChatApi';
-import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import ConnectionApi from '../api/ConnectionApi';
 import useScreenApiLogger from '../hooks/useScreenApiLogger';
 

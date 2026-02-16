@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { View, Text, Image, StyleSheet, ScrollView, TouchableOpacity, Modal, ActivityIndicator, Linking } from "react-native";
 import colors from "../config/colors";
-import Icon from "react-native-vector-icons/MaterialCommunityIcons";
+import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import Header from "../components/Header";
 import eventsApi from "../api/EventsApi";
 import { useNotification } from "../contexts/NotificationContext";
@@ -292,7 +292,12 @@ const EventDetailScreen = ({ route, navigation }) => {
 
   return (
     <View style={styles.container}>
-      <Header title="EVENT DETAIL" onBackPress={() => navigation.goBack()} />
+      <Header 
+        title="EVENT DETAIL" 
+        showTitle={true} 
+        showBackButton={true} 
+        onBackPress={() => navigation.goBack()} 
+      />
       
       <ScrollView 
         style={styles.scrollView}

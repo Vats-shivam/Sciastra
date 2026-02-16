@@ -5,7 +5,7 @@ import colors from "../config/colors";
 import Header from "../components/Header";
 import eventsApi from "../api/EventsApi";
 import { useNotification } from "../contexts/NotificationContext";
-import Icon from "react-native-vector-icons/MaterialCommunityIcons";
+import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { useFocusEffect } from "@react-navigation/native";
 import useScreenApiLogger from "../hooks/useScreenApiLogger";
 import Card from "../components/Card";
@@ -179,7 +179,12 @@ const RegisteredEvents = ({ navigation }) => {
   if (loading) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.background }}>
-        <Header title="REGISTERED EVENTS" />
+        <Header 
+          title="REGISTERED EVENTS" 
+          showTitle={true} 
+          showBackButton={true} 
+          onBackPress={() => navigation.goBack()} 
+        />
         <Container style={{ backgroundColor: colors.background }}>
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={colors.primary} />
@@ -192,7 +197,12 @@ const RegisteredEvents = ({ navigation }) => {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <Header title="REGISTERED EVENTS" />
+      <Header 
+        title="REGISTERED EVENTS" 
+        showTitle={true} 
+        showBackButton={true} 
+        onBackPress={() => navigation.goBack()} 
+      />
       <Container style={{ backgroundColor: colors.background }}>
         <ScrollView 
           contentContainerStyle={{ paddingBottom: 32 }}

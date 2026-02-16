@@ -6,7 +6,7 @@ import colors from '../config/colors';
 import authManager from '../services/AuthManager';
 import postApi from '../api/PostApi';
 import PostCard from '../components/PostCard';
-import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { Modal, Pressable } from 'react-native';
 import Header from '../components/Header';
 import { useLoader } from "../context/LoaderContext";
@@ -95,8 +95,8 @@ const ProfileScreen = ({ navigation }) => {
     try {
       setLoading(true);
       
-      // Get user profile from AuthManager
-      authManager.refreshUserData();
+      // Get user profile from AuthManager (includes connectionsCount from backend)
+      await authManager.refreshUserData();
       const currentUser = authManager.getCurrentUser();
       
       if (currentUser) {
@@ -108,7 +108,7 @@ const ProfileScreen = ({ navigation }) => {
           bio: currentUser.bio || 'Add a bio to tell others about yourself',
           profilePic: currentUser.profilePic,
           email: currentUser.email,
-          connectionsCount: 0, // Will be updated below
+          connectionsCount: currentUser.connectionsCount ?? 0, // From profile API, or fetched below
           topics: currentUser.topics || [],
           skills: currentUser.skills || [],
           workExperience: currentUser.experiences?.map(exp => ({
@@ -131,16 +131,17 @@ const ProfileScreen = ({ navigation }) => {
           rawData: currentUser // Keep original data for updates
         };
 
-        // Fetch actual connections count
-        try {
-          const connectionsResult = await ConnectionApi.getConnections(1, 1);
-          if (connectionsResult.success && connectionsResult.data) {
-            const totalConnections = connectionsResult.data.pagination?.total || 0;
-            transformedUser.connectionsCount = totalConnections;
+        // connectionsCount comes from profile API; fetch only if not present
+        if (transformedUser.connectionsCount === 0 && currentUser.connectionsCount === undefined) {
+          try {
+            const connectionsResult = await ConnectionApi.getConnections(1, 1);
+            if (connectionsResult.success && connectionsResult.data) {
+              transformedUser.connectionsCount =
+                connectionsResult.data.pagination?.total ?? 0;
+            }
+          } catch (error) {
+            console.log('Could not fetch connections count:', error);
           }
-        } catch (error) {
-          console.log('Could not fetch connections count:', error);
-          transformedUser.connectionsCount = 0;
         }
 
         setUser(transformedUser);
@@ -586,12 +587,15 @@ const ProfileScreen = ({ navigation }) => {
     }
   };
 
+  const handlePostDeleted = (postId) => {
+    setPosts((prev) => prev.filter((p) => p?.id !== postId));
+  };
 
   const renderPostsSection = () => (
     <ScrollView style={styles.tabContent}>
       <View style={styles.postsContainer}>
         {posts && Array.isArray(posts) ? posts.map(post => (
-          <PostCard key={post.id} post={post} style={styles.postCard} />
+          <PostCard key={post.id} post={post} style={styles.postCard} onPostDeleted={handlePostDeleted} />
         )) : (
           <Text style={styles.emptyText}>No posts yet</Text>
         )}
@@ -870,7 +874,7 @@ const ProfileScreen = ({ navigation }) => {
         ) : (
           <View style={styles.postsContainer}>
             {posts && Array.isArray(posts) && posts.length > 0 ? posts.map(post => (
-              <PostCard key={post.id} post={post} style={styles.postCard} />
+              <PostCard key={post.id} post={post} style={styles.postCard} onPostDeleted={handlePostDeleted} />
             )) : (
               <View style={styles.emptyStateContainer}>
                 <Icon name="newspaper-variant-outline" size={48} color={colors.textMuted} />

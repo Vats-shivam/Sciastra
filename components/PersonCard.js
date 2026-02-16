@@ -2,7 +2,7 @@
 import React from 'react';
 import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
 import colors from '../config/colors';
-import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 
 const PersonCard = ({ person, onChatPress, onMorePress, showActions = true }) => {
   return (
