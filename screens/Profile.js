@@ -139,7 +139,7 @@ const ProfileScreen = ({ navigation }) => {
             position: exp.role,
             duration: `${new Date(exp.startDate).getFullYear()} - ${exp.endDate ? new Date(exp.endDate).getFullYear() : 'Present'}`,
             description: exp.description,
-            isCurrentRole: exp.isCurrentRole
+            isCurrentRole: exp.current ?? exp.isCurrentRole ?? false
           })) || [],
           education: currentUser.education?.map(edu => ({
             id: edu.id,
@@ -148,7 +148,7 @@ const ProfileScreen = ({ navigation }) => {
             fieldOfStudy: edu.fieldOfStudy,
             duration: `${new Date(edu.startDate).getFullYear()} - ${edu.endDate ? new Date(edu.endDate).getFullYear() : 'Present'}`,
             grade: edu.grade,
-            isCurrent: edu.isCurrent
+            isCurrent: edu.current ?? edu.isCurrent ?? false
           })) || [],
           rawData: currentUser // Keep original data for updates
         };
@@ -975,7 +975,7 @@ const ProfileScreen = ({ navigation }) => {
               </TouchableOpacity>
             </View>
             
-            <ScrollView style={styles.modalScrollView}>
+            <ScrollView style={styles.modalScrollView} showsVerticalScrollIndicator={false}>
               <TextInput
                 style={styles.modalInput}
                 placeholder="Company Name"
@@ -1126,7 +1126,7 @@ const ProfileScreen = ({ navigation }) => {
               </TouchableOpacity>
             </View>
             
-            <ScrollView style={styles.modalScrollView}>
+            <ScrollView style={styles.modalScrollView} showsVerticalScrollIndicator={false}>
               <TextInput
                 style={styles.modalInput}
                 placeholder="Institution/University Name"
@@ -1655,12 +1655,12 @@ const styles = StyleSheet.create({
   // Modal Styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    backgroundColor: 'rgba(0, 0, 0, 0.92)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   modalContainer: {
-    backgroundColor: colors.backgroundElevated,
+    backgroundColor: 'rgba(15, 28, 38, 0.98)',
     borderRadius: 16,
     padding: 24,
     width: '90%',

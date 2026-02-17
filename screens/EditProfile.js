@@ -3,7 +3,6 @@ import React, { useState, useEffect } from 'react';
 import { View, TextInput, StyleSheet, Image, TouchableOpacity, Text, ScrollView, KeyboardAvoidingView, Platform, Modal, Alert } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
-import Container from '../components/Container';
 import Button from '../components/Button';
 import Header from '../components/Header';
 import colors from '../config/colors';
@@ -359,15 +358,15 @@ const EditProfileScreen = ({ navigation }) => {
 
   if (loading) {
     return (
-      <Container>
+      <View style={styles.screenContainer}>
         <Header title="Edit Profile" showTitle={true} showBackButton={true} onBackPress={() => navigation.goBack()} />
         <ProfileSkeleton showPosts={false} />
-      </Container>
+      </View>
     );
   }
 
   return (
-    <Container>
+    <View style={styles.screenContainer}>
       <Header 
         title="Edit Profile" 
         showTitle={true}
@@ -811,11 +810,15 @@ const EditProfileScreen = ({ navigation }) => {
       <View style={styles.floatingButtonContainer}>
         <Button title="Save Changes" onPress={handleSave} style={styles.floatingSaveButton} />
       </View>
-    </Container>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
+  screenContainer: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
   keyboardAvoidingView: {
     flex: 1,
   },

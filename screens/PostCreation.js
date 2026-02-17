@@ -243,30 +243,36 @@ const PostCreationScreen = ({ navigation }) => {
         onBackPress={() => navigation.goBack()}
       />
       
-      {/* Custom Post Button */}
+      {/* Custom Post Button - use View when loading to avoid TouchableOpacity disabled opacity */}
       <View style={styles.postButtonContainer}>
-        <TouchableOpacity
-          style={[
-            styles.postButton,
-            (!text.trim() && images.length === 0) && styles.postButtonDisabled
-          ]}
-          onPress={handlePost}
-          disabled={(!text.trim() && images.length === 0) || loading}
-          activeOpacity={0.8}
-        >
-          {loading ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="small" color={colors.white} />
-            </View>
-          ) : (
+        {loading ? (
+          <View
+            style={[
+              styles.postButton,
+              styles.postButtonLoading,
+            ]}
+          >
+            <ActivityIndicator size="small" color="#FFFFFF" />
+            <Text style={styles.postingText}>Posting...</Text>
+          </View>
+        ) : (
+          <TouchableOpacity
+            style={[
+              styles.postButton,
+              (!text.trim() && images.length === 0) && styles.postButtonDisabled
+            ]}
+            onPress={handlePost}
+            disabled={!text.trim() && images.length === 0}
+            activeOpacity={0.8}
+          >
             <Text style={[
               styles.postButtonText,
               (!text.trim() && images.length === 0) && styles.postButtonTextDisabled
             ]}>Post</Text>
-          )}
-        </TouchableOpacity>
+          </TouchableOpacity>
+        )}
 
-        {/* Upload Progress */}
+        {/* Upload Progress - separate from button so it doesn't affect button width */}
         {uploadProgress && (
           <View style={styles.progressContainer}>
             <Text style={styles.progressText}>{uploadProgress}</Text>
@@ -454,18 +460,25 @@ const styles = StyleSheet.create({
     top: 114,
     right: 16,
     zIndex: 10,
+    alignItems: 'flex-end',
   },
   postButton: {
     backgroundColor: colors.button,
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 12,
+    width: 110,
+    alignItems: 'center',
+    justifyContent: 'center',
     shadowColor: colors.button,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 5,
-    overflow: 'hidden',
+  },
+  postButtonLoading: {
+    flexDirection: 'row',
+    gap: 8,
   },
   postButtonDisabled: {
     backgroundColor: colors.card,
@@ -483,21 +496,24 @@ const styles = StyleSheet.create({
   postButtonTextDisabled: {
     color: colors.textMuted,
   },
-  loadingContainer: {
-    backgroundColor: 'transparent',
+  postingText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontFamily: 'Gilroy-SemiBold',
   },
   progressContainer: {
     marginTop: 8,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    backgroundColor: 'rgba(138, 43, 226, 0.15)',
+    alignSelf: 'flex-end',
+    backgroundColor: 'rgba(20, 37, 45, 0.95)',
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(138, 43, 226, 0.3)',
+    borderColor: 'rgba(138, 43, 226, 0.5)',
   },
   progressText: {
-    color: colors.button,
-    fontSize: 12,
+    color: '#FFFFFF',
+    fontSize: 13,
     textAlign: 'center',
     fontFamily: 'Gilroy-Medium',
   },

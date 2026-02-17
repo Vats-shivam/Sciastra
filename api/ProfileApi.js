@@ -242,6 +242,7 @@ class ProfileApiService {
   }
 
   // Convert date fields in experiences and education to MM/YYYY format
+  // Map isCurrentRole/isCurrent to backend field "current"
   formatProfileDates(profileData) {
     const formattedData = { ...profileData };
     
@@ -249,8 +250,9 @@ class ProfileApiService {
     if (formattedData.experiences && Array.isArray(formattedData.experiences)) {
       formattedData.experiences = formattedData.experiences.map(exp => ({
         ...exp,
+        current: exp.current ?? exp.isCurrentRole ?? false,
         startDate: this.convertDateToMonthYear(exp.startDate),
-        endDate: exp.isCurrentRole ? null : this.convertDateToMonthYear(exp.endDate),
+        endDate: (exp.current ?? exp.isCurrentRole) ? null : this.convertDateToMonthYear(exp.endDate),
       }));
     }
     
@@ -258,8 +260,9 @@ class ProfileApiService {
     if (formattedData.education && Array.isArray(formattedData.education)) {
       formattedData.education = formattedData.education.map(edu => ({
         ...edu,
+        current: edu.current ?? edu.isCurrent ?? false,
         startDate: this.convertDateToMonthYear(edu.startDate),
-        endDate: edu.current || edu.isCurrent ? null : this.convertDateToMonthYear(edu.endDate),
+        endDate: (edu.current ?? edu.isCurrent) ? null : this.convertDateToMonthYear(edu.endDate),
       }));
     }
     

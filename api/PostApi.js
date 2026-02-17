@@ -542,12 +542,7 @@ class PostApiService {
         
         const mockResults = {
           users: [
-            {
-              userId: 'search_user_1',
-              name: 'John Doe',
-              profession: 'Data Scientist',
-              profilePic: null,
-            }
+            { id: 'search_user_1', name: 'John Doe', profession: 'Data Scientist', profilePic: null }
           ],
           posts: [
             {
@@ -555,13 +550,14 @@ class PostApiService {
               content: `Search result for "${query}"`,
               topics: ['Search'],
               createdAt: new Date().toISOString(),
-              author: {
-                name: 'Search Author',
-                profession: 'Content Creator',
-              }
+              author: { name: 'Search Author', profession: 'Content Creator' }
             }
           ],
-          topics: ['Science', 'Technology', 'Learning'],
+          topics: [
+            { id: 'topic_1', name: 'Science', postCount: 0 },
+            { id: 'topic_2', name: 'Technology', postCount: 0 },
+            { id: 'topic_3', name: 'Learning', postCount: 0 },
+          ],
         };
 
         return {
@@ -570,38 +566,47 @@ class PostApiService {
         };
       }
 
-      let endpoint;
-      switch (type) {
-        case 'users':
-          endpoint = API_ENDPOINTS.POST.SEARCH_USERS;
-          break;
-        case 'posts':
-          endpoint = API_ENDPOINTS.POST.SEARCH_POSTS;
-          break;
-        case 'topics':
-          endpoint = API_ENDPOINTS.POST.SEARCH_TOPICS;
-          break;
-        default:
-          // For 'all', we'll search users first, then extend to other types
-          endpoint = API_ENDPOINTS.POST.SEARCH_USERS;
-      }
+      const encodedQuery = encodeURIComponent(query.trim());
+      const queryParams = `q=${encodedQuery}&page=${page}&limit=${limit}`;
 
-      const url = `${this.baseUrl}${endpoint}?q=${encodeURIComponent(query)}&page=${page}&limit=${limit}`;
-      
-      console.log('📡 PostApi Search - Making API request to URL:', url);
+      if (type === 'all') {
+        // Fetch users, posts, and topics in parallel
+        const [usersRes, postsRes, topicsRes] = await Promise.allSettled([
+          this.makeRequest(`${this.baseUrl}${API_ENDPOINTS.POST.SEARCH_USERS}?${queryParams}`, { method: 'GET' }),
+          this.makeRequest(`${this.baseUrl}${API_ENDPOINTS.POST.SEARCH_POSTS}?${queryParams}`, { method: 'GET' }),
+          this.makeRequest(`${this.baseUrl}${API_ENDPOINTS.POST.SEARCH_TOPICS}?${queryParams}`, { method: 'GET' }),
+        ]);
 
-      const response = await this.makeRequest(url, {
-        method: 'GET',
-      });
+        const users = usersRes.status === 'fulfilled' && usersRes.value?.success ? (usersRes.value.data?.users || []) : [];
+        const posts = postsRes.status === 'fulfilled' && postsRes.value?.success ? (postsRes.value.data?.posts || []) : [];
+        const topics = topicsRes.status === 'fulfilled' && topicsRes.value?.success ? (topicsRes.value.data?.topics || []) : [];
 
-      if (response.success) {
+        const anySucceeded = usersRes.status === 'fulfilled' || postsRes.status === 'fulfilled' || topicsRes.status === 'fulfilled';
+        if (!anySucceeded) {
+          const reason = usersRes.reason || postsRes.reason || topicsRes.reason;
+          throw reason || new Error('Search failed');
+        }
+
         return {
           success: true,
-          data: response.data,
+          data: { users, posts, topics },
         };
-      } else {
-        throw new Error(response.message || 'Search failed');
       }
+
+      const endpointMap = {
+        users: API_ENDPOINTS.POST.SEARCH_USERS,
+        posts: API_ENDPOINTS.POST.SEARCH_POSTS,
+        topics: API_ENDPOINTS.POST.SEARCH_TOPICS,
+      };
+      const endpoint = endpointMap[type] || API_ENDPOINTS.POST.SEARCH_USERS;
+      const url = `${this.baseUrl}${endpoint}?${queryParams}`;
+
+      const response = await this.makeRequest(url, { method: 'GET' });
+
+      if (response.success) {
+        return { success: true, data: response.data };
+      }
+      throw new Error(response.message || 'Search failed');
     } catch (error) {
       console.error('Search Error:', error);
       return {

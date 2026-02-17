@@ -4,6 +4,7 @@ import {
   Text,
   TextInput,
   FlatList,
+  ScrollView,
   TouchableOpacity,
   Image,
   StyleSheet,
@@ -17,7 +18,7 @@ import { useNavigation } from "@react-navigation/native";
 import colors from "../config/colors";
 import postApi from "../api/PostApi";
 import PostCard from "../components/PostCard";
-import { PostSkeleton } from "../components/skeletons";
+import { PostSkeleton, SearchResultsSkeleton } from "../components/skeletons";
 import Header from "../components/Header";
 import { useLoader } from "../context/LoaderContext";
 import useScreenApiLogger from "../hooks/useScreenApiLogger";
@@ -48,6 +49,7 @@ const HomeScreen = () => {
   const [feedPosts, setFeedPosts] = useState([]);
   const [searchResultsPosts, setSearchResultsPosts] = useState([]);
   const [searchResultsPeople, setSearchResultsPeople] = useState([]);
+  const [searchResultsTopics, setSearchResultsTopics] = useState([]);
   const [searchAvatarErrors, setSearchAvatarErrors] = useState({});
   const [nextCursor, setNextCursor] = useState(null);
   const [hasMore, setHasMore] = useState(true);
@@ -314,9 +316,10 @@ const HomeScreen = () => {
 
   const clearSearch = () => {
     setSearchText("");
-        setSearchResultsPosts([]);
-        setSearchResultsPeople([]);
-        setSearchAvatarErrors({});
+    setSearchResultsPosts([]);
+    setSearchResultsPeople([]);
+    setSearchResultsTopics([]);
+    setSearchAvatarErrors({});
     setSearchLoading(false);
   };
 
@@ -378,7 +381,10 @@ const HomeScreen = () => {
   );
 
   const renderSearchResults = () => {
-    const hasResults = searchResultsPosts.length > 0 || searchResultsPeople.length > 0;
+    const hasResults =
+      searchResultsPosts.length > 0 ||
+      searchResultsPeople.length > 0 ||
+      searchResultsTopics.length > 0;
     const showNoResults = !searchLoading && searchText.trim().length >= 2 && !hasResults;
 
     return (
@@ -388,9 +394,13 @@ const HomeScreen = () => {
       >
         <View style={{ backgroundColor: colors.background, flex: 1 }}>
           {searchLoading ? (
-            <View style={[styles.searchLoadingContainer, { paddingHorizontal: 12 }]}>
-              {[1, 2, 3].map((i) => <PostSkeleton key={i} />)}
-            </View>
+            <ScrollView
+              style={{ flex: 1 }}
+              contentContainerStyle={styles.searchSkeletonContent}
+              showsVerticalScrollIndicator={false}
+            >
+              <SearchResultsSkeleton />
+            </ScrollView>
           ) : showNoResults ? (
             <View style={styles.noResultsContainer}>
               <Icon name="magnify-remove" size={64} color={colors.textMuted} />
@@ -398,60 +408,79 @@ const HomeScreen = () => {
               <Text style={styles.noResultsSubtext}>Try different keywords or search terms</Text>
             </View>
           ) : (
-            <>
-              {searchResultsPosts.length > 0 && (
+            <ScrollView
+              style={{ flex: 1 }}
+              contentContainerStyle={{ paddingBottom: 24 }}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
+              {searchResultsTopics.length > 0 && (
                 <>
-                  <Text style={styles.sectionHeader}>Posts</Text>
-                  <FlatList
-                    data={searchResultsPosts}
-                    keyExtractor={keyExtractor}
-                    renderItem={({ item }) => <PostCard post={item} onPostDeleted={handleSearchPostDeleted} />}
-                    showsVerticalScrollIndicator={false}
-                  />
+                  <Text style={styles.sectionHeader}>Topics</Text>
+                  <View style={styles.topicChipsRow}>
+                    {searchResultsTopics.map((topic) => (
+                      <TouchableOpacity
+                        key={topic.id}
+                        style={styles.topicChip}
+                        onPress={() => setSearchText(topic.name)}
+                        activeOpacity={0.7}
+                      >
+                        <Icon name="tag" size={16} color={colors.primary} />
+                        <Text style={styles.topicChipText}>{topic.name}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
                 </>
               )}
               {searchResultsPeople.length > 0 && (
                 <>
                   <Text style={styles.sectionHeader}>People</Text>
-                  <FlatList
-                    data={searchResultsPeople}
-                    keyExtractor={keyExtractor}
-                    renderItem={({ item }) => (
-                      <TouchableOpacity
-                        style={styles.peopleCard}
-                        onPress={() => {
-                          // Check if this is the current user
-                          if (item.id === "1") {
-                            // Current user ID is '1'
-                            navigation.navigate("ProfileTab");
-                          } else {
-                            navigation.navigate("UserProfile", { userId: item.id });
-                          }
-                        }}
-                      >
-                        <Image
-                          source={
-                            searchAvatarErrors[item.id]
-                              ? require("../assets/icon.png")
-                              : getProfileImageSource(item, { fallbackKey: item.profilePic })
-                          }
-                          style={styles.avatarSmall}
-                          resizeMode="cover"
-                          defaultSource={require("../assets/icon.png")}
-                          onError={() =>
-                            setSearchAvatarErrors((prev) => ({ ...prev, [item.id]: true }))
-                          }
-                        />
-                        <View style={{ flex: 1, marginLeft: 8 }}>
-                          <Text style={styles.personName}>{item.name}</Text>
-                          <Text style={styles.subTitle}>{item.profession || item.bio || ''}</Text>
-                        </View>
-                      </TouchableOpacity>
-                    )}
-                  />
+                  {searchResultsPeople.map((item) => (
+                    <TouchableOpacity
+                      key={item.id}
+                      style={styles.peopleCard}
+                      onPress={() => {
+                        if (item.id === "1") {
+                          navigation.navigate("ProfileTab");
+                        } else {
+                          navigation.navigate("UserProfile", { userId: item.id });
+                        }
+                      }}
+                    >
+                      <Image
+                        source={
+                          searchAvatarErrors[item.id]
+                            ? require("../assets/icon.png")
+                            : getProfileImageSource(item, { fallbackKey: item.profilePic })
+                        }
+                        style={styles.avatarSmall}
+                        resizeMode="cover"
+                        defaultSource={require("../assets/icon.png")}
+                        onError={() =>
+                          setSearchAvatarErrors((prev) => ({ ...prev, [item.id]: true }))
+                        }
+                      />
+                      <View style={{ flex: 1, marginLeft: 8 }}>
+                        <Text style={styles.personName}>{item.name}</Text>
+                        <Text style={styles.subTitle}>{item.profession || item.bio || ""}</Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
                 </>
               )}
-            </>
+              {searchResultsPosts.length > 0 && (
+                <>
+                  <Text style={styles.sectionHeader}>Posts</Text>
+                  {searchResultsPosts.map((post) => (
+                    <PostCard
+                      key={post.id}
+                      post={post}
+                      onPostDeleted={handleSearchPostDeleted}
+                    />
+                  ))}
+                </>
+              )}
+            </ScrollView>
           )}
         </View>
       </KeyboardAvoidingView>
@@ -591,6 +620,27 @@ const styles = StyleSheet.create({
     paddingLeft: 16,
     color: colors.textPrimary,
   },
+  topicChipsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    gap: 8,
+  },
+  topicChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.accent,
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    gap: 6,
+  },
+  topicChipText: {
+    fontSize: 14,
+    fontFamily: 'Gilroy-Medium',
+    color: colors.textPrimary,
+  },
   peopleCard: {
     flexDirection: "row",
     backgroundColor: colors.card,
@@ -618,6 +668,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingVertical: 50,
+  },
+  searchSkeletonContent: {
+    flexGrow: 1,
+    paddingBottom: 24,
   },
   searchLoadingText: {
     marginTop: 16,
