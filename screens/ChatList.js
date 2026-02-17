@@ -20,6 +20,7 @@ import { useLoader } from '../context/LoaderContext';
 import useScreenApiLogger from '../hooks/useScreenApiLogger';
 import { getProfileImageSource } from '../utils/profileImage';
 import CustomRefreshControl from '../components/CustomRefreshControl';
+import { ChatItemSkeleton } from '../components/skeletons';
 
 const ChatListScreen = ({ navigation }) => {
   const { showLoader, hideLoader } = useLoader();
@@ -362,9 +363,8 @@ const ChatListScreen = ({ navigation }) => {
         }
         ListEmptyComponent={
           loading ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color={colors.primary} />
-              <Text style={styles.loadingText}>Loading chats...</Text>
+            <View style={{ paddingVertical: 16 }}>
+              {[1, 2, 3, 4, 5].map((i) => <ChatItemSkeleton key={i} />)}
             </View>
           ) : (
             <View style={styles.emptyContainer}>

@@ -17,6 +17,7 @@ import { useNavigation } from "@react-navigation/native";
 import colors from "../config/colors";
 import postApi from "../api/PostApi";
 import PostCard from "../components/PostCard";
+import { PostSkeleton } from "../components/skeletons";
 import Header from "../components/Header";
 import { useLoader } from "../context/LoaderContext";
 import useScreenApiLogger from "../hooks/useScreenApiLogger";
@@ -50,6 +51,7 @@ const HomeScreen = () => {
   const [searchAvatarErrors, setSearchAvatarErrors] = useState({});
   const [nextCursor, setNextCursor] = useState(null);
   const [hasMore, setHasMore] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const loadingMoreRef = useRef(false);
@@ -100,12 +102,9 @@ const HomeScreen = () => {
       lastCursorRef.current = cursor;
     } else {
       if (__DEV__) console.log("[Feed] Initial feed load");
-      // Reset bookkeeping for a fresh load
+      // Reset bookkeeping for a fresh load - use skeletons instead of global loader
       seenPostIdsRef.current = new Set();
       lastCursorRef.current = null;
-      if (!skipLoader) {
-        showLoader();
-      }
     }
 
     try {
@@ -151,6 +150,7 @@ const HomeScreen = () => {
           );
           // Keep server order for predictable pagination and less work.
           setFeedPosts(posts);
+          setInitialLoading(false);
         }
 
         const newCursor = pagination.nextCursor || null;
@@ -185,9 +185,7 @@ const HomeScreen = () => {
         loadingMoreRef.current = false;
         setLoadingMore(false);
       } else {
-        if (!skipLoader) {
-          hideLoader();
-        }
+        setInitialLoading(false);
       }
     }
   };
@@ -348,6 +346,12 @@ const HomeScreen = () => {
     );
   }, [loadingMore]);
 
+  const FeedSkeletonList = () => (
+    <View style={{ paddingHorizontal: 12, paddingBottom: 100 }}>
+      {[1, 2, 3].map((i) => <PostSkeleton key={i} />)}
+    </View>
+  );
+
   const renderFeed = () => (
     <FlatList
       data={feedPosts}
@@ -368,6 +372,7 @@ const HomeScreen = () => {
           onRefresh={handleRefresh}
         />
       }
+      ListEmptyComponent={initialLoading ? FeedSkeletonList : null}
       ListFooterComponent={feedFooter}
     />
   );
@@ -383,9 +388,8 @@ const HomeScreen = () => {
       >
         <View style={{ backgroundColor: colors.background, flex: 1 }}>
           {searchLoading ? (
-            <View style={styles.searchLoadingContainer}>
-              <ActivityIndicator size="large" color={colors.primary} />
-              <Text style={styles.searchLoadingText}>Searching...</Text>
+            <View style={[styles.searchLoadingContainer, { paddingHorizontal: 12 }]}>
+              {[1, 2, 3].map((i) => <PostSkeleton key={i} />)}
             </View>
           ) : showNoResults ? (
             <View style={styles.noResultsContainer}>

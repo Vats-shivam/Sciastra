@@ -8,6 +8,7 @@ import eventsApi from "../api/EventsApi";
 import { useLoader } from "../context/LoaderContext";
 import useScreenApiLogger from "../hooks/useScreenApiLogger";
 import CustomRefreshControl from "../components/CustomRefreshControl";
+import { EventCardSkeleton } from "../components/skeletons";
 
 const DEFAULT_CATEGORIES = [
   { id: "ALL", label: "All", icon: "format-list-bulleted" },
@@ -239,11 +240,17 @@ const EventScreen = ({ navigation }) => {
         contentContainerStyle={{ paddingBottom: 20 }}
         ListFooterComponent={renderListFooter}
         ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Icon name={emptyIcon} size={64} color={colors.textMuted} />
-            <Text style={styles.emptyText}>{emptyTitle}</Text>
-            <Text style={styles.emptySubText}>{emptySubText}</Text>
-          </View>
+          loading ? (
+            <View style={{ paddingVertical: 16 }}>
+              {[1, 2, 3].map((i) => <EventCardSkeleton key={i} />)}
+            </View>
+          ) : (
+            <View style={styles.emptyContainer}>
+              <Icon name={emptyIcon} size={64} color={colors.textMuted} />
+              <Text style={styles.emptyText}>{emptyTitle}</Text>
+              <Text style={styles.emptySubText}>{emptySubText}</Text>
+            </View>
+          )
         }
         refreshControl={
           <CustomRefreshControl

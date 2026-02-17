@@ -10,6 +10,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import useScreenApiLogger from "../hooks/useScreenApiLogger";
 import Card from "../components/Card";
 import CustomRefreshControl from "../components/CustomRefreshControl";
+import { EventCardSkeleton } from "../components/skeletons";
 
 const DEFAULT_EVENT_BANNER_URL = require("../assets/splash-icon.png");
 
@@ -186,10 +187,9 @@ const RegisteredEvents = ({ navigation }) => {
           onBackPress={() => navigation.goBack()} 
         />
         <Container style={{ backgroundColor: colors.background }}>
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={colors.primary} />
-            <Text style={styles.loadingText}>Loading your registered events...</Text>
-          </View>
+          <ScrollView contentContainerStyle={{ padding: 16 }}>
+            {[1, 2, 3].map((i) => <EventCardSkeleton key={i} />)}
+          </ScrollView>
         </Container>
       </View>
     );

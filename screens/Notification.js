@@ -1,6 +1,6 @@
 // screens/NotificationsScreen.js
 import React, { useState, useEffect } from 'react';
-import { FlatList, Text, StyleSheet, View, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { FlatList, Text, StyleSheet, View, TouchableOpacity } from 'react-native';
 import Container from '../components/Container';
 import Card from '../components/Card';
 import colors from '../config/colors';
@@ -8,6 +8,7 @@ import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { useNotification } from '../contexts/NotificationContext';
 import useScreenApiLogger from '../hooks/useScreenApiLogger';
 import CustomRefreshControl from '../components/CustomRefreshControl';
+import { NotificationSkeleton } from '../components/skeletons';
 
 const NotificationsScreen = () => {
   const [notifications, setNotifications] = useState([]);
@@ -87,9 +88,8 @@ const NotificationsScreen = () => {
   if (loading) {
     return (
       <Container>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={styles.loadingText}>Loading notifications...</Text>
+        <View style={{ padding: 16 }}>
+          {[1, 2, 3, 4, 5].map((i) => <NotificationSkeleton key={i} />)}
         </View>
       </Container>
     );

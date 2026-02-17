@@ -9,6 +9,7 @@ import authApi from "../api/AuthApi";
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import authManager from "../services/AuthManager";
 import useScreenApiLogger from "../hooks/useScreenApiLogger";
+import { EventCardSkeleton } from "../components/skeletons";
 
 const INSTRUCTIONS = [
   "Registration is mandatory for all participants.",
@@ -268,9 +269,11 @@ const EventDetailScreen = ({ route, navigation }) => {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.loadingText}>Loading event details...</Text>
+      <View style={styles.container}>
+        <Header title="EVENT DETAIL" showTitle={true} showBackButton={true} onBackPress={() => navigation.goBack()} />
+        <View style={{ padding: 16 }}>
+          <EventCardSkeleton />
+        </View>
       </View>
     );
   }

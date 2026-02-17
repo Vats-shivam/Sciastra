@@ -1,5 +1,5 @@
 // screens/ProfileScreen.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, Image, ScrollView, StyleSheet, TouchableOpacity, Alert, TextInput, ActivityIndicator } from 'react-native';
 import Container from '../components/Container';
 import colors from '../config/colors';
@@ -16,9 +16,12 @@ import CustomRefreshControl from '../components/CustomRefreshControl';
 import profileApi from '../api/ProfileApi';
 import { getProfileImageSource } from '../utils/profileImage';
 import { useFocusEffect } from '@react-navigation/native';
+import { ProfileSkeleton } from '../components/skeletons';
+import { useFeedRefresh } from '../contexts/FeedRefreshContext';
 
 const ProfileScreen = ({ navigation }) => {
   const { showLoader, hideLoader } = useLoader();
+  const { registerUpdatePostReaction } = useFeedRefresh() || {};
   const [user, setUser] = useState(null);
   const [posts, setPosts] = useState([]);
   const [menuVisible, setMenuVisible] = useState(false);
@@ -58,6 +61,25 @@ const ProfileScreen = ({ navigation }) => {
   const [modalLoading, setModalLoading] = useState(false);
 
   useScreenApiLogger('Profile');
+
+  const updatePostReactionInProfile = useCallback((postId, { added, reactionType = 'LIKE' }) => {
+    setPosts((prev) =>
+      prev.map((p) => {
+        if (p?.id !== postId) return p;
+        const currentCount = p.counts?.reactions ?? 0;
+        const newCount = Math.max(0, currentCount + (added ? 1 : -1));
+        return {
+          ...p,
+          counts: { ...p.counts, reactions: newCount },
+          userReaction: added ? reactionType : null,
+        };
+      })
+    );
+  }, []);
+
+  useEffect(() => {
+    return registerUpdatePostReaction?.(updatePostReactionInProfile);
+  }, [registerUpdatePostReaction, updatePostReactionInProfile]);
 
   useEffect(() => {
     initializeProfile();
@@ -605,8 +627,9 @@ const ProfileScreen = ({ navigation }) => {
 
   if (loading) {
     return (
-      <View style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }}>
-        <Text style={{ color: colors.textPrimary }}>Loading profile...</Text>
+      <View style={{ flex: 1, backgroundColor: colors.background }}>
+        <Header title="Profile" />
+        <ProfileSkeleton showPosts={true} />
       </View>
     );
   }

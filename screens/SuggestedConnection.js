@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   Image,
   StyleSheet,
-  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -18,6 +17,7 @@ import postApi from '../api/PostApi';
 import profileApi from '../api/ProfileApi';
 import authApi from '../api/AuthApi';
 import useScreenApiLogger from '../hooks/useScreenApiLogger';
+import { ConnectionSkeleton } from '../components/skeletons';
 
 const SuggestedConnectionsScreen = ({ navigation }) => {
   const [connections, setConnections] = useState([]);
@@ -226,10 +226,9 @@ const SuggestedConnectionsScreen = ({ navigation }) => {
     return (
       <LinearGradient
         colors={[colors.background, colors.backgroundSecondary, colors.background]}
-        style={styles.loadingContainer}
+        style={[styles.loadingContainer, { padding: 24 }]}
       >
-        <ActivityIndicator size="large" color="#8a2be2" />
-        <Text style={styles.loadingText}>Finding your community...</Text>
+        {[1, 2, 3, 4, 5].map((i) => <ConnectionSkeleton key={i} />)}
       </LinearGradient>
     );
   }

@@ -22,6 +22,7 @@ import colors from '../config/colors';
 import postApi from '../api/PostApi';
 import authApi from '../api/AuthApi';
 import { useLoader } from '../context/LoaderContext';
+import { PostDetailSkeleton } from '../components/skeletons';
 import { useNotification } from '../contexts/NotificationContext';
 import useScreenApiLogger from '../hooks/useScreenApiLogger';
 import { getProfileImageSource } from '../utils/profileImage';
@@ -534,10 +535,7 @@ const PostDetailScreen = ({ route, navigation }) => {
           <Text style={styles.headerTitle}>Post</Text>
           <View style={{ width: 24 }} />
         </View>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.button} />
-          <Text style={styles.loadingText}>Loading post...</Text>
-        </View>
+        <PostDetailSkeleton />
       </SafeAreaView>
     );
   }

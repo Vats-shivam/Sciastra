@@ -10,6 +10,7 @@ import colors from '../config/colors';
 import authManager from '../services/AuthManager';
 import profileApi from '../api/ProfileApi';
 import { useLoader } from '../context/LoaderContext';
+import { ProfileSkeleton } from '../components/skeletons';
 import { useNotification } from '../contexts/NotificationContext';
 import useScreenApiLogger from '../hooks/useScreenApiLogger';
 
@@ -359,9 +360,8 @@ const EditProfileScreen = ({ navigation }) => {
   if (loading) {
     return (
       <Container>
-        <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>Loading profile...</Text>
-        </View>
+        <Header title="Edit Profile" showTitle={true} showBackButton={true} onBackPress={() => navigation.goBack()} />
+        <ProfileSkeleton showPosts={false} />
       </Container>
     );
   }

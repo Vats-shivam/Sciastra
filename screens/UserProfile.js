@@ -1,5 +1,5 @@
 // screens/UserProfile.js
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, Image, ScrollView, StyleSheet, TouchableOpacity, Modal, Animated, Alert, Pressable } from 'react-native';
 import Container from '../components/Container';
 import colors from '../config/colors';
@@ -15,9 +15,12 @@ import postApi from '../api/PostApi';
 import useScreenApiLogger from '../hooks/useScreenApiLogger';
 import authManager from '../services/AuthManager';
 import { getProfileImageSource } from '../utils/profileImage';
+import { useFeedRefresh } from '../contexts/FeedRefreshContext';
+import { ProfileSkeleton } from '../components/skeletons';
 
 const UserProfileScreen = ({ navigation, route }) => {
   const { userId, isOnline: initialOnlineStatus } = route.params || {};
+  const { registerUpdatePostReaction } = useFeedRefresh() || {};
   const [user, setUser] = useState(null);
   const [posts, setPosts] = useState([]);
   const [connectionStatus, setConnectionStatus] = useState('unknown');
@@ -34,6 +37,25 @@ const UserProfileScreen = ({ navigation, route }) => {
   const { showError, showSuccess, showWarning, showInfo } = useNotification();
 
   useScreenApiLogger('UserProfile');
+
+  const updatePostReactionInProfile = useCallback((postId, { added, reactionType = 'LIKE' }) => {
+    setPosts((prev) =>
+      prev.map((p) => {
+        if (p?.id !== postId) return p;
+        const currentCount = p.counts?.reactions ?? 0;
+        const newCount = Math.max(0, currentCount + (added ? 1 : -1));
+        return {
+          ...p,
+          counts: { ...p.counts, reactions: newCount },
+          userReaction: added ? reactionType : null,
+        };
+      })
+    );
+  }, []);
+
+  useEffect(() => {
+    return registerUpdatePostReaction?.(updatePostReactionInProfile);
+  }, [registerUpdatePostReaction, updatePostReactionInProfile]);
 
   useEffect(() => {
     // Check if this is the current user
@@ -610,8 +632,9 @@ const UserProfileScreen = ({ navigation, route }) => {
 
   if (loading) {
     return (
-      <View style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }}>
-        <Text style={{ color: colors.textPrimary }}>Loading profile...</Text>
+      <View style={{ flex: 1, backgroundColor: colors.background }}>
+        <Header title="PROFILE" />
+        <ProfileSkeleton showPosts={true} />
       </View>
     );
   }

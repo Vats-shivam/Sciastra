@@ -8,6 +8,7 @@ import chatApi from '../api/ChatApi';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import ConnectionApi from '../api/ConnectionApi';
 import useScreenApiLogger from '../hooks/useScreenApiLogger';
+import { ConnectionSkeleton } from '../components/skeletons';
 
 const MyNetworkScreen = ({ navigation }) => {
   const [connections, setConnections] = useState([]);
@@ -91,9 +92,8 @@ const MyNetworkScreen = ({ navigation }) => {
   if (loading) {
     return (
       <Container>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={styles.loadingText}>Loading connections...</Text>
+        <View style={{ padding: 16 }}>
+          {[1, 2, 3, 4, 5].map((i) => <ConnectionSkeleton key={i} />)}
         </View>
       </Container>
     );

@@ -30,6 +30,7 @@ import colors from '../config/colors';
 import chatApi from '../api/ChatApi';
 import authApi from '../api/AuthApi';
 import { useLoader } from '../context/LoaderContext';
+import { ChatMessageSkeleton } from '../components/skeletons';
 import { useNotification } from '../contexts/NotificationContext';
 import useScreenApiLogger from '../hooks/useScreenApiLogger';
 
@@ -604,8 +605,8 @@ const OneToOneChatScreen = ({ route, navigation }) => {
 
   if (loading) {
     return (
-      <Container style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <Text style={{ color: colors.textPrimary, fontSize: 16 }}>Loading chat...</Text>
+      <Container style={{ flex: 1 }}>
+        <ChatMessageSkeleton />
       </Container>
     );
   }
