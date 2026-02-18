@@ -26,8 +26,10 @@ import { PostDetailSkeleton } from '../components/skeletons';
 import { useNotification } from '../contexts/NotificationContext';
 import useScreenApiLogger from '../hooks/useScreenApiLogger';
 import { getProfileImageSource } from '../utils/profileImage';
+import { parseUTCDate } from '../utils/dateUtils';
 import CustomRefreshControl from '../components/CustomRefreshControl';
 import { useFeedRefresh } from '../contexts/FeedRefreshContext';
+import FullScreenImageViewer from '../components/FullScreenImageViewer';
 
 // Reaction types from backend enum
 const REACTIONS = [
@@ -74,6 +76,7 @@ const PostDetailScreen = ({ route, navigation }) => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [menuButtonLayout, setMenuButtonLayout] = useState({ x: 0, y: 0, width: 0, height: 0 });
+  const [fullScreenImageSource, setFullScreenImageSource] = useState(null);
   
   const scrollViewRef = useRef(null);
   const commentsSectionRef = useRef(null);
@@ -364,7 +367,9 @@ const PostDetailScreen = ({ route, navigation }) => {
   };
 
   const timeAgo = (date) => {
-    const seconds = Math.floor((new Date() - new Date(date)) / 1000);
+    const d = parseUTCDate(date);
+    if (!d) return '';
+    const seconds = Math.floor((Date.now() - d.getTime()) / 1000);
     let interval = seconds / 31536000;
     if (interval > 1) {
       return Math.floor(interval) + " year" + (Math.floor(interval) === 1 ? "" : "s");
@@ -661,7 +666,7 @@ const PostDetailScreen = ({ route, navigation }) => {
                   </Text>
                 </TouchableOpacity>
                 <Text style={styles.postTime}>
-                  {displayPost?.createdAt ? new Date(displayPost.createdAt).toLocaleDateString() : (post.createdAt ? new Date(post.createdAt).toLocaleDateString() : '')}
+                  {displayPost?.createdAt ? (parseUTCDate(displayPost.createdAt)?.toLocaleDateString() ?? '') : (post.createdAt ? (parseUTCDate(post.createdAt)?.toLocaleDateString() ?? '') : '')}
                 </Text>
               </View>
             </View>
@@ -677,14 +682,22 @@ const PostDetailScreen = ({ route, navigation }) => {
                 : [];
               return displayImages.length > 0 ? (
                 <View style={styles.mediaContainer}>
-                  {displayImages.map((mediaItem, index) => (
-                    <Image
-                      key={index}
-                      source={getImageSource(mediaItem)}
-                      style={styles.postImage}
-                      resizeMode="cover"
-                    />
-                  ))}
+                  {displayImages.map((mediaItem, index) => {
+                    const imgSource = getImageSource(mediaItem);
+                    return (
+                      <TouchableOpacity
+                        key={index}
+                        activeOpacity={0.9}
+                        onPress={() => setFullScreenImageSource(imgSource)}
+                      >
+                        <Image
+                          source={imgSource}
+                          style={styles.postImage}
+                          resizeMode="cover"
+                        />
+                      </TouchableOpacity>
+                    );
+                  })}
                 </View>
               ) : null;
             })()}
@@ -1164,6 +1177,13 @@ const PostDetailScreen = ({ route, navigation }) => {
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* Full-screen image viewer (like OneToOne) */}
+      <FullScreenImageViewer
+        visible={!!fullScreenImageSource}
+        source={fullScreenImageSource}
+        onClose={() => setFullScreenImageSource(null)}
+      />
     </SafeAreaView>
   );
 };
@@ -1506,14 +1526,14 @@ const styles = StyleSheet.create({
   commentInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.card,
+    backgroundColor: 'rgba(15, 28, 38, 0.98)',
     borderRadius: 28,
     paddingLeft: 20,
     paddingRight: 6,
     paddingVertical: 6,
     minHeight: 56,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
   },
   commentInput: {
     flex: 1,

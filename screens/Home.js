@@ -51,14 +51,13 @@ const HomeScreen = () => {
   const [searchResultsPeople, setSearchResultsPeople] = useState([]);
   const [searchResultsTopics, setSearchResultsTopics] = useState([]);
   const [searchAvatarErrors, setSearchAvatarErrors] = useState({});
-  const [nextCursor, setNextCursor] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [initialLoading, setInitialLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const loadingMoreRef = useRef(false);
-  const lastCursorRef = useRef(null);
-  const seenPostIdsRef = useRef(new Set());
+  const lastPageRef = useRef(null);
   const lastLoadMoreAtRef = useRef(0);
 
   useScreenApiLogger("Home");
@@ -86,32 +85,31 @@ const HomeScreen = () => {
     };
   }, [searchText, searching]);
 
-  const loadFeedPosts = async (cursor = null, skipLoader = false) => {
-    const isLoadMore = Boolean(cursor);
+  const loadFeedPosts = async (page = null, skipLoader = false) => {
+    const isLoadMore = page !== null && page > 1;
+    const fetchPage = page ?? 1;
 
     if (isLoadMore) {
-      if (__DEV__) console.log(`[Feed] Load-more requested with lastPostId=${cursor}`);
+      if (__DEV__) console.log(`[Feed] Load-more requested, page=${fetchPage}`);
       if (loadingMoreRef.current || loadingMore || !hasMore) {
         if (__DEV__) console.log("[Feed] Skipping load-more (already loading or no more data)");
         return;
       }
-      if (cursor === lastCursorRef.current) {
-        if (__DEV__) console.log(`[Feed] Skipping load-more, cursor ${cursor} already processed`);
+      if (fetchPage === lastPageRef.current) {
+        if (__DEV__) console.log(`[Feed] Skipping load-more, page ${fetchPage} already processed`);
         return;
       }
       loadingMoreRef.current = true;
       setLoadingMore(true);
-      lastCursorRef.current = cursor;
+      lastPageRef.current = fetchPage;
     } else {
       if (__DEV__) console.log("[Feed] Initial feed load");
-      // Reset bookkeeping for a fresh load - use skeletons instead of global loader
-      seenPostIdsRef.current = new Set();
-      lastCursorRef.current = null;
+      lastPageRef.current = null;
     }
 
     try {
-      if (__DEV__) console.log(`[Feed] Fetching posts (${isLoadMore ? `cursor=${cursor}` : "initial"})`);
-      const result = await postApi.getFeedPosts(cursor, POSTS_PER_PAGE);
+      if (__DEV__) console.log(`[Feed] Fetching posts (${isLoadMore ? `page=${fetchPage}` : "initial"})`);
+      const result = await postApi.getFeedPosts(fetchPage, POSTS_PER_PAGE);
       if (result.success) {
         const posts = result.data.posts || [];
         if (__DEV__) {
@@ -121,54 +119,29 @@ const HomeScreen = () => {
           );
         }
         const pagination = result.data.pagination || {};
-        let appendedCount = posts.length;
 
         if (isLoadMore) {
-          const uniqueNew = [];
-          posts.forEach((post) => {
-            const postId = post?.id;
-            if (postId && seenPostIdsRef.current.has(postId)) {
-              return;
+          setFeedPosts((prev) => {
+            const existingIds = new Set(prev.map((p) => p?.id).filter(Boolean));
+            const uniqueNew = posts.filter((post) => post?.id && !existingIds.has(post.id));
+            if (__DEV__ && uniqueNew.length < posts.length) {
+              console.log(`[Feed] Deduped: ${posts.length} -> ${uniqueNew.length} new posts`);
             }
-            if (postId) {
-              seenPostIdsRef.current.add(postId);
-            }
-            uniqueNew.push(post);
+            return uniqueNew.length ? [...prev, ...uniqueNew] : prev;
           });
-          appendedCount = uniqueNew.length;
-          if (__DEV__) {
-            console.log(
-              "[Feed] Unique new post IDs (after dedup):",
-              uniqueNew.map((p) => p.id)
-            );
-          }
-          setFeedPosts((prev) =>
-            uniqueNew.length ? [...prev, ...uniqueNew] : prev
-          );
         } else {
-          // Seed the seen set so subsequent pages can deduplicate reliably
-          seenPostIdsRef.current = new Set(
-            posts.filter((p) => p?.id).map((p) => p.id)
-          );
-          // Keep server order for predictable pagination and less work.
           setFeedPosts(posts);
           setInitialLoading(false);
         }
 
-        const newCursor = pagination.nextCursor || null;
-        setNextCursor(newCursor);
-        if (__DEV__) console.log(`[Feed] Updated next cursor: ${newCursor ?? "null"}`);
-
+        setCurrentPage(fetchPage);
         let nextHasMore = pagination.hasMore;
         if (nextHasMore === undefined) {
-          nextHasMore = newCursor !== null;
+          nextHasMore = posts.length >= POSTS_PER_PAGE;
         }
-
-        if (posts.length === 0 || (isLoadMore && appendedCount === 0)) {
-          nextHasMore = false;
-        }
-
+        if (posts.length === 0) nextHasMore = false;
         setHasMore(Boolean(nextHasMore));
+        if (__DEV__) console.log(`[Feed] Page ${fetchPage}, hasMore: ${nextHasMore}`);
       } else {
         console.error("Failed to load feed posts:", result.message);
         if (!isLoadMore) {
@@ -224,20 +197,20 @@ const HomeScreen = () => {
   }, [registerUpdatePostReaction, updatePostReactionInFeed]);
 
   const handleLoadMore = useCallback(() => {
-    if (loadingMoreRef.current || loadingMore || !hasMore || !nextCursor) return;
+    if (loadingMoreRef.current || loadingMore || !hasMore) return;
 
     // Throttle to avoid repeated triggers during fast scrolling.
     const now = Date.now();
     if (now - lastLoadMoreAtRef.current < 800) return;
     lastLoadMoreAtRef.current = now;
 
-    loadFeedPosts(nextCursor);
-  }, [loadingMore, hasMore, nextCursor]);
+    loadFeedPosts(currentPage + 1);
+  }, [loadingMore, hasMore, currentPage]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      await loadFeedPosts(null, true); // Skip loader during refresh
+      await loadFeedPosts(1, true); // Reset to page 1
     } finally {
       setRefreshing(false);
     }

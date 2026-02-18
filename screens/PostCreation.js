@@ -280,7 +280,11 @@ const PostCreationScreen = ({ navigation }) => {
         )}
       </View>
 
-        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          style={styles.content}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
           {/* User Info */}
           <View style={styles.userSection}>
             <Image
@@ -311,13 +315,14 @@ const PostCreationScreen = ({ navigation }) => {
             </View>
           </View>
 
-          {/* Text Input */}
+          {/* Text Input - fixed height, scrollable when content overflows */}
           <View style={styles.textInputContainer}>
             <TextInput
               style={[styles.textInput, textInputFocused && styles.textInputFocused]}
               placeholder="What's on your mind?"
               placeholderTextColor={colors.textMuted}
               multiline
+              scrollEnabled
               value={text}
               onChangeText={setText}
               onFocus={() => setTextInputFocused(true)}
@@ -583,7 +588,8 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     paddingVertical: 16,
     paddingHorizontal: 0,
-    minHeight: 140,
+    height: 160,
+    maxHeight: 160,
     textAlignVertical: 'top',
     lineHeight: 24,
     borderBottomWidth: 1,

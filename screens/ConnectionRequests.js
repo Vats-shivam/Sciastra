@@ -19,6 +19,7 @@ import ConnectionApi from '../api/ConnectionApi';
 import { useLoader } from '../context/LoaderContext';
 import useScreenApiLogger from '../hooks/useScreenApiLogger';
 import { getProfileImageSource } from '../utils/profileImage';
+import { parseUTCDate } from '../utils/dateUtils';
 import CustomRefreshControl from '../components/CustomRefreshControl';
 
 const REQUEST_CATEGORIES = [
@@ -268,7 +269,8 @@ const ConnectionRequestsScreen = () => {
   );
 
   const formatDate = (dateString) => {
-    const date = new Date(dateString);
+    const date = parseUTCDate(dateString);
+    if (!date) return '';
     const now = new Date();
     const diffTime = Math.abs(now - date);
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));

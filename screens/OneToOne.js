@@ -27,6 +27,7 @@ import Animated, {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Container from '../components/Container';
 import colors from '../config/colors';
+import { parseUTCDate } from '../utils/dateUtils';
 import chatApi from '../api/ChatApi';
 import authApi from '../api/AuthApi';
 import { useLoader } from '../context/LoaderContext';
@@ -144,6 +145,16 @@ const OneToOneChatScreen = ({ route, navigation }) => {
       chatApi.removeStatusListener(userId, handleStatusChange);
     };
   }, [userId, userName]);
+
+  // Scroll to last message when keyboard opens (keep recent messages visible while typing)
+  // Must be before loading early return so hook order stays consistent
+  useEffect(() => {
+    const event = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const sub = Keyboard.addListener(event, () => {
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 80);
+    });
+    return () => sub.remove();
+  }, []);
 
   const initializeChat = async () => {
     try {
@@ -274,7 +285,7 @@ const OneToOneChatScreen = ({ route, navigation }) => {
       const existsByContent = prevMessages.find(msg =>
         msg.text === newMessage.text &&
         msg.sender === newMessage.sender &&
-        Math.abs(new Date(msg.createdAt).getTime() - new Date(newMessage.createdAt).getTime()) < 10000 // Within 10 seconds
+        Math.abs((parseUTCDate(msg.createdAt)?.getTime() || 0) - (parseUTCDate(newMessage.createdAt)?.getTime() || 0)) < 10000 // Within 10 seconds
       );
 
       if (existsById || existsByContent) {
@@ -682,7 +693,7 @@ const OneToOneChatScreen = ({ route, navigation }) => {
 
         <View style={styles.messageTimeContainer}>
           <Text style={styles.messageTime}>
-            {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            {parseUTCDate(item.createdAt)?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) ?? ''}
           </Text>
           {item.sender === 'me' && (
             <Icon
@@ -697,14 +708,13 @@ const OneToOneChatScreen = ({ route, navigation }) => {
     </View>
   );
 
-  const Wrapper = Platform.OS === 'ios' ? KeyboardAvoidingView : View;
-  const wrapperProps = Platform.OS === 'ios' ? {
-    behavior: 'padding',
-    keyboardVerticalOffset: insets.top + 88,
-  } : {};
+  // Match PostDetail: KeyboardAvoidingView for both platforms so input stays above keyboard
+  const wrapperProps = Platform.OS === 'ios'
+    ? { behavior: 'padding', keyboardVerticalOffset: 90 }
+    : { behavior: 'height', keyboardVerticalOffset: 0 };
 
   return (
-    <Wrapper style={styles.flex1} {...wrapperProps}>
+    <KeyboardAvoidingView style={styles.flex1} {...wrapperProps}>
       <SafeAreaView style={styles.container} edges={['top']}>
         <StatusBar barStyle="light-content" backgroundColor={colors.backgroundSecondary} />
         
@@ -763,6 +773,7 @@ const OneToOneChatScreen = ({ route, navigation }) => {
               style={styles.input}
               value={input}
               onChangeText={handleInputChange}
+              onFocus={() => flatListRef.current?.scrollToEnd({ animated: true })}
               placeholder="Type a message..."
               placeholderTextColor={colors.textMuted}
               multiline
@@ -835,8 +846,8 @@ const OneToOneChatScreen = ({ route, navigation }) => {
           </TouchableOpacity>
         </View>
       </Modal>
-      </SafeAreaView>
-    </Wrapper>
+    </SafeAreaView>
+    </KeyboardAvoidingView>
   );
 };
 

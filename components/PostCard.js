@@ -24,8 +24,10 @@ import authApi from "../api/AuthApi";
 import { useNotification } from "../contexts/NotificationContext";
 import PostIcon from "./PostIcon";
 import HeaderIcon from "./HeaderIcon";
+import FullScreenImageViewer from "./FullScreenImageViewer";
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { getProfileImageSource } from "../utils/profileImage";
+import { parseUTCDate } from "../utils/dateUtils";
 import { useFeedRefresh } from "../contexts/FeedRefreshContext";
 
 const { width: screenWidth } = Dimensions.get("window");
@@ -45,7 +47,7 @@ const PostCard = memo(({ post, onPostDeleted }) => {
   const { showError, showSuccess } = useNotification();
   const { updatePostReaction } = useFeedRefresh() || {};
   const [showFullDescription, setShowFullDescription] = useState(false);
-  const [userReaction, setUserReaction] = useState(post.userReaction || null); // Track the current user's reaction
+  const [userReaction, setUserReaction] = useState(post?.userReaction || null); // Track the current user's reaction
   const [reactionLoading, setReactionLoading] = useState(false);
   const [imageLoading, setImageLoading] = useState({});
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
@@ -56,8 +58,8 @@ const PostCard = memo(({ post, onPostDeleted }) => {
   );
   const [imageHeights, setImageHeights] = useState({}); // Track image heights dynamically
 
-  // Fullscreen image modal
-  const [selectedImage, setSelectedImage] = useState(null);
+  // Fullscreen image modal - stores { uri } or full source for viewer
+  const [fullScreenImageSource, setFullScreenImageSource] = useState(null);
   
   // Options menu and report modal
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
@@ -73,7 +75,7 @@ const PostCard = memo(({ post, onPostDeleted }) => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const currentUserId = authApi.getCurrentUserId();
-  const postAuthorId = post.author?.id || post.authorId;
+  const postAuthorId = post?.author?.id || post?.authorId;
   const isAuthor = currentUserId && postAuthorId && String(currentUserId) === String(postAuthorId);
 
   // No longer needed with chat service pattern - auth headers handle authentication
@@ -160,16 +162,19 @@ const PostCard = memo(({ post, onPostDeleted }) => {
   const displayReactionType = effectiveReactionsCount > 0 ? 'LIKE' : null;
 
   // Determine if this is a repost and get the original post
-  const isRepost = post.isRepost || false;
-  const originalPost = post.originalPost || null;
-  const repostComment = post.repostComment || null;
+  const isRepost = post?.isRepost || false;
+  const originalPost = post?.originalPost || null;
+  const repostComment = post?.repostComment || null;
   const displayPost = isRepost && originalPost ? originalPost : post;
-  const reposter = isRepost ? post.author : null;
+  const reposter = isRepost ? post?.author : null;
 
   // Handle multiple images using chat service pattern (simplified)
   const displayImages = Array.isArray(displayPost.media)
     ? displayPost.media.filter((item) => (item.mediaType === "image" || item.type === "image" || (!item.type && !item.mediaType)))
     : [];
+
+  // Image width: squeezed to fit container (feed padding 12 each side + container padding 20 each side)
+  const contentWidth = screenWidth - 24 - 40; // = screenWidth - 64
 
   // Reset image index and heights when post or images change
   useEffect(() => {
@@ -178,9 +183,9 @@ const PostCard = memo(({ post, onPostDeleted }) => {
     setCurrentImageIndex(0);
     setImageHeights({}); // Reset heights when post changes
     
-    // Pre-calculate image dimensions
+    // Pre-calculate image dimensions (match content width)
     if (displayImages.length > 0) {
-      const imageWidth = screenWidth - 32;
+      const imageWidth = contentWidth;
       const maxHeight = 700;
       
       displayImages.forEach((item, index) => {
@@ -237,8 +242,12 @@ const PostCard = memo(({ post, onPostDeleted }) => {
     }
   }, [post?.counts?.reactions, reactionLoading, userReaction]);
 
+  if (!post) return null;
+
   const timeAgo = (date) => {
-    const seconds = Math.floor((new Date() - new Date(date)) / 1000);
+    const d = parseUTCDate(date);
+    if (!d) return '';
+    const seconds = Math.floor((Date.now() - d.getTime()) / 1000);
     let interval = seconds / 31536000;
     if (interval > 1) {
       return Math.floor(interval) + " year" + (Math.floor(interval) === 1 ? "" : "s") + " ago";
@@ -370,50 +379,52 @@ const PostCard = memo(({ post, onPostDeleted }) => {
 
         {/* Image Carousel */}
         {displayImages.length > 0 && (
-        <View style={styles.mediaContainer}>
+        <View style={[styles.mediaContainer, { width: contentWidth }]}>
           <FlatList
             data={displayImages}
             keyExtractor={(item, index) => `${post.id}_media_${index}`}
             horizontal
             pagingEnabled
             showsHorizontalScrollIndicator={false}
+            decelerationRate="fast"
+            snapToInterval={contentWidth}
+            snapToAlignment="start"
             style={styles.carousel}
+            contentContainerStyle={{ paddingRight: 0 }}
             onMomentumScrollEnd={(event) => {
-              const imageWidth = screenWidth - 32;
               const index = Math.round(
-                event.nativeEvent.contentOffset.x / imageWidth
+                event.nativeEvent.contentOffset.x / contentWidth
               );
               setCurrentImageIndex(Math.min(index, displayImages.length - 1));
             }}
             onScrollToIndexFailed={(info) => {
-              // Handle scroll to index failure gracefully
               if (__DEV__) console.log('Scroll to index failed:', info);
             }}
             renderItem={({ item, index }) => {
-              const imageSource = getImageSource(item);
+              const imgSource = getImageSource(item);
               const imageKey = `${post.id}_${index}`;
-              const imageWidth = screenWidth - 32;
-              const imageHeight = imageHeights[imageKey] || 300; // Default to 300 if not calculated yet
-              const maxHeight = 700; // Maximum height to prevent extremely tall images
+              const imageHeight = imageHeights[imageKey] || 300;
+              const maxHeight = 700;
               const calculatedHeight = Math.min(imageHeight, maxHeight);
 
               return (
-                <TouchableOpacity 
-                  onPress={() => setSelectedImage(imageSource.uri)}
+                <TouchableOpacity
+                  style={{ width: contentWidth }}
+                  onPress={() => setFullScreenImageSource(imgSource)}
                   activeOpacity={0.9}
                 >
-                  <View style={styles.imageContainer}>
+                  <View style={[styles.imageContainer, { width: contentWidth }]}>
                     {imageLoading[imageKey] && (
-                      <View style={[styles.imageLoader, { height: calculatedHeight }]}>
+                      <View style={[styles.imageLoader, { height: calculatedHeight, width: contentWidth }]}>
                         <ActivityIndicator size="large" color={colors.primary} />
                       </View>
                     )}
                     <Image
-                      source={imageSource}
+                      source={imgSource}
                       style={[
                         styles.image,
                         {
-                          width: imageWidth,
+                          width: contentWidth,
                           height: calculatedHeight,
                         },
                         imageLoading[imageKey] && styles.imageLoading
@@ -825,6 +836,13 @@ const PostCard = memo(({ post, onPostDeleted }) => {
         </Pressable>
       </Modal>
 
+      {/* Full-screen image viewer (like OneToOne) */}
+      <FullScreenImageViewer
+        visible={!!fullScreenImageSource}
+        source={fullScreenImageSource}
+        onClose={() => setFullScreenImageSource(null)}
+      />
+
       </View>
     </View>
   );
@@ -866,10 +884,11 @@ const styles = StyleSheet.create({
   description: { fontFamily: 'Gilroy-Regular', color: colors.textSecondary, fontSize: 14, lineHeight: 20 },
   showMore: { fontFamily: 'Gilroy-Regular', color: colors.textMuted, marginTop: 4 },
 
-  // Media Container
+  // Media Container - fits within container (padding 20 each side)
   mediaContainer: {
     marginTop: 10,
     position: 'relative',
+    alignSelf: 'stretch',
   },
 
   // Carousel
@@ -881,7 +900,6 @@ const styles = StyleSheet.create({
   },
   image: {
     borderRadius: 12,
-    marginRight: 12,
   },
   imageLoading: {
     opacity: 0.7,

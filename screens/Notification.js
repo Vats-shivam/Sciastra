@@ -9,6 +9,7 @@ import { useNotification } from '../contexts/NotificationContext';
 import useScreenApiLogger from '../hooks/useScreenApiLogger';
 import CustomRefreshControl from '../components/CustomRefreshControl';
 import { NotificationSkeleton } from '../components/skeletons';
+import { parseUTCDate } from '../utils/dateUtils';
 
 const NotificationsScreen = () => {
   const [notifications, setNotifications] = useState([]);
@@ -77,7 +78,7 @@ const NotificationsScreen = () => {
         <View style={styles.textContainer}>
           <Text style={[styles.text, !item.read && styles.unreadText]}>{item.text}</Text>
           <Text style={styles.timestamp}>
-            {new Date(item.timestamp).toLocaleDateString()}
+            {parseUTCDate(item.timestamp)?.toLocaleDateString() ?? ''}
           </Text>
         </View>
         {!item.read && <View style={styles.unreadDot} />}

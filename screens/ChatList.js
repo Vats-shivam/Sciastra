@@ -19,6 +19,7 @@ import chatApi from '../api/ChatApi';
 import { useLoader } from '../context/LoaderContext';
 import useScreenApiLogger from '../hooks/useScreenApiLogger';
 import { getProfileImageSource } from '../utils/profileImage';
+import { parseUTCDate } from '../utils/dateUtils';
 import CustomRefreshControl from '../components/CustomRefreshControl';
 import { ChatItemSkeleton } from '../components/skeletons';
 
@@ -144,7 +145,7 @@ const ChatListScreen = ({ navigation }) => {
       if (!lastMessageText?.trim()) lastMessageText = 'New message';
 
       const timeStr = messageData.createdAt
-        ? new Date(messageData.createdAt).toLocaleDateString()
+        ? (parseUTCDate(messageData.createdAt)?.toLocaleDateString() ?? new Date().toLocaleDateString())
         : new Date().toLocaleDateString();
 
       setChats(prevChats =>
@@ -225,7 +226,7 @@ const ChatListScreen = ({ navigation }) => {
           if (!lastMessageText?.trim()) lastMessageText = 'No messages yet';
 
           const lastMsgTime = latestMsg?.createdAt;
-          const timeStr = lastMsgTime ? new Date(lastMsgTime).toLocaleDateString() : '';
+          const timeStr = lastMsgTime ? (parseUTCDate(lastMsgTime)?.toLocaleDateString() ?? '') : '';
 
           return {
             id: room.id,

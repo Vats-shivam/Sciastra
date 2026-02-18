@@ -309,8 +309,9 @@ class PostApiService {
     }
   }
 
-  // Get feed posts with cursor-based pagination - Updated to handle media
-  async getFeedPosts(cursor = null, limit = 15) {
+  // Get feed posts with page-based pagination - Updated to handle media
+  async getFeedPosts(page, limit = 15) {
+    const safePage = page == null ? 1 : page;
     try {
       const userId = authApi.getCurrentUserId();
       if (!userId) {
@@ -365,10 +366,7 @@ class PostApiService {
         };
       }
 
-      let url = `${this.baseUrl}/posts/feed?limit=${limit}&_t=${Date.now()}`;
-      if (cursor) {
-        url += `&lastPostId=${encodeURIComponent(cursor)}`;
-      }
+      const url = `${this.baseUrl}/posts/feed?page=${safePage}&limit=${limit}&_t=${Date.now()}`;
 
       if (__DEV__) console.log('📰 Fetching feed from:', url);
 
