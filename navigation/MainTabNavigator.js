@@ -148,6 +148,15 @@ const MainTabNavigator = () => {
         name="HomeTab"
         component={HomeScreen}
         options={{ title: "Home" }}
+        listeners={({ navigation }) => ({
+          tabPress: (e) => {
+            const state = navigation.getState();
+            const currentRoute = state?.routes?.[state.index];
+            if (currentRoute?.name === 'HomeTab') {
+              navigation.setParams({ resetToFeed: Date.now() });
+            }
+          },
+        })}
       />
       <Tab.Screen
         name="PeopleTab"

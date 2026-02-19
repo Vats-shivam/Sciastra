@@ -248,7 +248,7 @@ const OtpVerificationScreen = ({ navigation, route }) => {
         <View style={styles.content}>
           {/* Header Section */}
           <View style={styles.headerContainer}>
-            <Text style={styles.logoText}>Xcience</Text>
+            <Text style={styles.logoText}>Sciastra</Text>
             <Text style={styles.title}>Verify Your Number</Text>
             <Text style={styles.subtitle}>
               Enter the 6-digit code sent to{'\n'}

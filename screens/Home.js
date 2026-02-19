@@ -14,7 +14,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute } from "@react-navigation/native";
 import colors from "../config/colors";
 import postApi from "../api/PostApi";
 import PostCard from "../components/PostCard";
@@ -41,6 +41,7 @@ const shuffleArray = (array) => {
 
 const HomeScreen = () => {
   const navigation = useNavigation();
+  const route = useRoute();
   const { showLoader, hideLoader } = useLoader();
   const { registerUpdatePostReaction } = useFeedRefresh() || {};
   const [searching, setSearching] = useState(false);
@@ -295,6 +296,15 @@ const HomeScreen = () => {
     setSearchAvatarErrors({});
     setSearchLoading(false);
   };
+
+  useEffect(() => {
+    const resetToFeed = route.params?.resetToFeed;
+    if (resetToFeed) {
+      setSearching(false);
+      clearSearch();
+      navigation.setParams({ resetToFeed: undefined });
+    }
+  }, [route.params?.resetToFeed]);
 
   const keyExtractor = useCallback((item) => String(item?.id ?? ""), []);
   const feedContentContainerStyle = useMemo(
