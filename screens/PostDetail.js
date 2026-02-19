@@ -116,14 +116,31 @@ const PostDetailScreen = ({ route, navigation }) => {
 
       if (postResult?.success) {
         const apiPost = postResult.data;
+        const hasValidUrl = (m) => (m?.url || m?.uri || m?.signedUrl) && String(m.url || m.uri || m.signedUrl).startsWith('http');
         // Preserve media from postData when it has valid URLs - API response can overwrite with
         // proxy URLs that may not work, causing the image to vanish after the fetch completes
-        const hasValidMedia = postData?.media?.length > 0 && postData.media.some(
-          (m) => (m.url || m.uri || m.signedUrl) && String(m.url || m.uri || m.signedUrl).startsWith('http')
-        );
-        const mergedPost = hasValidMedia && postData
-          ? { ...apiPost, media: postData.media, mediaUrls: postData.mediaUrls }
-          : apiPost;
+        const hasValidMedia = postData?.media?.length > 0 && postData.media.some(hasValidUrl);
+        const isRepostWithOriginal = postData?.isRepost && postData?.originalPost;
+        const hasValidOriginalMedia = isRepostWithOriginal && postData.originalPost?.media?.length > 0 && postData.originalPost.media.some(hasValidUrl);
+
+        let mergedPost = apiPost;
+        if (postData) {
+          if (hasValidMedia) {
+            mergedPost = { ...mergedPost, media: postData.media, mediaUrls: postData.mediaUrls };
+          }
+          // For reposts: preserve originalPost.media from postData so the image renders (API may omit or return different URLs)
+          if (hasValidOriginalMedia) {
+            mergedPost = {
+              ...mergedPost,
+              originalPost: {
+                ...(mergedPost.originalPost || {}),
+                ...postData.originalPost,
+                media: postData.originalPost.media,
+                mediaUrls: postData.originalPost.mediaUrls,
+              },
+            };
+          }
+        }
         setPost(mergedPost);
       } else if (!postData) {
         // If we don't even have fallback postData, we can't render.

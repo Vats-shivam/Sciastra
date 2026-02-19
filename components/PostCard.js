@@ -175,6 +175,9 @@ const PostCard = memo(({ post, onPostDeleted }) => {
 
   // Image width: squeezed to fit container (feed padding 12 each side + container padding 20 each side)
   const contentWidth = screenWidth - 24 - 40; // = screenWidth - 64
+  // Repost: originalPostContainer has padding 16 each side, so use smaller width to stay inside
+  const repostContentWidth = screenWidth - 60 - 32; // container 20*2 + originalPostContainer 16*2 = 72
+  const mediaContentWidth = isRepost ? repostContentWidth : contentWidth;
 
   // Reset image index and heights when post or images change
   useEffect(() => {
@@ -185,7 +188,7 @@ const PostCard = memo(({ post, onPostDeleted }) => {
     
     // Pre-calculate image dimensions (match content width)
     if (displayImages.length > 0) {
-      const imageWidth = contentWidth;
+      const imageWidth = mediaContentWidth;
       const maxHeight = 700;
       
       displayImages.forEach((item, index) => {
@@ -217,7 +220,7 @@ const PostCard = memo(({ post, onPostDeleted }) => {
         }
       });
     }
-  }, [displayPost?.id, displayImages.length]);
+  }, [displayPost?.id, displayImages.length, mediaContentWidth]);
 
   // Sync userReaction from post when feed reloads (post prop changes with fresh API data)
   useEffect(() => {
@@ -377,9 +380,9 @@ const PostCard = memo(({ post, onPostDeleted }) => {
           </Pressable>
         )}
 
-        {/* Image Carousel */}
+        {/* Image Carousel - use mediaContentWidth so repost images stay inside originalPostContainer */}
         {displayImages.length > 0 && (
-        <View style={[styles.mediaContainer, { width: contentWidth }]}>
+        <View style={[styles.mediaContainer, { width: mediaContentWidth }]}>
           <FlatList
             data={displayImages}
             keyExtractor={(item, index) => `${post.id}_media_${index}`}
@@ -387,13 +390,13 @@ const PostCard = memo(({ post, onPostDeleted }) => {
             pagingEnabled
             showsHorizontalScrollIndicator={false}
             decelerationRate="fast"
-            snapToInterval={contentWidth}
+            snapToInterval={mediaContentWidth}
             snapToAlignment="start"
             style={styles.carousel}
             contentContainerStyle={{ paddingRight: 0 }}
             onMomentumScrollEnd={(event) => {
               const index = Math.round(
-                event.nativeEvent.contentOffset.x / contentWidth
+                event.nativeEvent.contentOffset.x / mediaContentWidth
               );
               setCurrentImageIndex(Math.min(index, displayImages.length - 1));
             }}
@@ -402,20 +405,20 @@ const PostCard = memo(({ post, onPostDeleted }) => {
             }}
             renderItem={({ item, index }) => {
               const imgSource = getImageSource(item);
-              const imageKey = `${post.id}_${index}`;
+              const imageKey = `${displayPost.id}_${index}`;
               const imageHeight = imageHeights[imageKey] || 300;
               const maxHeight = 700;
               const calculatedHeight = Math.min(imageHeight, maxHeight);
 
               return (
                 <TouchableOpacity
-                  style={{ width: contentWidth }}
+                  style={{ width: mediaContentWidth }}
                   onPress={() => setFullScreenImageSource(imgSource)}
                   activeOpacity={0.9}
                 >
-                  <View style={[styles.imageContainer, { width: contentWidth }]}>
+                  <View style={[styles.imageContainer, { width: mediaContentWidth }]}>
                     {imageLoading[imageKey] && (
-                      <View style={[styles.imageLoader, { height: calculatedHeight, width: contentWidth }]}>
+                      <View style={[styles.imageLoader, { height: calculatedHeight, width: mediaContentWidth }]}>
                         <ActivityIndicator size="large" color={colors.primary} />
                       </View>
                     )}
@@ -424,7 +427,7 @@ const PostCard = memo(({ post, onPostDeleted }) => {
                       style={[
                         styles.image,
                         {
-                          width: contentWidth,
+                          width: mediaContentWidth,
                           height: calculatedHeight,
                         },
                         imageLoading[imageKey] && styles.imageLoading
@@ -1180,6 +1183,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.glassBorder,
     opacity: 1,
+    overflow: 'hidden',
   },
   repostModalOverlay: {
     flex: 1,
