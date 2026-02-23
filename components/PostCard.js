@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   Pressable,
+  Animated,
   Dimensions,
   FlatList,
   Modal,
@@ -32,7 +33,7 @@ import { getProfileImageSource } from "../utils/profileImage";
 import { parseUTCDate } from "../utils/dateUtils";
 import { useFeedRefresh } from "../contexts/FeedRefreshContext";
 
-const { width: screenWidth } = Dimensions.get("window");
+const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 
 // Reaction types from backend enum
 const REACTIONS = [
@@ -60,6 +61,10 @@ const PostCard = memo(({ post, onPostDeleted }) => {
     Math.max(post.counts?.reactions || 0, post.userReaction ? 1 : 0)
   );
   const [imageHeights, setImageHeights] = useState({}); // Track image heights dynamically
+  // Animated container height for image carousel
+  const DEFAULT_IMAGE_HEIGHT = 300;
+  const MAX_MEDIA_HEIGHT = Math.min(700, Math.round(screenHeight * 0.7));
+  const containerHeightAnim = useRef(new Animated.Value(DEFAULT_IMAGE_HEIGHT)).current;
 
   // Fullscreen image modal - stores { uri } or full source for viewer
   const [fullScreenImageSource, setFullScreenImageSource] = useState(null);
@@ -193,7 +198,7 @@ const PostCard = memo(({ post, onPostDeleted }) => {
     // Pre-calculate image dimensions (match content width)
     if (displayImages.length > 0) {
       const imageWidth = mediaContentWidth;
-      const maxHeight = 700;
+      const maxHeight = MAX_MEDIA_HEIGHT;
       
       displayImages.forEach((item, index) => {
         const imageKey = `${displayPost.id}_${index}`;
@@ -225,6 +230,25 @@ const PostCard = memo(({ post, onPostDeleted }) => {
       });
     }
   }, [displayPost?.id, displayImages.length, mediaContentWidth]);
+
+  // When imageHeights or currentImageIndex updates, animate container to target height
+  useEffect(() => {
+    const key = `${displayPost?.id}_${currentImageIndex}`;
+    const target = imageHeights[key] || DEFAULT_IMAGE_HEIGHT;
+    const final = Math.min(target, MAX_MEDIA_HEIGHT);
+    Animated.timing(containerHeightAnim, {
+      toValue: final,
+      duration: 260,
+      useNativeDriver: false,
+    }).start();
+  }, [currentImageIndex, imageHeights, displayPost?.id]);
+
+  // When new post loads, set container height to first image (without animation)
+  useEffect(() => {
+    const key = `${displayPost?.id}_0`;
+    const initial = imageHeights[key] || DEFAULT_IMAGE_HEIGHT;
+    containerHeightAnim.setValue(Math.min(initial, MAX_MEDIA_HEIGHT));
+  }, [displayPost?.id, imageHeights]);
 
   // Sync userReaction from post when feed reloads (post prop changes with fresh API data)
   useEffect(() => {
@@ -386,7 +410,7 @@ const PostCard = memo(({ post, onPostDeleted }) => {
 
         {/* Image Carousel - use mediaContentWidth so repost images stay inside originalPostContainer */}
         {displayImages.length > 0 && (
-        <View style={[styles.mediaContainer, { width: mediaContentWidth }]}>
+        <Animated.View style={[styles.mediaContainer, { width: mediaContentWidth, height: containerHeightAnim }]}>
           <FlatList
             data={displayImages}
             keyExtractor={(item, index) => `${post.id}_media_${index}`}
@@ -420,7 +444,7 @@ const PostCard = memo(({ post, onPostDeleted }) => {
                   onPress={() => setFullScreenImageSource(imgSource)}
                   activeOpacity={0.9}
                 >
-                  <View style={[styles.imageContainer, { width: mediaContentWidth }]}>
+                  <View style={[styles.imageContainer, { width: mediaContentWidth, height: calculatedHeight, justifyContent: 'center', alignItems: 'center' }]}>
                     {imageLoading[imageKey] && (
                       <View style={[styles.imageLoader, { height: calculatedHeight, width: mediaContentWidth }]}>
                         <ActivityIndicator size="large" color={colors.primary} />
@@ -458,7 +482,7 @@ const PostCard = memo(({ post, onPostDeleted }) => {
               <Text style={styles.mediaCountText}>{currentImageIndex + 1} / {displayImages.length}</Text>
             </View>
           )}
-        </View>
+        </Animated.View>
         )}
 
         {/* Stats */}
