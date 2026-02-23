@@ -167,6 +167,11 @@ const MainTabNavigator = () => {
         name="AddPostTab"
         component={PostCreationScreen}
         options={{ title: "Post" }}
+        listeners={({ navigation, route }) => ({
+          focus: () => {
+            try { console.log('[MainTabNavigator] AddPostTab focused', { time: new Date().toISOString(), params: route?.params }); } catch {}
+          }
+        })}
       />
       <Tab.Screen
         name="EventTab"

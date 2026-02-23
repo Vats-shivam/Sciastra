@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRoute, CommonActions, useFocusEffect } from '@react-navigation/native';
+import { useEditPost } from '../contexts/EditPostContext';
 import { BackHandler } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
@@ -56,6 +57,7 @@ const PostCreationScreen = ({ navigation }) => {
   const [userProfilePic, setUserProfilePic] = useState(null);
   const [showVisibilityPicker, setShowVisibilityPicker] = useState(false);
   const { showError, showSuccess, showWarning } = useNotification();
+  const { editingPost, setEditingPost, clearEditingPost } = useEditPost();
 
   useScreenApiLogger('PostCreation');
 
@@ -86,60 +88,88 @@ const PostCreationScreen = ({ navigation }) => {
     loadUserInfo();
   }, []);
 
+// Helper to hydrate media into images (declared before prefill to avoid temporal issues)
+const hydrateMediaIntoImages = (rawMedia, prefixId) => {
+  if (typeof rawMedia === 'string') {
+    try { rawMedia = JSON.parse(rawMedia); } catch (e) { rawMedia = []; }
+  }
+  if (!Array.isArray(rawMedia)) return [];
+  return rawMedia.map((m, i) => ({
+    id: m.key || m.id || `${prefixId}_${i}`,
+    uri: m.url || m.signedUrl || (m.key ? postApi.getMediaDisplayUrl(m.key) : null),
+    key: m.key,
+    width: m.width,
+    height: m.height,
+    fileName: m.fileName || `image_${i}.jpg`,
+    mimeType: m.type || m.mediaType || 'image/jpeg',
+  }));
+};
+
 // Prefill when editing (draft or published). Also re-run on focus to catch params passed via tab navigation.
-const prefillFromParams = (params) => {
-  if (!params?.isEditing) return;
+const prefillFromParams = async (params) => {
+  try { console.log('[PostCreation] prefillFromParams start', { time: new Date().toISOString(), editingPostId: editingPost?.id || null, params }); } catch {}
+  // Prefer global editingPost from context if provided
+  try {
+    if (editingPost) {
+      const p = editingPost;
+      try { console.log('[PostCreation] using editingPost to prefill', { time: new Date().toISOString(), postId: p.id }); } catch {}
+      setText(p.content || '');
+    try { console.log('[PostCreation] setText to editingPost.content', { time: new Date().toISOString(), text: p.content || '' }); } catch {}
+      setVisibility((p.privacy || 'PUBLIC').toLowerCase());
+      setImages(hydrateMediaIntoImages(p.media || p.mediaUrls || [], `post_${p.id || 'editing'}`));
+      return;
+    }
+
+  } catch (e) {}
+
+  // If not editing, reset to defaults so a fresh post can be created
+  if (!params?.isEditing) {
+    // Do not aggressively clear here — clearing is handled once on mount to avoid races
+  }
   console.log('PostCreation prefillFromParams called with params:', params);
 
-  // Draft edit case
-  if (params?.draftPost) {
-    const draft = params.draftPost;
-    setText(draft.content || '');
-    setVisibility((draft.privacy || 'PUBLIC').toLowerCase());
-    // Support media as array or JSON string
-    let rawMedia = draft.media;
+  const hydrateMediaIntoImages = (rawMedia, prefixId) => {
     if (typeof rawMedia === 'string') {
       try { rawMedia = JSON.parse(rawMedia); } catch (e) { rawMedia = []; }
     }
-    if (Array.isArray(rawMedia)) {
-      const imgs = rawMedia.map((m, i) => ({
-        id: m.key || m.id || `draft_${draft.id}_${i}`,
-        uri: m.url || m.signedUrl || (m.key ? postApi.getMediaDisplayUrl(m.key) : null),
-        key: m.key,
-        width: m.width,
-        height: m.height,
-        fileName: m.fileName || `image_${i}.jpg`,
-        mimeType: m.type || m.mediaType || 'image/jpeg',
-      }));
-      setImages(imgs);
-    } else {
-      setImages([]);
+    if (!Array.isArray(rawMedia)) return [];
+    return rawMedia.map((m, i) => ({
+      id: m.key || m.id || `${prefixId}_${i}`,
+      uri: m.url || m.signedUrl || (m.key ? postApi.getMediaDisplayUrl(m.key) : null),
+      key: m.key,
+      width: m.width,
+      height: m.height,
+      fileName: m.fileName || `image_${i}.jpg`,
+      mimeType: m.type || m.mediaType || 'image/jpeg',
+    }));
+  };
+
+  // Draft edit case
+  if (params?.draftPost) {
+    let draft = params.draftPost;
+    // If draft object is incomplete (only id), fetch full post
+    if (draft && !draft.content && draft.id) {
+      const fetched = await postApi.getPostById(draft.id);
+      if (fetched.success) draft = fetched.data;
     }
+    setText(draft.content || '');
+    setVisibility((draft.privacy || 'PUBLIC').toLowerCase());
+    setImages(hydrateMediaIntoImages(draft.media, `draft_${draft.id}`));
   }
 
   // Published post edit case (including reposts)
   if (params?.post) {
-    const p = params.post;
+    let p = params.post;
+    // If post object is incomplete (only id), fetch full post
+    if (p && !p.content && p.id) {
+      const fetched = await postApi.getPostById(p.id);
+      if (fetched.success) p = fetched.data;
+    }
     setText(p.content || '');
+    try { console.log('[PostCreation] setText to params.post.content', { time: new Date().toISOString(), text: p.content || '' }); } catch {}
     setVisibility((p.privacy || 'PUBLIC').toLowerCase());
-    let rawMedia = p.media;
-    if (typeof rawMedia === 'string') {
-      try { rawMedia = JSON.parse(rawMedia); } catch (e) { rawMedia = []; }
-    }
-    if (Array.isArray(rawMedia)) {
-      const imgs = rawMedia.map((m, i) => ({
-        id: m.key || m.id || `post_${p.id}_${i}`,
-        uri: m.url || m.signedUrl || (m.key ? postApi.getMediaDisplayUrl(m.key) : null),
-        key: m.key,
-        width: m.width,
-        height: m.height,
-        fileName: m.fileName || `image_${i}.jpg`,
-        mimeType: m.type || m.mediaType || 'image/jpeg',
-      }));
-      setImages(imgs);
-    } else {
-      setImages([]);
-    }
+    setImages(hydrateMediaIntoImages(p.media, `post_${p.id}`));
+    try { console.log('[PostCreation] prefilled from params postId', { time: new Date().toISOString(), postId: p.id }); } catch {}
   }
 };
 
@@ -153,8 +183,68 @@ useFocusEffect(
     // Also attempt to read params again on focus (handles tab navigation param passing)
     console.log('PostCreation useFocusEffect - route.params:', route?.params);
     prefillFromParams(route?.params);
-  }, [route?.params])
+    // If there's no global editingPost and not editing via params, ensure fresh defaults on focus
+    if (!editingPost && !route?.params?.isEditing) {
+      try {
+        console.log('[PostCreation] focus-clearing editor (no editingPost)', { time: new Date().toISOString() });
+      } catch {}
+      setText('');
+      setImages([]);
+      setVisibility('public');
+    }
+  }, [route?.params, editingPost])
 );
+
+// Also react to global editingPost changes (set by PostCard) so prefill runs when context is set after navigation
+useEffect(() => {
+  prefillFromParams(route?.params);
+}, [editingPost]);
+
+// On initial mount, if we're not editing and there's no global editingPost, ensure fresh defaults.
+const initialMountRef = React.useRef(true);
+useEffect(() => {
+  if (!initialMountRef.current) return;
+  initialMountRef.current = false;
+  if (!editingPost && !route?.params?.isEditing) {
+    setText('');
+    setImages([]);
+    setVisibility('public');
+    try { navigation.setParams({ resetToken: undefined }); } catch (e) {}
+  }
+}, []);
+ 
+// Apply editingPost deterministically when id changes using layout effect to avoid paint races.
+const appliedEditingPostIdRef = React.useRef(null);
+React.useLayoutEffect(() => {
+  const id = editingPost?.id || null;
+  if (id && appliedEditingPostIdRef.current !== id) {
+    try { console.log('[PostCreation] layout-applying editingPost', { time: new Date().toISOString(), postId: id }); } catch {}
+    setText(editingPost.content || '');
+    setVisibility((editingPost.privacy || 'PUBLIC').toLowerCase());
+    setImages(hydrateMediaIntoImages(editingPost.media || editingPost.mediaUrls || [], `post_${id}`));
+    appliedEditingPostIdRef.current = id;
+  }
+  if (!editingPost) {
+    appliedEditingPostIdRef.current = null;
+  }
+}, [editingPost]);
+
+// Debug render state for visibility issues
+try {
+  console.log('[PostCreation] RENDER DEBUG', {
+    time: new Date().toISOString(),
+    editingPostId: editingPost?.id || null,
+    appliedEditingPostId: appliedEditingPostIdRef.current,
+    textPreview: (text || '').slice(0, 50),
+    imagesCount: images.length,
+  });
+} catch (e) {}
+ 
+
+// Log text state changes for debugging
+useEffect(() => {
+  try { console.log('[PostCreation] text state changed', { time: new Date().toISOString(), text: text }); } catch (e) {}
+}, [text]);
 
   const pickImages = async () => {
     if (images.length >= 5) {
@@ -234,10 +324,16 @@ useFocusEffect(
     setLoading(true);
     try {
       // Prepare post data
+      // Include existing uploaded media (images with a key) so updatePostWithMedia preserves or removes correctly.
+      const existingMedia = images
+        .filter(img => img.key)
+        .map(m => ({ key: m.key, type: m.mimeType?.startsWith('image') ? 'image' : 'video', fileName: m.fileName }));
+
       const postData = {
         content: text.trim(),
         topicNames: extractHashtags(text), // Extract hashtags from text
         privacy: visibility.toUpperCase(),
+        media: existingMedia.length > 0 ? existingMedia : undefined
       };
 
       // Prepare media files for upload
@@ -262,18 +358,21 @@ useFocusEffect(
         setUploadProgress(`Uploading ${selectedFiles.length} image${selectedFiles.length > 1 ? 's' : ''}...`);
       }
 
-      // If editing an existing post (published, repost, or draft), update instead of creating
+      // If editing an existing post (published, repost, or draft), prefer global editingPost
       let result;
-      if (route?.params?.isEditing) {
+      const isEditing = !!editingPost || !!route?.params?.isEditing;
+      if (isEditing) {
+        const target = editingPost || route?.params;
         // If editing a draft and user clicks Post -> publish the draft
-        if (route?.params?.draftPost?.id) {
+        const targetIsDraft = (editingPost && editingPost.status === 'DRAFT') || (route?.params?.draftPost?.id);
+        if (targetIsDraft && (editingPost?.id || route?.params?.draftPost?.id)) {
           postData.status = 'PUBLISHED';
-          result = await postApi.updatePostWithMedia(route.params.draftPost.id, postData, selectedFiles);
-        } else if (route?.params?.post?.id) {
-          // Editing a published post or repost - update existing
-          result = await postApi.updatePostWithMedia(route.params.post.id, postData, selectedFiles);
+          const id = editingPost?.id || route.params.draftPost.id;
+          result = await postApi.updatePostWithMedia(id, postData, selectedFiles);
+        } else if (editingPost?.id || route?.params?.post?.id) {
+          const id = editingPost?.id || route.params.post.id;
+          result = await postApi.updatePostWithMedia(id, postData, selectedFiles);
         } else {
-          // Fallback - create new
           result = await postApi.createPostWithMedia(postData, selectedFiles);
         }
       } else {
@@ -286,11 +385,17 @@ useFocusEffect(
       if (result.success) {
         setUploadProgress('Post published successfully!');
 
-        // Clean up memory
+        // Clean up memory and force route params reset so next open is fresh
         setText('');
         setImages([]);
         setVisibility('public');
         showSuccess('Your post has been published successfully!');
+        // Clear global edit state
+        try { clearEditingPost(); } catch (e) {}
+        try {
+          // Ensure the MainTabs AddPostTab params are cleared
+          navigation.navigate('MainTabs', { screen: 'AddPostTab', params: { isEditing: false, post: null, draftPost: null, resetToken: Date.now() } });
+        } catch (e) {}
         navigation.goBack();
       } else {
         const errorMessage = result.message || 'Failed to publish your post';
@@ -324,11 +429,16 @@ useFocusEffect(
 
     setLoading(true);
     try {
+      const existingMedia = images
+        .filter(img => img.key)
+        .map(m => ({ key: m.key, type: m.mimeType?.startsWith('image') ? 'image' : 'video', fileName: m.fileName }));
+
       const postData = {
         content: text.trim(),
         topicNames: extractHashtags(text),
         privacy: visibility.toUpperCase(),
-        status: 'DRAFT'
+        status: 'DRAFT',
+        media: existingMedia.length > 0 ? existingMedia : undefined
       };
 
       const selectedFiles = images.map((image, index) => ({
@@ -340,16 +450,16 @@ useFocusEffect(
         height: image.height,
         caption: '',
       }));
+      // Prefer global editingPost when available
       let result;
-      if (route?.params?.isEditing) {
-        // If editing a draft
+      if (editingPost?.id) {
+        result = await postApi.updatePostWithMedia(editingPost.id, postData, selectedFiles);
+      } else if (route?.params?.isEditing) {
         if (route?.params?.draftPost?.id) {
           result = await postApi.updatePostWithMedia(route.params.draftPost.id, postData, selectedFiles);
         } else if (route?.params?.post?.id) {
-          // Editing a published post (or repost)
           result = await postApi.updatePostWithMedia(route.params.post.id, postData, selectedFiles);
         } else {
-          // Fallback to create
           result = await postApi.createPostWithMedia(postData, selectedFiles);
         }
       } else {
@@ -361,6 +471,10 @@ useFocusEffect(
         setImages([]);
         setVisibility('public');
         showSuccess('Draft saved successfully');
+        try { clearEditingPost(); } catch (e) {}
+        try {
+          navigation.navigate('MainTabs', { screen: 'AddPostTab', params: { isEditing: false, post: null, draftPost: null, resetToken: Date.now() } });
+        } catch (e) {}
         // If a proceed action was provided, call it (navigate)
         if (proceedActionRef.current) {
           navigation.dispatch(proceedActionRef.current);

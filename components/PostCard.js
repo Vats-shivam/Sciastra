@@ -18,7 +18,8 @@ import {
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
 import colors from "../config/colors";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, CommonActions } from "@react-navigation/native";
+import { useEditPost } from '../contexts/EditPostContext';
 import postApi from "../api/PostApi";
 import profileApi from "../api/ProfileApi";
 import authApi from "../api/AuthApi";
@@ -46,6 +47,7 @@ const PostCard = memo(({ post, onPostDeleted }) => {
 
   const navigation = useNavigation();
   const { showError, showSuccess } = useNotification();
+  const { setEditingPost } = useEditPost();
   const { updatePostReaction, removePostsByAuthor } = useFeedRefresh() || {};
   const [showFullDescription, setShowFullDescription] = useState(false);
   const [userReaction, setUserReaction] = useState(post?.userReaction || null); // Track the current user's reaction
@@ -597,7 +599,13 @@ const PostCard = memo(({ post, onPostDeleted }) => {
                       onPress={() => {
                         setShowOptionsMenu(false);
                         // Edit draft - open PostCreation via AddPostTab with draftPost
-                        navigation.navigate('AddPostTab', { isEditing: true, draftPost: post });
+                        try {
+                          console.log('[PostCard] before setEditingPost', { time: new Date().toISOString(), postId: post.id, navFocused: navigation.isFocused && navigation.isFocused() });
+                          setEditingPost(post);
+                          console.log('[PostCard] after setEditingPost', { time: new Date().toISOString(), postId: post.id });
+                        } catch (e) { console.error('setEditingPost error', e); }
+                        console.log('[PostCard] navigating to AddPostTab', { time: new Date().toISOString(), postId: post.id });
+                        navigation.dispatch(CommonActions.navigate({ name: 'AddPostTab' }));
                       }}
                     >
                       <Text style={styles.optionText}>Edit Draft</Text>
@@ -673,7 +681,13 @@ const PostCard = memo(({ post, onPostDeleted }) => {
                       onPress={() => {
                         setShowOptionsMenu(false);
                         // Navigate to the AddPost tab (contains PostCreation) to edit this post
-                        navigation.navigate('AddPostTab', { isEditing: true, post });
+                        try {
+                          console.log('[PostCard] before setEditingPost (Edit Post)', { time: new Date().toISOString(), postId: post.id, navFocused: navigation.isFocused && navigation.isFocused() });
+                          setEditingPost(post);
+                          console.log('[PostCard] after setEditingPost (Edit Post)', { time: new Date().toISOString(), postId: post.id });
+                        } catch (e) { console.error('setEditingPost error', e); }
+                        console.log('[PostCard] navigating to AddPostTab (Edit Post)', { time: new Date().toISOString(), postId: post.id });
+                        navigation.dispatch(CommonActions.navigate({ name: 'AddPostTab' }));
                       }}
                     >
                       <Text style={styles.optionText}>Edit Post</Text>

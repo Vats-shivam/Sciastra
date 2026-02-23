@@ -352,7 +352,7 @@ const UserProfileScreen = ({ navigation, route }) => {
           });
         } else {
           console.error('Failed to create/get chat room:', chatResult.message);
-          showError('Failed to start chat. Please try again.');
+          showError(chatResult.message || 'Failed to start chat. Please try again.');
         }
       } catch (error) {
         console.error('Error starting chat:', error);

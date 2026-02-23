@@ -2,6 +2,7 @@ import React, { useEffect } from "react";
 import AuthNavigator from "./navigation/AuthNavigator";
 import { LoaderProvider } from "./context/LoaderContext";
 import { NotificationProvider } from "./contexts/NotificationContext";
+import { EditPostProvider } from "./contexts/EditPostContext";
 import { initializeNetworkConfig } from "./api/NetworkConfig";
 
 export default function App() {
@@ -13,7 +14,9 @@ export default function App() {
   return (
     <LoaderProvider>
       <NotificationProvider>
-        <AuthNavigator />
+        <EditPostProvider>
+          <AuthNavigator />
+        </EditPostProvider>
       </NotificationProvider>
     </LoaderProvider>
   );
