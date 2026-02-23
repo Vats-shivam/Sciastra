@@ -5,6 +5,7 @@ import {
   TextInput,
   StyleSheet,
   Image,
+  Animated,
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
@@ -13,6 +14,8 @@ import {
   Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRoute, CommonActions, useFocusEffect } from '@react-navigation/native';
+import { BackHandler } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import colors from '../config/colors';
@@ -82,6 +85,76 @@ const PostCreationScreen = ({ navigation }) => {
 
     loadUserInfo();
   }, []);
+
+// Prefill when editing (draft or published). Also re-run on focus to catch params passed via tab navigation.
+const prefillFromParams = (params) => {
+  if (!params?.isEditing) return;
+  console.log('PostCreation prefillFromParams called with params:', params);
+
+  // Draft edit case
+  if (params?.draftPost) {
+    const draft = params.draftPost;
+    setText(draft.content || '');
+    setVisibility((draft.privacy || 'PUBLIC').toLowerCase());
+    // Support media as array or JSON string
+    let rawMedia = draft.media;
+    if (typeof rawMedia === 'string') {
+      try { rawMedia = JSON.parse(rawMedia); } catch (e) { rawMedia = []; }
+    }
+    if (Array.isArray(rawMedia)) {
+      const imgs = rawMedia.map((m, i) => ({
+        id: m.key || m.id || `draft_${draft.id}_${i}`,
+        uri: m.url || m.signedUrl || (m.key ? postApi.getMediaDisplayUrl(m.key) : null),
+        key: m.key,
+        width: m.width,
+        height: m.height,
+        fileName: m.fileName || `image_${i}.jpg`,
+        mimeType: m.type || m.mediaType || 'image/jpeg',
+      }));
+      setImages(imgs);
+    } else {
+      setImages([]);
+    }
+  }
+
+  // Published post edit case (including reposts)
+  if (params?.post) {
+    const p = params.post;
+    setText(p.content || '');
+    setVisibility((p.privacy || 'PUBLIC').toLowerCase());
+    let rawMedia = p.media;
+    if (typeof rawMedia === 'string') {
+      try { rawMedia = JSON.parse(rawMedia); } catch (e) { rawMedia = []; }
+    }
+    if (Array.isArray(rawMedia)) {
+      const imgs = rawMedia.map((m, i) => ({
+        id: m.key || m.id || `post_${p.id}_${i}`,
+        uri: m.url || m.signedUrl || (m.key ? postApi.getMediaDisplayUrl(m.key) : null),
+        key: m.key,
+        width: m.width,
+        height: m.height,
+        fileName: m.fileName || `image_${i}.jpg`,
+        mimeType: m.type || m.mediaType || 'image/jpeg',
+      }));
+      setImages(imgs);
+    } else {
+      setImages([]);
+    }
+  }
+};
+
+useEffect(() => {
+  console.log('PostCreation route.params changed:', route?.params);
+  prefillFromParams(route?.params);
+}, [route?.params]);
+
+useFocusEffect(
+  React.useCallback(() => {
+    // Also attempt to read params again on focus (handles tab navigation param passing)
+    console.log('PostCreation useFocusEffect - route.params:', route?.params);
+    prefillFromParams(route?.params);
+  }, [route?.params])
+);
 
   const pickImages = async () => {
     if (images.length >= 5) {
@@ -189,8 +262,24 @@ const PostCreationScreen = ({ navigation }) => {
         setUploadProgress(`Uploading ${selectedFiles.length} image${selectedFiles.length > 1 ? 's' : ''}...`);
       }
 
-      // Create post with media using the new API
-      const result = await postApi.createPostWithMedia(postData, selectedFiles);
+      // If editing an existing post (published, repost, or draft), update instead of creating
+      let result;
+      if (route?.params?.isEditing) {
+        // If editing a draft and user clicks Post -> publish the draft
+        if (route?.params?.draftPost?.id) {
+          postData.status = 'PUBLISHED';
+          result = await postApi.updatePostWithMedia(route.params.draftPost.id, postData, selectedFiles);
+        } else if (route?.params?.post?.id) {
+          // Editing a published post or repost - update existing
+          result = await postApi.updatePostWithMedia(route.params.post.id, postData, selectedFiles);
+        } else {
+          // Fallback - create new
+          result = await postApi.createPostWithMedia(postData, selectedFiles);
+        }
+      } else {
+        // Create post with media using the new API
+        result = await postApi.createPostWithMedia(postData, selectedFiles);
+      }
 
       setUploadProgress('Creating post...');
 
@@ -227,6 +316,219 @@ const PostCreationScreen = ({ navigation }) => {
     }
   };
 
+  const handleSaveDraft = async () => {
+    if (!text.trim() && images.length === 0) {
+      showWarning('Please write something or add an image to save as draft.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const postData = {
+        content: text.trim(),
+        topicNames: extractHashtags(text),
+        privacy: visibility.toUpperCase(),
+        status: 'DRAFT'
+      };
+
+      const selectedFiles = images.map((image, index) => ({
+        uri: image.uri,
+        fileName: image.fileName || `image_${Date.now()}_${index}.jpg`,
+        contentType: image.mimeType || 'image/jpeg',
+        size: image.fileSize || 1024000,
+        width: image.width,
+        height: image.height,
+        caption: '',
+      }));
+      let result;
+      if (route?.params?.isEditing) {
+        // If editing a draft
+        if (route?.params?.draftPost?.id) {
+          result = await postApi.updatePostWithMedia(route.params.draftPost.id, postData, selectedFiles);
+        } else if (route?.params?.post?.id) {
+          // Editing a published post (or repost)
+          result = await postApi.updatePostWithMedia(route.params.post.id, postData, selectedFiles);
+        } else {
+          // Fallback to create
+          result = await postApi.createPostWithMedia(postData, selectedFiles);
+        }
+      } else {
+        result = await postApi.createPostWithMedia(postData, selectedFiles);
+      }
+
+      if (result.success) {
+        setText('');
+        setImages([]);
+        setVisibility('public');
+        showSuccess('Draft saved successfully');
+        // If a proceed action was provided, call it (navigate)
+        if (proceedActionRef.current) {
+          navigation.dispatch(proceedActionRef.current);
+          proceedActionRef.current = null;
+        } else {
+          navigation.goBack();
+        }
+      } else {
+        showError(result.message || 'Failed to save draft. Please try again.');
+      }
+    } catch (error) {
+      console.error('Save draft error:', error);
+      showError('Failed to save draft. Please try again.');
+    } finally {
+      setLoading(false);
+      setShowUnsavedModal(false);
+    }
+  };
+
+  // Reference to store pending navigation action from beforeRemove listener
+  const proceedActionRef = React.useRef(null);
+
+  // Unsaved changes modal state
+  const [showUnsavedModal, setShowUnsavedModal] = useState(false);
+  const scaleAnim = React.useRef(new Animated.Value(0.8)).current;
+
+  useEffect(() => {
+    if (showUnsavedModal) {
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        friction: 8,
+        useNativeDriver: true,
+      }).start();
+    } else {
+      Animated.timing(scaleAnim, {
+        toValue: 0.8,
+        duration: 120,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [showUnsavedModal]);
+
+  // Register navigation blocker to prompt when user navigates away with content
+  useEffect(() => {
+    const handler = (e) => {
+      console.log('beforeRemove handler fired, checking unsaved content');
+      // If no content, don't block
+      const hasContent = (text && text.trim().length > 0) || (images && images.length > 0);
+      console.log('hasContent:', hasContent);
+      if (!hasContent) return;
+
+      // Prevent default behavior of leaving the screen
+      e.preventDefault();
+
+      // Save the pending action so we can dispatch it after user choice
+      proceedActionRef.current = e.data.action;
+      setShowUnsavedModal(true);
+    };
+
+    const unsubscribe = navigation.addListener('beforeRemove', handler);
+
+    // Hardware back (Android) - intercept to show modal
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      const hasContent = (text && text.trim().length > 0) || (images && images.length > 0);
+      if (!hasContent) return false; // allow default back behavior
+      // store goBack action and show modal
+      proceedActionRef.current = CommonActions.goBack();
+      setShowUnsavedModal(true);
+      return true; // prevent default
+    });
+
+    // Parent/tab navigator press - walk up ancestor chain and attach listeners (multiple navigator nesting)
+    const tabUnsubs = [];
+    let parent = navigation.getParent();
+    let depth = 0;
+    while (parent && depth < 4) {
+      try {
+        const unsub = parent.addListener('tabPress', (e) => {
+          console.log('tabPress received at ancestor depth', depth, 'target:', e?.target);
+          // Only intercept if this screen is currently focused
+          if (!navigation.isFocused()) return;
+          const hasContent = (text && text.trim().length > 0) || (images && images.length > 0);
+          console.log('tabPress hasContent:', hasContent);
+          if (!hasContent) return;
+          // Prevent tab switch
+          e.preventDefault();
+          // Store navigation action to perform later (navigate by key if available)
+          proceedActionRef.current = CommonActions.navigate({ key: e.target });
+          setShowUnsavedModal(true);
+        });
+        tabUnsubs.push(unsub);
+      } catch (err) {
+        // ignore
+      }
+      parent = parent.getParent ? parent.getParent() : null;
+      depth++;
+    }
+
+    return () => {
+      if (typeof unsubscribe === 'function') unsubscribe();
+      backHandler.remove();
+      if (tabUnsubs && tabUnsubs.length) {
+        tabUnsubs.forEach((u) => { if (typeof u === 'function') u(); });
+      }
+    };
+    // Intentionally include text/images so handler sees latest content
+  }, [navigation, text, images]);
+
+  // Helper to attempt navigation (used for header back)
+  const attemptNavigateAway = (action = CommonActions.goBack()) => {
+    const hasContent = (text && text.trim().length > 0) || (images && images.length > 0);
+    if (!hasContent) {
+      navigation.dispatch(action);
+      return;
+    }
+    proceedActionRef.current = action;
+    setShowUnsavedModal(true);
+  };
+
+  // Prevent tab switches / focus loss by re-focusing when there is unsaved content.
+  const route = useRoute();
+  const reFocusSuppressRef = React.useRef(false);
+  useEffect(() => {
+    const onBlur = () => {
+      // If user already chose an action, allow navigation
+      if (proceedActionRef.current) return;
+
+      const hasContent = (text && text.trim().length > 0) || (images && images.length > 0);
+      if (!hasContent) return;
+
+      if (reFocusSuppressRef.current) return;
+
+      // Show modal and re-focus this screen to prevent the switch
+      setShowUnsavedModal(true);
+
+      // Re-focus by navigating to this route again (works for tab/navigate)
+      reFocusSuppressRef.current = true;
+      navigation.dispatch(CommonActions.navigate({ name: route?.name }));
+      // reset suppress after short delay
+      setTimeout(() => { reFocusSuppressRef.current = false; }, 300);
+    };
+
+    const unsub = navigation.addListener('blur', onBlur);
+    return () => {
+      if (typeof unsub === 'function') unsub();
+    };
+  }, [navigation, route.name, text, images]);
+
+  const handleConfirmDelete = () => {
+    // Clear draft content and proceed with navigation
+    setText('');
+    setImages([]);
+    setVisibility('public');
+    setShowUnsavedModal(false);
+    showSuccess('Draft discarded');
+    if (proceedActionRef.current) {
+      navigation.dispatch(proceedActionRef.current);
+      proceedActionRef.current = null;
+    } else {
+      navigation.goBack();
+    }
+  };
+
+  const handleConfirmSave = async () => {
+    // Save draft and then proceed (handleSaveDraft handles proceedActionRef)
+    await handleSaveDraft();
+  };
+
   // Helper function to extract hashtags from text
   const extractHashtags = (text) => {
     const hashtags = text.match(/#\w+/g);
@@ -240,7 +542,7 @@ const PostCreationScreen = ({ navigation }) => {
       <Header 
         title="CREATE POST"
         showBackButton={true}
-        onBackPress={() => navigation.goBack()}
+        onBackPress={() => attemptNavigateAway()}
       />
       
       {/* Custom Post Button - use View when loading to avoid TouchableOpacity disabled opacity */}
@@ -269,6 +571,15 @@ const PostCreationScreen = ({ navigation }) => {
               styles.postButtonText,
               (!text.trim() && images.length === 0) && styles.postButtonTextDisabled
             ]}>Post</Text>
+          </TouchableOpacity>
+        )}
+        {!loading && (
+          <TouchableOpacity
+            style={[styles.saveDraftButton]}
+            onPress={handleSaveDraft}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.saveDraftButtonText}>Save Draft</Text>
           </TouchableOpacity>
         )}
 
@@ -451,6 +762,35 @@ const PostCreationScreen = ({ navigation }) => {
             </View>
           </TouchableOpacity>
         </Modal>
+        {/* Unsaved changes modal */}
+        <Modal
+          visible={showUnsavedModal}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowUnsavedModal(false)}
+        >
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setShowUnsavedModal(false)}
+          >
+            <Animated.View style={[styles.unsavedModal, { transform: [{ scale: scaleAnim }]}]}>
+              <View style={styles.modalIconWrap}>
+                <Icon name="content-save" size={36} color="#f08b3a" />
+              </View>
+              <Text style={styles.modalTitle}>Save to drafts?</Text>
+              <Text style={styles.modalDesc}>Save to drafts to edit and post at a later time.</Text>
+
+              <TouchableOpacity style={styles.savePrimaryButton} onPress={handleConfirmSave} activeOpacity={0.8}>
+                <Text style={styles.savePrimaryText}>Save</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.deleteButton} onPress={handleConfirmDelete} activeOpacity={0.8}>
+                <Text style={styles.deleteButtonText}>Delete</Text>
+              </TouchableOpacity>
+            </Animated.View>
+          </TouchableOpacity>
+        </Modal>
     </View>
   );
 };
@@ -500,6 +840,78 @@ const styles = StyleSheet.create({
   },
   postButtonTextDisabled: {
     color: colors.textMuted,
+  },
+  saveDraftButton: {
+    marginTop: 8,
+    backgroundColor: colors.card,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+  },
+  saveDraftButtonText: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    fontFamily: 'Gilroy-SemiBold',
+  },
+  unsavedModal: {
+    backgroundColor: colors.card,
+    borderRadius: 16,
+    marginHorizontal: 28,
+    padding: 20,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  modalIconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#fff7ef',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  modalIcon: {
+    width: 36,
+    height: 36,
+    resizeMode: 'contain'
+  },
+  modalDesc: {
+    color: colors.textMuted,
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  savePrimaryButton: {
+    backgroundColor: colors.button,
+    paddingVertical: 12,
+    paddingHorizontal: 36,
+    borderRadius: 12,
+    width: '100%',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  savePrimaryText: {
+    color: '#fff',
+    fontSize: 16,
+    fontFamily: 'Gilroy-SemiBold',
+  },
+  deleteButton: {
+    borderWidth: 1,
+    borderColor: '#e74c3c',
+    paddingVertical: 12,
+    paddingHorizontal: 36,
+    borderRadius: 12,
+    width: '100%',
+    alignItems: 'center',
+  },
+  deleteButtonText: {
+    color: '#e74c3c',
+    fontSize: 16,
+    fontFamily: 'Gilroy-SemiBold',
   },
   postingText: {
     color: '#FFFFFF',
@@ -691,8 +1103,9 @@ const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.7)',
-    justifyContent: 'flex-end',
-    padding: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
   },
   visibilityModal: {
     backgroundColor: colors.card,

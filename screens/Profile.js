@@ -7,7 +7,8 @@ import authManager from '../services/AuthManager';
 import postApi from '../api/PostApi';
 import PostCard from '../components/PostCard';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
-import { Modal, Pressable } from 'react-native';
+import { Modal, Pressable, Linking } from 'react-native';
+import { PRIVACY_POLICY_URL, TERMS_AND_CONDITIONS_URL } from '../config/legalConfig';
 import Header from '../components/Header';
 import { useLoader } from "../context/LoaderContext";
 import ConnectionApi from '../api/ConnectionApi';
@@ -24,6 +25,7 @@ const ProfileScreen = ({ navigation }) => {
   const { registerUpdatePostReaction } = useFeedRefresh() || {};
   const [user, setUser] = useState(null);
   const [posts, setPosts] = useState([]);
+  const [drafts, setDrafts] = useState([]);
   const [menuVisible, setMenuVisible] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -84,6 +86,19 @@ const ProfileScreen = ({ navigation }) => {
   useEffect(() => {
     initializeProfile();
   }, []);
+
+  // Helper: strip resolved profilePic URLs before sending update to backend
+  const sanitizeProfileUpdate = (updateData) => {
+    const copy = { ...updateData };
+    if (copy.profilePic && typeof copy.profilePic === 'string' && copy.profilePic.startsWith('http')) {
+      // frontend often stores resolved URL; backend expects S3 key when updating profilePic.
+      delete copy.profilePic;
+    }
+    if (copy.profileImageUrl && typeof copy.profileImageUrl === 'string' && copy.profileImageUrl.startsWith('http')) {
+      delete copy.profileImageUrl;
+    }
+    return copy;
+  };
 
   // Reload data when screen comes into focus (e.g., after editing profile)
   useFocusEffect(
@@ -260,6 +275,27 @@ const ProfileScreen = ({ navigation }) => {
             });
             
             setPosts(sortedPosts);
+            // Load drafts for current user
+            try {
+              const draftsResult = await postApi.getUserDrafts(userId, 1, 50);
+              if (draftsResult.success) {
+                // Ensure media URLs are processed so images render in drafts list
+                try {
+                  const rawDrafts = draftsResult.data?.posts || draftsResult.data || [];
+                  const processed = await postApi.processPostsWithMedia(rawDrafts);
+                  // processPostsWithMedia returns an array corresponding to rawDrafts
+                  setDrafts({ posts: processed });
+                } catch (procErr) {
+                  console.error('Drafts media processing failed:', procErr);
+                  setDrafts(draftsResult.data);
+                }
+              } else {
+                setDrafts({ posts: [] });
+              }
+            } catch (err) {
+              console.error('Failed to fetch drafts:', err);
+              setDrafts({ posts: [] });
+            }
           } else {
             console.error('Failed to load user posts:', postsResult.message);
             setPosts([]);
@@ -369,7 +405,7 @@ const ProfileScreen = ({ navigation }) => {
         experiences: updatedExperiences
       };
       
-      const result = await profileApi.updateProfile(updateData);
+      const result = await profileApi.updateProfile(sanitizeProfileUpdate(updateData));
       if (result.success) {
         await loadCurrentUserData();
         setExperienceModalVisible(false);
@@ -454,7 +490,7 @@ const ProfileScreen = ({ navigation }) => {
         education: updatedEducation
       };
       
-      const result = await profileApi.updateProfile(updateData);
+      const result = await profileApi.updateProfile(sanitizeProfileUpdate(updateData));
       if (result.success) {
         await loadCurrentUserData();
         setEducationModalVisible(false);
@@ -494,7 +530,7 @@ const ProfileScreen = ({ navigation }) => {
         topics: updatedTopics
       };
       
-      const result = await profileApi.updateProfile(updateData);
+      const result = await profileApi.updateProfile(sanitizeProfileUpdate(updateData));
       if (result.success) {
         await loadCurrentUserData();
         setTopicModalVisible(false);
@@ -526,7 +562,7 @@ const ProfileScreen = ({ navigation }) => {
         topics: updatedTopics
       };
       
-      const result = await profileApi.updateProfile(updateData);
+      const result = await profileApi.updateProfile(sanitizeProfileUpdate(updateData));
       if (result.success) {
         await loadCurrentUserData();
         setRemoveTopicModalVisible(false);
@@ -555,13 +591,13 @@ const ProfileScreen = ({ navigation }) => {
 
     setModalLoading(true);
     try {
-      const updatedTopics = [...(user.skills || []), newSkill.trim()];
+      const updatedSkills = [...(user.skills || []), newSkill.trim()];
       const updateData = {
         ...user.rawData,
-        topics: updatedTopics
+        skills: updatedSkills
       };
       
-      const result = await profileApi.updateProfile(updateData);
+      const result = await profileApi.updateProfile(sanitizeProfileUpdate(updateData));
       if (result.success) {
         await loadCurrentUserData();
         setSkillModalVisible(false);
@@ -593,7 +629,7 @@ const ProfileScreen = ({ navigation }) => {
         skills: updatedSkills
       };
       
-      const result = await profileApi.updateProfile(updateData);
+      const result = await profileApi.updateProfile(sanitizeProfileUpdate(updateData));
       if (result.success) {
         await loadCurrentUserData();
         setRemoveSkillModalVisible(false);
@@ -673,7 +709,7 @@ const ProfileScreen = ({ navigation }) => {
         >
           <Pressable style={styles.menuOverlay} onPress={closeMenu}>
             <View style={styles.menuContainer}>
-              <Pressable style={styles.menuItem} onPress={handleEditProfile}>
+            <Pressable style={styles.menuItem} onPress={handleEditProfile}>
                 <Text style={styles.menuText}>Edit Profile</Text>
               </Pressable>
               <Pressable style={styles.menuItem} onPress={handleRegisteredEvents}>
@@ -681,6 +717,23 @@ const ProfileScreen = ({ navigation }) => {
               </Pressable>
               <Pressable style={styles.menuItem} onPress={handleSettings}>
                 <Text style={styles.menuText}>Settings</Text>
+              </Pressable>
+              <Pressable
+                style={styles.menuItem}
+                onPress={() => {
+                  // Open privacy policy in external browser or PDF viewer
+                  Linking.openURL(PRIVACY_POLICY_URL).catch(err => console.error('Failed to open privacy policy URL:', err));
+                }}
+              >
+                <Text style={styles.menuText}>Privacy Policy</Text>
+              </Pressable>
+              <Pressable
+                style={styles.menuItem}
+                onPress={() => {
+                  Linking.openURL(TERMS_AND_CONDITIONS_URL).catch(err => console.error('Failed to open terms URL:', err));
+                }}
+              >
+                <Text style={styles.menuText}>Terms & Conditions</Text>
               </Pressable>
             </View>
           </Pressable>
@@ -731,6 +784,15 @@ const ProfileScreen = ({ navigation }) => {
           >
             <Text style={[styles.tabText, activeTab === 'Posts' && styles.activeTabText]}>Posts</Text>
           </TouchableOpacity>
+          {/* Drafts tab - only for own profile */}
+          {user && String(user.id) === String(authManager.getCurrentUser()?.userId) && (
+            <TouchableOpacity
+              style={[styles.tab, activeTab === 'Drafts' && styles.activeTab]}
+              onPress={() => setActiveTab('Drafts')}
+            >
+              <Text style={[styles.tabText, activeTab === 'Drafts' && styles.activeTabText]}>Drafts</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Tab Content */}
@@ -894,7 +956,7 @@ const ProfileScreen = ({ navigation }) => {
               )}
             </View>
           </View>
-        ) : (
+        ) : activeTab === 'Posts' ? (
           <View style={styles.postsContainer}>
             {posts && Array.isArray(posts) && posts.length > 0 ? posts.map(post => (
               <PostCard key={post.id} post={post} style={styles.postCard} onPostDeleted={handlePostDeleted} />
@@ -906,6 +968,46 @@ const ProfileScreen = ({ navigation }) => {
               </View>
             )}
           </View>
+        ) :  (
+          <ScrollView style={styles.tabContent}>
+            <View style={styles.postsContainer}>
+              {(() => {
+                const arr = drafts?.posts || (Array.isArray(drafts) ? drafts : []);
+                const draftPosts = (arr || []).filter(p => String(p.status || '').toUpperCase() === 'DRAFT');
+                if (draftPosts.length === 0) {
+                  return (
+                    <View style={styles.emptyStateContainer}>
+                      <Icon name="file-document-outline" size={48} color={colors.textMuted} />
+                      <Text style={styles.emptyText}>No drafts yet</Text>
+                      <Text style={styles.emptySubText}>Drafts you save will appear here</Text>
+                    </View>
+                  );
+                }
+
+                return draftPosts.map(post => (
+                  <PostCard
+                    key={post.id}
+                    post={post}
+                    style={styles.postCard}
+                    onPostDeleted={() => {
+                      setDrafts(prev => {
+                        const arrInner = prev?.posts || [];
+                        return { ...prev, posts: arrInner.filter(p => p.id !== post.id) };
+                      });
+                    }}
+                    onPublishSuccess={(publishedPost) => {
+                      // Add published post to posts list and remove draft
+                      setPosts(prev => [publishedPost, ...(prev || [])]);
+                      setDrafts(prev => {
+                        const arrInner = prev?.posts || [];
+                        return { ...prev, posts: arrInner.filter(p => p.id !== post.id) };
+                      });
+                    }}
+                  />
+                ));
+              })()}
+            </View>
+          </ScrollView>
         )}
       </ScrollView>
 

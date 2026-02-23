@@ -7,6 +7,7 @@ import authManager from '../services/AuthManager';
 import { useNotification } from '../contexts/NotificationContext';
 import Header from '../components/Header';
 import useScreenApiLogger from '../hooks/useScreenApiLogger';
+import profileApi from '../api/ProfileApi';
 
 const SettingsScreen = ({ navigation }) => {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
@@ -14,6 +15,7 @@ const SettingsScreen = ({ navigation }) => {
   const [contactModalVisible, setContactModalVisible] = useState(false);
   const [contactModalType, setContactModalType] = useState('about');
   const [languageModalVisible, setLanguageModalVisible] = useState(false);
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const { showError, showSuccess } = useNotification();
 
   useScreenApiLogger('Settings');
@@ -72,6 +74,21 @@ const SettingsScreen = ({ navigation }) => {
               </View>
               <Icon name="chevron-right" size={24} color={colors.textMuted} />
             </TouchableOpacity>
+          
+          <View style={styles.divider} />
+
+          <TouchableOpacity
+            style={styles.settingRow}
+            onPress={() => setDeleteModalVisible(true)}
+          >
+            <View style={styles.settingLeft}>
+              <View style={[styles.iconContainer, { backgroundColor: colors.error }]}>
+                <Icon name="delete" size={22} color={colors.white} />
+              </View>
+              <Text style={[styles.settingLabel, { color: colors.error }]}>Delete Account</Text>
+            </View>
+            <Icon name="chevron-right" size={24} color={colors.textMuted} />
+          </TouchableOpacity>
           </View>
         </View>
 
@@ -191,6 +208,58 @@ const SettingsScreen = ({ navigation }) => {
                 onPress={confirmLogout}
               >
                 <Text style={styles.confirmModalButtonText}>Logout</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Delete Account Confirmation Modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={deleteModalVisible}
+        onRequestClose={() => setDeleteModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalIconContainer}>
+              <Icon name="alert-circle" size={48} color={colors.error} />
+            </View>
+            
+            <Text style={styles.modalTitle}>Delete Account</Text>
+            <Text style={styles.modalMessage}>
+              This action is irreversible. All your posts, media, connections and account data will be permanently deleted. Are you sure you want to continue?
+            </Text>
+            
+            <View style={styles.modalButtons}>
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.cancelModalButton]}
+                onPress={() => setDeleteModalVisible(false)}
+              >
+                <Text style={styles.cancelModalButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.confirmModalButton]}
+                onPress={async () => {
+                  setDeleteModalVisible(false);
+                  try {
+                    const res = await profileApi.deleteAccount();
+                    if (res.success) {
+                      await authManager.logout();
+                      showSuccess('Account deleted successfully');
+                      navigation.reset && navigation.reset({ index: 0, routes: [{ name: 'Welcome' }] });
+                    } else {
+                      showError(res.message || 'Failed to delete account');
+                    }
+                  } catch (error) {
+                    console.error('Delete account error:', error);
+                    showError('Failed to delete account. Please try again.');
+                  }
+                }}
+              >
+                <Text style={styles.confirmModalButtonText}>Delete</Text>
               </TouchableOpacity>
             </View>
           </View>

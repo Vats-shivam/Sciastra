@@ -18,6 +18,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import LottieView from 'lottie-react-native';
 import colors from '../config/colors';
 import useScreenApiLogger from '../hooks/useScreenApiLogger';
+import { Linking } from 'react-native';
+import { PRIVACY_POLICY_URL, TERMS_AND_CONDITIONS_URL } from '../config/legalConfig';
 
 const { width, height } = Dimensions.get('window');
 
@@ -236,7 +238,14 @@ const OnboardingScreen = ({ navigation }) => {
             
             <View style={styles.termsContainer}>
               <Text style={styles.termsText}>
-                By continuing, you agree to our Terms of Service and Privacy Policy
+                By continuing, you agree to our{' '}
+                <Text style={styles.linkText} onPress={() => Linking.openURL(TERMS_AND_CONDITIONS_URL)}>
+                  Terms of Service
+                </Text>{' '}
+                and{' '}
+                <Text style={styles.linkText} onPress={() => Linking.openURL(PRIVACY_POLICY_URL)}>
+                  Privacy Policy
+                </Text>.
               </Text>
             </View>
           </Animated.View>
@@ -477,6 +486,10 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.6)',
     fontSize: 12,
     textAlign: 'center',
+  },
+  linkText: {
+    color: '#9ecbff',
+    textDecorationLine: 'underline',
   },
 });
 

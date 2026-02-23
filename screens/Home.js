@@ -44,6 +44,7 @@ const HomeScreen = () => {
   const route = useRoute();
   const { showLoader, hideLoader } = useLoader();
   const { registerUpdatePostReaction } = useFeedRefresh() || {};
+  const { registerRemovePostsByAuthor } = useFeedRefresh() || {};
   const [searching, setSearching] = useState(false);
   const [searchText, setSearchText] = useState("");
   const [searchLoading, setSearchLoading] = useState(false);
@@ -196,6 +197,15 @@ const HomeScreen = () => {
   useEffect(() => {
     return registerUpdatePostReaction?.(updatePostReactionInFeed);
   }, [registerUpdatePostReaction, updatePostReactionInFeed]);
+
+  // Register removal callback to instantly remove posts from feed when a user blocks another user
+  useEffect(() => {
+    const removePostsByAuthor = (authorId) => {
+      setFeedPosts((prev) => prev.filter((p) => String(p?.author?.id || p?.authorId) !== String(authorId)));
+      setSearchResultsPosts((prev) => prev.filter((p) => String(p?.author?.id || p?.authorId) !== String(authorId)));
+    };
+    return registerRemovePostsByAuthor?.(removePostsByAuthor);
+  }, [registerRemovePostsByAuthor]);
 
   const handleLoadMore = useCallback(() => {
     if (loadingMoreRef.current || loadingMore || !hasMore) return;

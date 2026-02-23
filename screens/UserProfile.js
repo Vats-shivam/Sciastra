@@ -20,7 +20,7 @@ import { ProfileSkeleton } from '../components/skeletons';
 
 const UserProfileScreen = ({ navigation, route }) => {
   const { userId, isOnline: initialOnlineStatus } = route.params || {};
-  const { registerUpdatePostReaction } = useFeedRefresh() || {};
+  const { registerUpdatePostReaction, removePostsByAuthor } = useFeedRefresh() || {};
   const [user, setUser] = useState(null);
   const [posts, setPosts] = useState([]);
   const [connectionStatus, setConnectionStatus] = useState('unknown');
@@ -917,6 +917,66 @@ const UserProfileScreen = ({ navigation, route }) => {
               }}
             >
               <Text style={[styles.optionText, styles.reportOptionTextMenu]}>Report User</Text>
+            </TouchableOpacity>
+            <View style={styles.optionDivider} />
+            <TouchableOpacity
+              style={styles.optionItem}
+              onPress={() => {
+                setShowOptionsMenu(false);
+                Alert.alert(
+                  'Block User',
+                  `Are you sure you want to block ${user?.name || 'this user'}? Their posts will be removed from your feed and a report will be sent for review.`,
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: 'Block',
+                      style: 'destructive',
+                      onPress: async () => {
+                        try {
+                          const targetId = userId;
+                          const res = await ProfileApi.blockUser(targetId);
+                          if (res.success) {
+                            showSuccess('User blocked. Their posts have been removed from your feed.');
+                            try {
+                              removePostsByAuthor && removePostsByAuthor(targetId);
+                            } catch (e) { console.error('removePostsByAuthor error', e); }
+                          } else {
+                            showError(res.message || 'Failed to block user');
+                          }
+                        } catch (err) {
+                          console.error('Block user error:', err);
+                          showError('Failed to block user. Please try again.');
+                        }
+                      }
+                    }
+                  ]
+                );
+              }}
+            >
+              <Text style={[styles.optionText, { color: colors.error }]}>Block User</Text>
+            </TouchableOpacity>
+            <View style={styles.optionDivider} />
+            <TouchableOpacity
+              style={styles.optionItem}
+              onPress={async () => {
+                setShowOptionsMenu(false);
+                try {
+                  const targetId = userId;
+                  const res = await ProfileApi.unblockUser(targetId);
+                  if (res.success) {
+                    showSuccess('User unblocked');
+                    // Invalidate/refresh feed to allow their posts to reappear
+                    try { await loadUserData(); } catch {}
+                  } else {
+                    showError(res.message || 'Failed to unblock user');
+                  }
+                } catch (err) {
+                  console.error('Unblock user error:', err);
+                  showError('Failed to unblock user. Please try again.');
+                }
+              }}
+            >
+              <Text style={[styles.optionText, { color: colors.primary }]}>Unblock User</Text>
             </TouchableOpacity>
           </Pressable>
         </Pressable>

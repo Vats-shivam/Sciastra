@@ -42,6 +42,10 @@ const REACTIONS = [
 ];
 
 const { width: screenWidth } = Dimensions.get("window");
+// Card layout constants (match postCard margin/padding)
+const CARD_HORIZONTAL_MARGIN = 16; // margin on postCard container
+const CARD_HORIZONTAL_PADDING = 24; // padding inside postCard
+const CONTENT_MAX_WIDTH = screenWidth - 2 * (CARD_HORIZONTAL_MARGIN + CARD_HORIZONTAL_PADDING);
 
 const PostDetailScreen = ({ route, navigation }) => {
   const { postId, postData } = route.params || {};
@@ -77,6 +81,7 @@ const PostDetailScreen = ({ route, navigation }) => {
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [menuButtonLayout, setMenuButtonLayout] = useState({ x: 0, y: 0, width: 0, height: 0 });
   const [fullScreenImageSource, setFullScreenImageSource] = useState(null);
+  const [imageHeights, setImageHeights] = useState({});
   
   const scrollViewRef = useRef(null);
   const commentsSectionRef = useRef(null);
@@ -691,29 +696,63 @@ const PostDetailScreen = ({ route, navigation }) => {
             {/* Post Content */}
             <Text style={styles.postContent}>{displayPost?.content || ''}</Text>
 
-            {/* Post Media - filter for images only (matches PostCard) */}
+      {/* Post Media - filter for images only (matches PostCard) */}
             {(() => {
               const media = displayPost?.media || post?.media;
               const displayImages = Array.isArray(media)
                 ? media.filter((item) => (item.mediaType === 'image' || item.type === 'image' || (!item.type && !item.mediaType)))
                 : [];
+        // Pre-calc image dimensions to preserve aspect ratio and ensure image fits inside container limits
+        useEffect(() => {
+          if (!displayImages || displayImages.length === 0) {
+            setImageHeights({});
+            return;
+          }
+          const containerWidth = CONTENT_MAX_WIDTH; // account for margins + padding
+          const containerMaxHeight = 500; // hard cap to prevent extreme tall images
+          displayImages.forEach((item, index) => {
+            const src = (item.url || item.uri || item.signedUrl) || (item.key ? postApi.getMediaDisplayUrl(item.key) : null);
+            if (!src) return;
+            Image.getSize(
+              src,
+              (w, h) => {
+                if (w && h) {
+                  // Compute scale so the image fits within both width and maxHeight, without upscaling
+                  const scale = Math.min(containerWidth / w, containerMaxHeight / h, 1);
+                  const finalW = Math.round(w * scale);
+                  const finalH = Math.round(h * scale);
+                  setImageHeights(prev => ({
+                    ...prev,
+                    [`${post?.id || 'post'}_${index}`]: { width: finalW, height: finalH },
+                  }));
+                }
+              },
+              () => {
+                // ignore errors, fallback handled in render
+              }
+            );
+          });
+        }, [post?.id, JSON.stringify(displayImages)]);
               return displayImages.length > 0 ? (
                 <View style={styles.mediaContainer}>
                   {displayImages.map((mediaItem, index) => {
                     const imgSource = getImageSource(mediaItem);
-                    return (
-                      <TouchableOpacity
-                        key={index}
-                        activeOpacity={0.9}
-                        onPress={() => setFullScreenImageSource(imgSource)}
-                      >
-                        <Image
-                          source={imgSource}
-                          style={styles.postImage}
-                          resizeMode="cover"
-                        />
-                      </TouchableOpacity>
-                    );
+                const key = `${post?.id || 'post'}_${index}`;
+                const dims = imageHeights[key] || { width: CONTENT_MAX_WIDTH, height: 200 };
+                return (
+                  <TouchableOpacity
+                    key={index}
+                    activeOpacity={0.9}
+                    onPress={() => setFullScreenImageSource(imgSource)}
+                    style={{ alignItems: 'center' }}
+                  >
+                    <Image
+                      source={imgSource}
+                      style={[styles.postImage, { width: dims.width, height: dims.height }]}
+                      resizeMode="contain"
+                    />
+                  </TouchableOpacity>
+                );
                   })}
                 </View>
               ) : null;
@@ -1327,6 +1366,7 @@ const styles = StyleSheet.create({
     height: 200,
     borderRadius: 12,
     marginBottom: 8,
+    marginVertical: 8,
   },
   engagementStats: {
     flexDirection: 'row',

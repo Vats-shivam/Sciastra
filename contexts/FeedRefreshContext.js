@@ -23,8 +23,28 @@ export function FeedRefreshProvider({ children }) {
     });
   }, []);
 
+  // Register/remove posts by author callback - used for instant removal after blocking
+  const authorRemovalCallbacksRef = useRef(new Set());
+  const registerRemovePostsByAuthor = useCallback((fn) => {
+    if (!fn) return () => {};
+    authorRemovalCallbacksRef.current.add(fn);
+    return () => {
+      authorRemovalCallbacksRef.current.delete(fn);
+    };
+  }, []);
+
+  const removePostsByAuthor = useCallback((authorId) => {
+    authorRemovalCallbacksRef.current.forEach((fn) => {
+      try {
+        fn(authorId);
+      } catch (e) {
+        console.warn('FeedRefreshContext: removePostsByAuthor callback error', e);
+      }
+    });
+  }, []);
+
   return (
-    <FeedRefreshContext.Provider value={{ registerUpdatePostReaction, updatePostReaction }}>
+    <FeedRefreshContext.Provider value={{ registerUpdatePostReaction, updatePostReaction, registerRemovePostsByAuthor, removePostsByAuthor }}>
       {children}
     </FeedRefreshContext.Provider>
   );

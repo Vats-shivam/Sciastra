@@ -600,6 +600,57 @@ class ProfileApiService {
     }
   }
 
+  // Delete the current user's account (hard delete)
+  async deleteAccount() {
+    try {
+      const userId = authApi.getCurrentUserId();
+      if (!userId) throw new Error(ERROR_MESSAGES.UNAUTHORIZED);
+
+      const url = `${this.baseUrl}${API_ENDPOINTS.PROFILE.UPDATE}`;
+      const response = await this.makeRequest(url, {
+        method: 'DELETE',
+      });
+
+      if (response.success) {
+        // Clear local cache and tokens handled by AuthManager after API success
+        return { success: true, message: response.message || 'Account deleted' };
+      } else {
+        throw new Error(response.message || 'Failed to delete account');
+      }
+    } catch (error) {
+      console.error('Delete Account Error:', error);
+      return { success: false, message: error.message || 'Failed to delete account' };
+    }
+  }
+
+  // Block a user
+  async blockUser(userIdToBlock) {
+    try {
+      const url = `${this.baseUrl}/profile/block/${encodeURIComponent(userIdToBlock)}`;
+      const response = await this.makeRequest(url, {
+        method: 'POST',
+      });
+      return response;
+    } catch (error) {
+      console.error('Block User Error:', error);
+      return { success: false, message: error.message || 'Failed to block user' };
+    }
+  }
+
+  // Unblock a user
+  async unblockUser(userIdToUnblock) {
+    try {
+      const url = `${this.baseUrl}/profile/unblock/${encodeURIComponent(userIdToUnblock)}`;
+      const response = await this.makeRequest(url, {
+        method: 'POST',
+      });
+      return response;
+    } catch (error) {
+      console.error('Unblock User Error:', error);
+      return { success: false, message: error.message || 'Failed to unblock user' };
+    }
+  }
+
   // Validate profile data
   validateProfileData(profileData) {
     const errors = [];

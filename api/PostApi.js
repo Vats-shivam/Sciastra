@@ -149,6 +149,7 @@ class PostApiService {
         topicNames: postData.topicNames || [],
         privacy: postData.privacy || 'PUBLIC',
       };
+      if (postData.status) payload.status = postData.status;
 
       const response = await this.makeRequest(`${this.baseUrl}/posts`, {
         method: 'POST',
@@ -280,6 +281,7 @@ class PostApiService {
         topicNames: postData.topicNames || [],
         privacy: postData.privacy || 'PUBLIC',
       };
+      if (postData.status) postPayload.status = postData.status;
 
       console.log('📝 Post payload:', JSON.stringify(postPayload, null, 2));
 
@@ -724,6 +726,105 @@ class PostApiService {
         success: false,
         message: error.message || 'Failed to load posts. Please try again.',
       };
+    }
+  }
+
+  // Get drafts for current user
+  async getUserDrafts(userId = null, page = 1, limit = 10) {
+    try {
+      const currentUserId = authApi.getCurrentUserId();
+      const targetUserId = userId || currentUserId;
+      if (!currentUserId) throw new Error(ERROR_MESSAGES.UNAUTHORIZED);
+
+      const url = `${this.baseUrl}/posts/user/${targetUserId}/drafts?page=${page}&limit=${limit}`;
+      const response = await this.makeRequest(url, { method: 'GET' });
+      if (response.success) return { success: true, data: response.data };
+      throw new Error(response.message || 'Failed to load drafts');
+    } catch (error) {
+      console.error('Get User Drafts Error:', error);
+      return { success: false, message: error.message || 'Failed to load drafts' };
+    }
+  }
+
+  // Publish a draft post
+  async publishDraft(postId) {
+    try {
+      const userId = authApi.getCurrentUserId();
+      if (!userId) throw new Error(ERROR_MESSAGES.UNAUTHORIZED);
+      const url = `${this.baseUrl}/posts/${postId}/publish`;
+      const response = await this.makeRequest(url, { method: 'POST' });
+      if (response.success) return { success: true, data: response.data };
+      throw new Error(response.message || 'Failed to publish draft');
+    } catch (error) {
+      console.error('Publish Draft Error:', error);
+      return { success: false, message: error.message || 'Failed to publish draft' };
+    }
+  }
+
+  // Update a post (PUT). payload can include content, media (array), privacy, status
+  async updatePost(postId, payload) {
+    try {
+      const userId = authApi.getCurrentUserId();
+      if (!userId) throw new Error(ERROR_MESSAGES.UNAUTHORIZED);
+
+      const url = `${this.baseUrl}/posts/${postId}`;
+      const response = await this.makeRequest(url, {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      });
+
+      if (response.success) return { success: true, data: response.data };
+      throw new Error(response.message || 'Failed to update post');
+    } catch (error) {
+      console.error('Update Post Error:', error);
+      return { success: false, message: error.message || 'Failed to update post' };
+    }
+  }
+
+  // Update post with media: upload new media files then call updatePost
+  async updatePostWithMedia(postId, postData, selectedFiles = []) {
+    try {
+      const userId = authApi.getCurrentUserId();
+      if (!userId) throw new Error(ERROR_MESSAGES.UNAUTHORIZED);
+
+      let mediaItems = postData.media || [];
+      // Upload any selected files first (reusing upload flow)
+      if (selectedFiles.length > 0) {
+        const uploadUrlsResult = await this.getMediaUploadUrls(selectedFiles);
+        if (uploadUrlsResult.success) {
+          const uploadPromises = selectedFiles.map(async (file, index) => {
+            const uploadData = uploadUrlsResult.data[index];
+            // upload file blob
+            const fileResponse = await fetch(file.uri);
+            const fileBlob = await fileResponse.blob();
+            const s3Response = await fetch(uploadData.uploadUrl, {
+              method: 'PUT',
+              body: fileBlob,
+              headers: { 'Content-Type': uploadData.contentType },
+            });
+            if (!s3Response.ok) throw new Error('S3 upload failed');
+            return {
+              key: uploadData.key,
+              type: uploadData.contentType.startsWith('image/') ? 'image' : 'video',
+              fileName: uploadData.fileName,
+            };
+          });
+          const uploaded = await Promise.all(uploadPromises);
+          mediaItems = [...(mediaItems || []), ...uploaded];
+        } else {
+          throw new Error(uploadUrlsResult.message || 'Failed to get upload URLs');
+        }
+      }
+
+      const payload = {
+        ...postData,
+        media: mediaItems,
+      };
+
+      return await this.updatePost(postId, payload);
+    } catch (error) {
+      console.error('Update Post With Media Error:', error);
+      return { success: false, message: error.message || 'Failed to update post with media' };
     }
   }
 

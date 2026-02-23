@@ -13,6 +13,7 @@ import {
   ScrollView,
   TextInput,
   Platform,
+  Alert,
 } from "react-native";
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
@@ -45,7 +46,7 @@ const PostCard = memo(({ post, onPostDeleted }) => {
 
   const navigation = useNavigation();
   const { showError, showSuccess } = useNotification();
-  const { updatePostReaction } = useFeedRefresh() || {};
+  const { updatePostReaction, removePostsByAuthor } = useFeedRefresh() || {};
   const [showFullDescription, setShowFullDescription] = useState(false);
   const [userReaction, setUserReaction] = useState(post?.userReaction || null); // Track the current user's reaction
   const [reactionLoading, setReactionLoading] = useState(false);
@@ -77,6 +78,7 @@ const PostCard = memo(({ post, onPostDeleted }) => {
   const currentUserId = authApi.getCurrentUserId();
   const postAuthorId = post?.author?.id || post?.authorId;
   const isAuthor = currentUserId && postAuthorId && String(currentUserId) === String(postAuthorId);
+  const isDraft = String(post?.status || '').toUpperCase() === 'DRAFT';
 
   // No longer needed with chat service pattern - auth headers handle authentication
 
@@ -507,59 +509,61 @@ const PostCard = memo(({ post, onPostDeleted }) => {
         </Pressable>
 
         {/* Action Buttons */}
-        <View style={styles.actions}>
-        <Pressable
-          onPress={() => !reactionLoading && handleReaction()}
-          style={[styles.actionButton, reactionLoading && { opacity: 0.8 }]}
-          disabled={reactionLoading}
-        >
-          <View style={styles.actionContent}>
-            {userReaction ? (
-              <Icon name="thumb-up" size={20} color={colors.primary} />
-            ) : (
-              <Icon
-                name="thumb-up-outline"
-                size={20}
-                color={colors.textSecondary}
-                style={{ transform: [{ scaleX: -1 }] }}
-              />
-            )}
-            <Text style={[styles.actionText, { marginLeft: 6 }, userReaction && { color: colors.primary }]}>
-              {userReaction ? 'Liked' : 'Like'}
-            </Text>
+        {!isDraft && (
+          <View style={styles.actions}>
+            <Pressable
+              onPress={() => !reactionLoading && handleReaction()}
+              style={[styles.actionButton, reactionLoading && { opacity: 0.8 }]}
+              disabled={reactionLoading}
+            >
+              <View style={styles.actionContent}>
+                {userReaction ? (
+                  <Icon name="thumb-up" size={20} color={colors.primary} />
+                ) : (
+                  <Icon
+                    name="thumb-up-outline"
+                    size={20}
+                    color={colors.textSecondary}
+                    style={{ transform: [{ scaleX: -1 }] }}
+                  />
+                )}
+                <Text style={[styles.actionText, { marginLeft: 6 }, userReaction && { color: colors.primary }]}>
+                  {userReaction ? 'Liked' : 'Like'}
+                </Text>
+              </View>
+            </Pressable>
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={() => navigation.navigate("PostDetail", { postId: post.id, postData: post })}
+            >
+              <View style={styles.actionContent}>
+                <Icon name="comment-outline" size={20} color={colors.textSecondary} />
+                <Text style={[styles.actionText, { marginLeft: 6 }]}>Comment</Text>
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.actionButton}
+              onPress={() => {
+                // Check if user is trying to repost their own post
+                const currentUserId = authApi.getCurrentUserId();
+                const postToRepost = isRepost && originalPost ? originalPost : post;
+                const postAuthorId = postToRepost.author?.id || postToRepost.userId;
+                
+                if (String(currentUserId) === String(postAuthorId)) {
+                  showError('You cannot repost your own post');
+                  return;
+                }
+                
+                setShowRepostModal(true);
+              }}
+            >
+              <View style={styles.actionContent}>
+                <Icon name="repeat" size={20} color={colors.textSecondary} />
+                <Text style={[styles.actionText, { marginLeft: 6 }]}>Repost</Text>
+              </View>
+            </TouchableOpacity>
           </View>
-        </Pressable>
-        <TouchableOpacity
-          style={styles.actionButton}
-          onPress={() => navigation.navigate("PostDetail", { postId: post.id, postData: post })}
-        >
-          <View style={styles.actionContent}>
-            <Icon name="comment-outline" size={20} color={colors.textSecondary} />
-            <Text style={[styles.actionText, { marginLeft: 6 }]}>Comment</Text>
-          </View>
-        </TouchableOpacity>
-        <TouchableOpacity 
-          style={styles.actionButton}
-          onPress={() => {
-            // Check if user is trying to repost their own post
-            const currentUserId = authApi.getCurrentUserId();
-            const postToRepost = isRepost && originalPost ? originalPost : post;
-            const postAuthorId = postToRepost.author?.id || postToRepost.userId;
-            
-            if (String(currentUserId) === String(postAuthorId)) {
-              showError('You cannot repost your own post');
-              return;
-            }
-            
-            setShowRepostModal(true);
-          }}
-        >
-          <View style={styles.actionContent}>
-            <Icon name="repeat" size={20} color={colors.textSecondary} />
-            <Text style={[styles.actionText, { marginLeft: 6 }]}>Repost</Text>
-          </View>
-        </TouchableOpacity>
-      </View>
+        )}
       </View>
 
       {/* Options Menu Modal */}
@@ -584,48 +588,170 @@ const PostCard = memo(({ post, onPostDeleted }) => {
             ]}
             onPress={(e) => e.stopPropagation()}
           >
-            <TouchableOpacity
-              style={styles.optionItem}
-              onPress={() => {
-                setShowOptionsMenu(false);
-                if (post.author?.id === "1") {
-                  navigation.navigate('MainTabs', { screen: 'ProfileTab' });
-                } else {
-                  navigation.navigate("UserProfile", { userId: post.author?.id });
-                }
-              }}
-            >
-              <Text style={styles.optionText}>View Profile</Text>
-            </TouchableOpacity>
-            <View style={styles.optionDivider} />
-            {isAuthor ? (
+            {isDraft ? (
+              <>
+                {isAuthor && (
+                  <>
+                    <TouchableOpacity
+                      style={styles.optionItem}
+                      onPress={() => {
+                        setShowOptionsMenu(false);
+                        // Edit draft - open PostCreation via AddPostTab with draftPost
+                        navigation.navigate('AddPostTab', { isEditing: true, draftPost: post });
+                      }}
+                    >
+                      <Text style={styles.optionText}>Edit Draft</Text>
+                    </TouchableOpacity>
+                    <View style={styles.optionDivider} />
+                    <TouchableOpacity
+                      style={styles.optionItem}
+                      onPress={async () => {
+                        setShowOptionsMenu(false);
+                        try {
+                          const res = await postApi.publishDraft(post.id);
+                          if (res.success) {
+                            try {
+                              onPublishSuccess && onPublishSuccess(res.data);
+                            } catch (cbErr) {
+                              console.error('onPublishSuccess callback error:', cbErr);
+                            }
+                            showSuccess('Draft published');
+                            try {
+                              onPostDeleted?.(post.id);
+                            } catch (delErr) {
+                              console.error('onPostDeleted callback error:', delErr);
+                            }
+                          } else {
+                            showError(res.message || 'Failed to publish draft');
+                          }
+                        } catch (err) {
+                          console.error('Publish draft error:', err);
+                          showError('Failed to publish draft');
+                        }
+                      }}
+                    >
+                      <Text style={styles.optionText}>Publish</Text>
+                    </TouchableOpacity>
+                    <View style={styles.optionDivider} />
+                    <TouchableOpacity
+                      style={styles.optionItem}
+                      onPress={() => {
+                        setShowOptionsMenu(false);
+                        setShowDeleteConfirm(true);
+                      }}
+                      disabled={deleteLoading}
+                    >
+                      {deleteLoading ? (
+                        <ActivityIndicator size="small" color={colors.error} />
+                      ) : (
+                        <Text style={[styles.optionText, { color: colors.error }]}>Delete Draft</Text>
+                      )}
+                    </TouchableOpacity>
+                  </>
+                )}
+              </>
+            ) : (
               <>
                 <TouchableOpacity
                   style={styles.optionItem}
                   onPress={() => {
                     setShowOptionsMenu(false);
-                    setShowDeleteConfirm(true);
+                    if (post.author?.id === "1") {
+                      navigation.navigate('MainTabs', { screen: 'ProfileTab' });
+                    } else {
+                      navigation.navigate("UserProfile", { userId: post.author?.id });
+                    }
                   }}
-                  disabled={deleteLoading}
                 >
-                  {deleteLoading ? (
-                    <ActivityIndicator size="small" color={colors.error} />
-                  ) : (
-                    <Text style={[styles.optionText, { color: colors.error }]}>Delete Post</Text>
-                  )}
+                  <Text style={styles.optionText}>View Profile</Text>
                 </TouchableOpacity>
                 <View style={styles.optionDivider} />
+                {isAuthor && !isRepost ? (
+                  <>
+                    <TouchableOpacity
+                      style={styles.optionItem}
+                      onPress={() => {
+                        setShowOptionsMenu(false);
+                        // Navigate to the AddPost tab (contains PostCreation) to edit this post
+                        navigation.navigate('AddPostTab', { isEditing: true, post });
+                      }}
+                    >
+                      <Text style={styles.optionText}>Edit Post</Text>
+                    </TouchableOpacity>
+                    <View style={styles.optionDivider} />
+                  </>
+                ) : null}
+                {isAuthor && (
+                  <>
+                  <TouchableOpacity
+                      style={styles.optionItem}
+                      onPress={() => {
+                        setShowOptionsMenu(false);
+                        setShowDeleteConfirm(true);
+                      }}
+                      disabled={deleteLoading}
+                    >
+                      {deleteLoading ? (
+                        <ActivityIndicator size="small" color={colors.error} />
+                      ) : (
+                        <Text style={[styles.optionText, { color: colors.error }]}>Delete Post</Text>
+                      )}
+                    </TouchableOpacity>
+                    <View style={styles.optionDivider} />
+                  </>
+                )}
+                <TouchableOpacity
+                  style={styles.optionItem}
+                  onPress={() => {
+                    setShowOptionsMenu(false);
+                    setShowReportSheet(true);
+                  }}
+                >
+                  <Text style={[styles.optionText, styles.reportOptionTextMenu]}>Report Post</Text>
+                </TouchableOpacity>
+                <View style={styles.optionDivider} />
+                <TouchableOpacity
+                  style={styles.optionItem}
+                  onPress={() => {
+                    setShowOptionsMenu(false);
+                    // Confirm block
+                    Alert.alert(
+                      "Block User",
+                      "Are you sure you want to block this user? Their posts will be removed from your feed and a report will be sent for review.",
+                      [
+                        { text: "Cancel", style: "cancel" },
+                        {
+                          text: "Block",
+                          style: "destructive",
+                          onPress: async () => {
+                            try {
+                              const authorIdToBlock = post?.author?.id || post?.authorId;
+                              const res = await profileApi.blockUser(authorIdToBlock);
+                              if (res.success) {
+                                showSuccess('User blocked. Their posts have been removed from your feed.');
+                                try {
+                                  removePostsByAuthor && removePostsByAuthor(authorIdToBlock);
+                                } catch (e) {
+                                  console.error('removePostsByAuthor callback error', e);
+                                }
+                              } else {
+                                showError(res.message || 'Failed to block user');
+                              }
+                            } catch (err) {
+                              console.error('Block user error:', err);
+                              showError('Failed to block user. Please try again.');
+                            }
+                          }
+                        }
+                      ],
+                      { cancelable: true }
+                    );
+                  }}
+                >
+                  <Text style={[styles.optionText, { color: colors.error }]}>Block User</Text>
+                </TouchableOpacity>
               </>
-            ) : null}
-            <TouchableOpacity
-              style={styles.optionItem}
-              onPress={() => {
-                setShowOptionsMenu(false);
-                setShowReportSheet(true);
-              }}
-            >
-              <Text style={[styles.optionText, styles.reportOptionTextMenu]}>Report Post</Text>
-            </TouchableOpacity>
+            )}
           </Pressable>
         </Pressable>
       </Modal>

@@ -13,6 +13,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path } from 'react-native-svg';
 import colors from '../config/colors';
+import { Linking } from 'react-native';
+import { PRIVACY_POLICY_URL, TERMS_AND_CONDITIONS_URL } from '../config/legalConfig';
 import authApi from '../api/AuthApi';
 import { useNotification } from '../contexts/NotificationContext';
 import useScreenApiLogger from '../hooks/useScreenApiLogger';
@@ -125,7 +127,14 @@ const LoginScreen = ({ navigation }) => {
             {/* Terms */}
             <View style={styles.termsContainer}>
               <Text style={styles.termsText}>
-                By continuing, you agree to our Terms of Service and Privacy Policy
+                By continuing, you agree to our{' '}
+                <Text style={styles.linkText} onPress={() => Linking.openURL(TERMS_AND_CONDITIONS_URL)}>
+                  Terms of Service
+                </Text>{' '}
+                and{' '}
+                <Text style={styles.linkText} onPress={() => Linking.openURL(PRIVACY_POLICY_URL)}>
+                  Privacy Policy
+                </Text>.
               </Text>
             </View>
           </View>
@@ -238,6 +247,10 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.6)',
     fontSize: 12,
     textAlign: 'center',
+  },
+  linkText: {
+    color: '#9ecbff',
+    textDecorationLine: 'underline',
   },
   bypassHint: {
     backgroundColor: 'rgba(138, 43, 226, 0.1)',
