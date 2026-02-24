@@ -110,6 +110,31 @@ const PostCard = memo(({ post, onPostDeleted }) => {
     return { uri: preferredUrl || '' };
   };
 
+  // Blocked users cache (module-scoped) to avoid repeated network calls
+  // eslint-disable-next-line no-var
+  var _blockedCache = global.__blockedUserIdsCache || null;
+  if (!global.__blockedUserIdsCache) global.__blockedUserIdsCache = _blockedCache;
+  const [isBlocked, setIsBlocked] = useState(false);
+
+  const ensureBlockedCache = async () => {
+    if (_blockedCache && _blockedCache.data) {
+      setIsBlocked((_blockedCache.data || []).includes(postAuthorId));
+      return;
+    }
+    if (!_blockedCache) {
+      // store promise
+      _blockedCache = { promise: profileApi.getMyBlocks().then(r => (r.success ? r.data : [])), data: null };
+      global.__blockedUserIdsCache = _blockedCache;
+    }
+    try {
+      const data = await _blockedCache.promise;
+      _blockedCache.data = data;
+      setIsBlocked((data || []).includes(postAuthorId));
+    } catch (e) {
+      // ignore
+    }
+  };
+
   const handleReaction = async () => {
     if (reactionLoading) return; // Prevent double taps
 
@@ -384,14 +409,20 @@ const PostCard = memo(({ post, onPostDeleted }) => {
             ref={menuButtonRef}
             onPress={(e) => {
               e.stopPropagation();
-              if (menuButtonRef.current) {
-                menuButtonRef.current.measureInWindow((x, y, width, height) => {
-                  setMenuButtonLayout({ x, y, width, height });
+              // Ensure blocked users cache is loaded, then open menu
+              (async () => {
+                try {
+                  await ensureBlockedCache();
+                } catch (e) {}
+                if (menuButtonRef.current) {
+                  menuButtonRef.current.measureInWindow((x, y, width, height) => {
+                    setMenuButtonLayout({ x, y, width, height });
+                    setShowOptionsMenu(true);
+                  });
+                } else {
                   setShowOptionsMenu(true);
-                });
-              } else {
-                setShowOptionsMenu(true);
-              }
+                }
+              })();
             }}
           >
             <HeaderIcon name="menu" size={20} color={colors.textSecondary} />
@@ -761,9 +792,12 @@ const PostCard = memo(({ post, onPostDeleted }) => {
                   <Text style={[styles.optionText, styles.reportOptionTextMenu]}>Report Post</Text>
                 </TouchableOpacity>
                 <View style={styles.optionDivider} />
+            {/* Show Block User only when not the post author and not already blocked */}
+            {!isAuthor && !isBlocked && (
+              <>
                 <TouchableOpacity
                   style={styles.optionItem}
-                  onPress={() => {
+                  onPress={async () => {
                     setShowOptionsMenu(false);
                     // Confirm block
                     Alert.alert(
@@ -785,6 +819,14 @@ const PostCard = memo(({ post, onPostDeleted }) => {
                                 } catch (e) {
                                   console.error('removePostsByAuthor callback error', e);
                                 }
+                                // update local blocked cache
+                                if (global.__blockedUserIdsCache && global.__blockedUserIdsCache.data) {
+                                  global.__blockedUserIdsCache.data.push(authorIdToBlock);
+                                  setIsBlocked(true);
+                                } else {
+                                  global.__blockedUserIdsCache = { data: [authorIdToBlock] };
+                                  setIsBlocked(true);
+                                }
                               } else {
                                 showError(res.message || 'Failed to block user');
                               }
@@ -801,6 +843,9 @@ const PostCard = memo(({ post, onPostDeleted }) => {
                 >
                   <Text style={[styles.optionText, { color: colors.error }]}>Block User</Text>
                 </TouchableOpacity>
+                <View style={styles.optionDivider} />
+              </>
+            )}
               </>
             )}
           </Pressable>

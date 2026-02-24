@@ -13,6 +13,7 @@ import {
   StatusBar,
   ActivityIndicator,
   SafeAreaView,
+  BackHandler,
 } from "react-native";
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { useNavigation, useRoute } from "@react-navigation/native";
@@ -316,6 +317,21 @@ const HomeScreen = () => {
       navigation.setParams({ resetToFeed: undefined });
     }
   }, [route.params?.resetToFeed]);
+
+  // Handle Android hardware back button: when searching, consume back press to exit search mode
+  useEffect(() => {
+    const onBackPress = () => {
+      if (searching) {
+        setSearching(false);
+        clearSearch();
+        return true; // handled
+      }
+      return false; // allow default behavior
+    };
+
+    const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => sub.remove();
+  }, [searching, clearSearch]);
 
   const keyExtractor = useCallback((item) => String(item?.id ?? ""), []);
   const feedContentContainerStyle = useMemo(

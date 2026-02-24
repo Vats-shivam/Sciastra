@@ -651,6 +651,21 @@ class ProfileApiService {
     }
   }
 
+  // Get list of user IDs blocked by the current user
+  async getMyBlocks() {
+    try {
+      // profile endpoints are namespaced under /profile — use configured endpoint
+      const response = await this.makeRequest(`${this.baseUrl}${API_ENDPOINTS.PROFILE.GET_BY_ID}/blocks`, { method: 'GET' });
+      if (response.success && response.data) {
+        return { success: true, data: response.data };
+      }
+      return { success: false, data: [], message: response.message || 'Failed to fetch blocks' };
+    } catch (error) {
+      console.error('Get My Blocks Error:', error);
+      return { success: false, data: [], message: error.message || 'Failed to fetch blocks' };
+    }
+  }
+
   // Validate profile data
   validateProfileData(profileData) {
     const errors = [];

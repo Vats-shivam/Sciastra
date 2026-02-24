@@ -33,6 +33,7 @@ const UserProfileScreen = ({ navigation, route }) => {
   const statusHandlerRef = useRef(null);
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
   const [showReportSheet, setShowReportSheet] = useState(false);
+  const [isBlocked, setIsBlocked] = useState(false);
   const { showLoader, hideLoader } = useLoader();
   const { showError, showSuccess, showWarning, showInfo } = useNotification();
 
@@ -76,6 +77,27 @@ const UserProfileScreen = ({ navigation, route }) => {
       cleanupSocketListeners();
     };
   }, [userId]);
+
+  // When screen gains focus, refresh blocked-state so UI stays in sync after actions elsewhere
+  useEffect(() => {
+    const onFocus = navigation.addListener('focus', async () => {
+      try {
+        const blocksRes = await ProfileApi.getMyBlocks();
+        if (blocksRes.success && Array.isArray(blocksRes.data)) {
+          // update local and global cache
+          setIsBlocked((blocksRes.data || []).includes(String(userId)));
+          if (!global.__blockedUserIdsCache) global.__blockedUserIdsCache = { data: blocksRes.data };
+          else global.__blockedUserIdsCache.data = blocksRes.data;
+        } else {
+          setIsBlocked(false);
+        }
+      } catch (e) {
+        setIsBlocked(false);
+      }
+    });
+
+    return onFocus;
+  }, [navigation, userId]);
 
   // Set up socket listeners for online/offline status
   const initializeSocketListeners = async () => {
@@ -202,6 +224,33 @@ const UserProfileScreen = ({ navigation, route }) => {
       
       setUser(transformedUser);
       
+      // Use backend-provided flag if available; otherwise fall back to fetching blocked list
+      try {
+        const backendFlag = (profileResult && profileResult.data && profileResult.data.isBlockedByMe) === true;
+        if (backendFlag) {
+          setIsBlocked(true);
+          if (global.__blockedUserIdsCache && Array.isArray(global.__blockedUserIdsCache.data)) {
+            if (!global.__blockedUserIdsCache.data.includes(String(userId))) {
+              global.__blockedUserIdsCache.data.push(String(userId));
+            }
+          } else {
+            global.__blockedUserIdsCache = { data: [String(userId)] };
+          }
+        } else {
+          // fallback to fetching blocks list (backwards compatibility)
+          const blocksRes = await ProfileApi.getMyBlocks();
+          if (blocksRes.success && Array.isArray(blocksRes.data)) {
+            setIsBlocked((blocksRes.data || []).includes(String(userId)));
+            // sync global cache
+            global.__blockedUserIdsCache = { data: blocksRes.data || [] };
+          } else {
+            setIsBlocked(false);
+          }
+        }
+      } catch (e) {
+        setIsBlocked(false);
+      }
+
       // Load user posts
       try {
         const postsResult = await postApi.getUserPosts(userId, 1, 10);
@@ -919,65 +968,95 @@ const UserProfileScreen = ({ navigation, route }) => {
               <Text style={[styles.optionText, styles.reportOptionTextMenu]}>Report User</Text>
             </TouchableOpacity>
             <View style={styles.optionDivider} />
-            <TouchableOpacity
-              style={styles.optionItem}
-              onPress={() => {
-                setShowOptionsMenu(false);
-                Alert.alert(
-                  'Block User',
-                  `Are you sure you want to block ${user?.name || 'this user'}? Their posts will be removed from your feed and a report will be sent for review.`,
-                  [
-                    { text: 'Cancel', style: 'cancel' },
-                    {
-                      text: 'Block',
-                      style: 'destructive',
-                      onPress: async () => {
+            {/* Show Block/Unblock only when viewing someone else's profile */}
+            {String(userId) !== String(authManager.getCurrentUser()?.id || authManager.getCurrentUser()?.userId) && (
+              <>
+                {!isBlocked && (
+                  <>
+                    <TouchableOpacity
+                      style={styles.optionItem}
+                      onPress={() => {
+                        setShowOptionsMenu(false);
+                        Alert.alert(
+                          'Block User',
+                          `Are you sure you want to block ${user?.name || 'this user'}? Their posts will be removed from your feed and a report will be sent for review.`,
+                          [
+                            { text: 'Cancel', style: 'cancel' },
+                            {
+                              text: 'Block',
+                              style: 'destructive',
+                              onPress: async () => {
+                                try {
+                                  const targetId = userId;
+                                  const res = await ProfileApi.blockUser(targetId);
+                                  if (res.success) {
+                                    showSuccess('User blocked. Their posts have been removed from your feed.');
+                                    try {
+                                      removePostsByAuthor && removePostsByAuthor(targetId);
+                                    } catch (e) { console.error('removePostsByAuthor error', e); }
+                                    setIsBlocked(true);
+                                    // update global blocked cache
+                                    if (global.__blockedUserIdsCache && Array.isArray(global.__blockedUserIdsCache.data)) {
+                                      if (!global.__blockedUserIdsCache.data.includes(String(targetId))) {
+                                        global.__blockedUserIdsCache.data.push(String(targetId));
+                                      }
+                                    } else {
+                                      global.__blockedUserIdsCache = { data: [String(targetId)] };
+                                    }
+                                  } else {
+                                    showError(res.message || 'Failed to block user');
+                                  }
+                                } catch (err) {
+                                  console.error('Block user error:', err);
+                                  showError('Failed to block user. Please try again.');
+                                }
+                              }
+                            }
+                          ]
+                        );
+                      }}
+                    >
+                      <Text style={[styles.optionText, { color: colors.error }]}>Block User</Text>
+                    </TouchableOpacity>
+                    <View style={styles.optionDivider} />
+                  </>
+                )}
+
+                {isBlocked && (
+                  <>
+                    <TouchableOpacity
+                      style={styles.optionItem}
+                      onPress={async () => {
+                        setShowOptionsMenu(false);
                         try {
                           const targetId = userId;
-                          const res = await ProfileApi.blockUser(targetId);
+                          const res = await ProfileApi.unblockUser(targetId);
                           if (res.success) {
-                            showSuccess('User blocked. Their posts have been removed from your feed.');
-                            try {
-                              removePostsByAuthor && removePostsByAuthor(targetId);
-                            } catch (e) { console.error('removePostsByAuthor error', e); }
+                            showSuccess('User unblocked');
+                            setIsBlocked(false);
+                            // update global blocked cache
+                            if (global.__blockedUserIdsCache && Array.isArray(global.__blockedUserIdsCache.data)) {
+                              global.__blockedUserIdsCache.data = global.__blockedUserIdsCache.data.filter((id) => String(id) !== String(targetId));
+                            } else {
+                              global.__blockedUserIdsCache = { data: [] };
+                            }
+                            try { await loadUserData(); } catch {}
                           } else {
-                            showError(res.message || 'Failed to block user');
+                            showError(res.message || 'Failed to unblock user');
                           }
                         } catch (err) {
-                          console.error('Block user error:', err);
-                          showError('Failed to block user. Please try again.');
+                          console.error('Unblock user error:', err);
+                          showError('Failed to unblock user. Please try again.');
                         }
-                      }
-                    }
-                  ]
-                );
-              }}
-            >
-              <Text style={[styles.optionText, { color: colors.error }]}>Block User</Text>
-            </TouchableOpacity>
-            <View style={styles.optionDivider} />
-            <TouchableOpacity
-              style={styles.optionItem}
-              onPress={async () => {
-                setShowOptionsMenu(false);
-                try {
-                  const targetId = userId;
-                  const res = await ProfileApi.unblockUser(targetId);
-                  if (res.success) {
-                    showSuccess('User unblocked');
-                    // Invalidate/refresh feed to allow their posts to reappear
-                    try { await loadUserData(); } catch {}
-                  } else {
-                    showError(res.message || 'Failed to unblock user');
-                  }
-                } catch (err) {
-                  console.error('Unblock user error:', err);
-                  showError('Failed to unblock user. Please try again.');
-                }
-              }}
-            >
-              <Text style={[styles.optionText, { color: colors.primary }]}>Unblock User</Text>
-            </TouchableOpacity>
+                      }}
+                    >
+                      <Text style={[styles.optionText, { color: colors.primary }]}>Unblock User</Text>
+                    </TouchableOpacity>
+                    <View style={styles.optionDivider} />
+                  </>
+                )}
+              </>
+            )}
           </Pressable>
         </Pressable>
       </Modal>

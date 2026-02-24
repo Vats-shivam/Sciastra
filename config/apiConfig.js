@@ -5,7 +5,7 @@ const getBaseUrl = (port) => {
 
   // Production API URL - Temporarily use HTTP due to self-signed SSL certificate const PRODUCTION_URL = "https://Xcience.in";
   // const PRODUCTION_URL = "https://6ce2-2406-9e00-112f-d8b4-a1af-5895-7643-7549.ngrok-free.app";
-  const PRODUCTION_URL = "http://Xcience.in";
+  const PRODUCTION_URL = "http://192.168.1.33:8000";
   // Development URLs
   const DEVELOPMENT_URL = "http://Xcience.in"; // Use HTTP for both environments
 
