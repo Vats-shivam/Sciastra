@@ -378,14 +378,25 @@ class PostApiService {
 
       if (response.success) {
         const rawPosts = response.data.posts || [];
-        // Process posts to include signed media URLs
-        const processedPosts = await this.processPostsWithMedia(rawPosts);
 
+        // Log sample of media URLs for debugging CDN usage (first 5 posts, up to 3 media URLs each)
+        try {
+          const sample = rawPosts.slice(0, 5).map(p => ({
+            id: p.id,
+            mediaUrls: (p.media || []).slice(0, 3).map(m => m.url || m.thumbUrl || m.fullUrl || m.key),
+          }));
+          console.log('🛰️ Feed media sample URLs:', JSON.stringify(sample));
+        } catch (logErr) {
+          console.warn('Failed to log feed media sample:', logErr);
+        }
+
+        // Backend now returns ready-to-render media URLs (thumbUrl/fullUrl or media.url).
+        // Avoid per-post client-side processing to eliminate latency.
         return {
           success: true,
           data: {
             ...response.data,
-            posts: processedPosts
+            posts: rawPosts
           },
         };
       } else {
@@ -657,11 +668,19 @@ class PostApiService {
       });
 
       if (response.success) {
-        // Process post media (same as feed) so media has proper url/uri for rendering
-        const processedPosts = await this.processPostsWithMedia([response.data]);
+        // Log media URLs for this post for debugging CDN usage
+        try {
+          const post = response.data;
+          const mediaUrls = (post.media || []).map(m => m.url || m.thumbUrl || m.fullUrl || m.key);
+          console.log(`🛰️ Post ${post.id} media URLs:`, JSON.stringify(mediaUrls));
+        } catch (logErr) {
+          console.warn('Failed to log post media URLs:', logErr);
+        }
+
+        // Backend returns ready-to-render media URLs for single post
         return {
           success: true,
-          data: processedPosts[0] || response.data,
+          data: response.data,
         };
       } else {
         throw new Error(response.message || 'Post not found');
@@ -1123,128 +1142,9 @@ class PostApiService {
 
   // Process posts to include signed media URLs based on backend pattern
   async processPostsWithMedia(posts) {
-    try {
-      console.log('📰 Processing posts with media:', posts.length);
-
-      const processedPosts = await Promise.all(posts.map(async (post) => {
-        if (!post.media || !Array.isArray(post.media) || post.media.length === 0) {
-          // No media, return post as-is but ensure media array exists
-          return {
-            ...post,
-            media: [],
-            mediaUrls: [],
-            userReaction: post.userReaction,
-            counts: post.counts
-          };
-        }
-
-        // Process media to get proxy URL and signed URL (with fallback)
-        const processedMedia = await Promise.all(post.media.map(async (mediaItem) => {
-          try {
-            // Prefer signedUrl when available - S3 signed URLs work directly without proxy
-            const signedUrl = mediaItem.signedUrl;
-            if (signedUrl && typeof signedUrl === 'string' && signedUrl.startsWith('http')) {
-              return {
-                ...mediaItem,
-                url: signedUrl,
-                uri: signedUrl,
-                displayUrl: signedUrl,
-                signedUrl,
-                mediaType: mediaItem.mediaType || mediaItem.type || 'image',
-                key: mediaItem.key || mediaItem.mediaKey
-              };
-            }
-
-            // If media already has a valid URL (from Feed CDN or backend), preserve it
-            const existingUrl = mediaItem.url || mediaItem.uri || mediaItem.displayUrl;
-            if (existingUrl && typeof existingUrl === 'string' && existingUrl.startsWith('http')) {
-              const correctedUrl = this.correctBaseUrl(existingUrl);
-              return {
-                ...mediaItem,
-                url: correctedUrl,
-                uri: correctedUrl,
-                displayUrl: correctedUrl,
-                signedUrl: mediaItem.signedUrl ? this.correctBaseUrl(mediaItem.signedUrl) : correctedUrl,
-                mediaType: mediaItem.mediaType || mediaItem.type || 'image',
-                key: mediaItem.key || mediaItem.mediaKey
-              };
-            }
-
-            // If media already has both URLs, check if they need base URL correction
-            if (mediaItem.url && mediaItem.signedUrl) {
-              const correctedUrl = this.correctBaseUrl(mediaItem.url);
-              const correctedSignedUrl = this.correctBaseUrl(mediaItem.signedUrl);
-
-              return {
-                ...mediaItem,
-                url: correctedUrl,
-                signedUrl: correctedSignedUrl,
-                uri: correctedUrl,
-                mediaType: mediaItem.mediaType || mediaItem.type || 'image'
-              };
-            }
-
-            // If we have a key, generate media URLs (chat service pattern)
-            if (mediaItem.key || mediaItem.mediaKey) {
-              const key = mediaItem.key || mediaItem.mediaKey;
-              const displayUrl = this.getMediaDisplayUrl(key);
-
-              return {
-                ...mediaItem,
-                key,
-                url: displayUrl,
-                uri: displayUrl,
-                displayUrl,
-                mediaType: mediaItem.mediaType || mediaItem.type || 'image'
-              };
-            }
-
-            // If we only have a URL, correct it and use for both
-            if (mediaItem.url) {
-              const correctedUrl = this.correctBaseUrl(mediaItem.url);
-              return {
-                ...mediaItem,
-                url: correctedUrl,
-                uri: correctedUrl,
-                signedUrl: correctedUrl,
-                mediaType: mediaItem.mediaType || mediaItem.type || 'image'
-              };
-            }
-
-            // Fallback: return media item as-is
-            console.warn('📰 Media item has no url or key:', mediaItem);
-            return mediaItem;
-          } catch (error) {
-            console.error('📰 Error processing media item:', error);
-            return mediaItem; // Return original on error
-          }
-        }));
-
-        // Create legacy mediaUrls array for backward compatibility
-        const mediaUrls = processedMedia
-          .filter(item => item.url || item.uri)
-          .map(item => item.url || item.uri);
-
-        return {
-          ...post,
-          media: processedMedia,
-          mediaUrls: mediaUrls,
-          userReaction: post.userReaction,
-          counts: post.counts
-        };
-      }));
-
-      console.log('📰 Processed posts with media URLs');
-      return processedPosts;
-    } catch (error) {
-      console.error('📰 Error processing posts with media:', error);
-      // Return original posts on error
-      return posts.map(post => ({
-        ...post,
-        media: post.media || [],
-        mediaUrls: post.mediaUrls || []
-      }));
-    }
+    // No-op: backend now returns ready-to-render media URLs (thumbUrl/fullUrl or media.url).
+    // Keep this method for backward compatibility; simply return posts unchanged.
+    return posts;
   }
 
   // Get proxy URL for media (PRIMARY method - following chat pattern)
@@ -1290,43 +1190,12 @@ class PostApiService {
         // The signed URL should be publicly accessible (no auth headers needed)
         return this.correctBaseUrl(response.data.signedUrl);
       } else {
-        throw new Error('Failed to get signed URL from backend');
-      }
-    } catch (error) {
-      console.warn('📰 Failed to get signed URL, trying direct fetch fallback:', error.message);
-
-      // Last resort: try to fetch the media directly with auth and create blob URL
-      try {
-        const directUrl = `${this.baseUrl}/posts/media/${encodeURIComponent(mediaKey)}`;
-        console.log('📰 Trying direct media fetch with auth:', directUrl);
-
-        const accessToken = authApi.getAccessToken();
-        if (!accessToken) {
-          throw new Error('No access token available');
-        }
-
-        const response = await fetch(directUrl, {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Accept': 'image/*'
-          }
-        });
-
-        if (!response.ok) {
-          throw new Error(`Direct media request failed: ${response.status}`);
-        }
-
-        const blob = await response.blob();
-        const localUrl = URL.createObjectURL(blob);
-        console.log('📰 Created fallback blob URL:', localUrl);
-        return localUrl;
-
-      } catch (fallbackError) {
-        console.error('📰 All media loading methods failed:', fallbackError);
-        // Return placeholder or error image
+        console.warn('📰 Failed to get signed URL from backend for key:', mediaKey);
         return null;
       }
+    } catch (error) {
+      console.warn('📰 Error while requesting signed URL:', error.message);
+      return null;
     }
   }
 

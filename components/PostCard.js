@@ -93,11 +93,11 @@ const PostCard = memo(({ post, onPostDeleted }) => {
   const getImageSource = (mediaItem) => {
     const userToken = authApi.getAccessToken();
 
-    // Prefer backend-provided URL when available (CDN or proxy URL from API)
-    const existingUrl = mediaItem.uri || mediaItem.url || mediaItem.displayUrl;
-    if (existingUrl && typeof existingUrl === 'string' && existingUrl.startsWith('http')) {
+    // Prefer thumbnail then full URL provided by backend
+    const preferredUrl = mediaItem.thumbUrl || mediaItem.url || mediaItem.fullUrl || mediaItem.displayUrl || mediaItem.uri;
+    if (preferredUrl && typeof preferredUrl === 'string' && preferredUrl.startsWith('http')) {
       return {
-        uri: existingUrl,
+        uri: preferredUrl,
         headers: userToken ? { Authorization: `Bearer ${userToken}` } : undefined,
       };
     }
@@ -107,7 +107,7 @@ const PostCard = memo(({ post, onPostDeleted }) => {
       return postApi.getImageSource(mediaItem.key, userToken);
     }
 
-    return { uri: existingUrl || '' };
+    return { uri: preferredUrl || '' };
   };
 
   const handleReaction = async () => {
@@ -205,27 +205,35 @@ const PostCard = memo(({ post, onPostDeleted }) => {
         const imageSource = getImageSource(item);
         
         if (imageSource.uri) {
-          Image.getSize(
-            imageSource.uri,
-            (width, height) => {
-              if (width && height) {
-                const aspectRatio = height / width;
-                const calculatedHeight = imageWidth * aspectRatio;
-                const finalHeight = Math.min(calculatedHeight, maxHeight);
+          // Prefer dimensions provided by backend to avoid network-based getSize calls
+          if (item.width && item.height) {
+            const aspectRatio = item.height / item.width;
+            const calculatedHeight = imageWidth * aspectRatio;
+            const finalHeight = Math.min(calculatedHeight, maxHeight);
+            setImageHeights(prev => ({ ...prev, [imageKey]: finalHeight }));
+          } else {
+            Image.getSize(
+              imageSource.uri,
+              (width, height) => {
+                if (width && height) {
+                  const aspectRatio = height / width;
+                  const calculatedHeight = imageWidth * aspectRatio;
+                  const finalHeight = Math.min(calculatedHeight, maxHeight);
+                  setImageHeights(prev => ({
+                    ...prev,
+                    [imageKey]: finalHeight
+                  }));
+                }
+              },
+              (error) => {
+                // Fallback to default height on error
                 setImageHeights(prev => ({
                   ...prev,
-                  [imageKey]: finalHeight
+                  [imageKey]: 300
                 }));
               }
-            },
-            (error) => {
-              // Fallback to default height on error
-              setImageHeights(prev => ({
-                ...prev,
-                [imageKey]: 300
-              }));
-            }
-          );
+            );
+          }
         }
       });
     }
@@ -416,6 +424,11 @@ const PostCard = memo(({ post, onPostDeleted }) => {
             keyExtractor={(item, index) => `${post.id}_media_${index}`}
             horizontal
             pagingEnabled
+            windowSize={5}
+            removeClippedSubviews={true}
+            maxToRenderPerBatch={1}
+            initialNumToRender={1}
+            updateCellsBatchingPeriod={50}
             showsHorizontalScrollIndicator={false}
             decelerationRate="fast"
             snapToInterval={mediaContentWidth}
