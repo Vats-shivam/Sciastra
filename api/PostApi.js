@@ -328,7 +328,7 @@ class PostApiService {
           {
             id: 'mock_post_1',
             userId: 'user_123',
-            content: 'Welcome to SciAstra Community! This is a sample post.',
+            content: 'Welcome to SciX Community! This is a sample post.',
             topics: ['Science', 'Learning'],
             media: [], // Updated to use media array
             mediaUrls: [],

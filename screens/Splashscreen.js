@@ -62,7 +62,7 @@ const SplashScreen = ({ navigation }) => {
         ]}
       >
         <Image source={require('../assets/icon.png')} style={styles.logo} />
-        <Text style={styles.appName}>SCIASTRA</Text>
+        <Text style={styles.appName}>SCIX</Text>
       </Animated.View>
 
       {/* Subtle pulsing loader */}

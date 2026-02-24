@@ -68,7 +68,7 @@ const LoginScreen = ({ navigation }) => {
         <View style={styles.content}>
           {/* Logo Section */}
           <View style={styles.logoContainer}>
-            <Text style={styles.logoText}>SciAstra</Text>
+            <Text style={styles.logoText}>SciX</Text>
             <Text style={styles.subtitle}>
               Join a vibrant community where{'\n'}
               collaboration and learning thrive!

@@ -221,7 +221,7 @@ const OnboardingScreen = ({ navigation }) => {
               },
             ]}
           >
-            <Text style={styles.logoText}>SciAstra</Text>
+            <Text style={styles.logoText}>SciX</Text>
             <Text style={styles.formTitle}>Ready to join our community?</Text>
             
             <TouchableOpacity

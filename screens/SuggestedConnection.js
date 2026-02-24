@@ -277,7 +277,7 @@ const SuggestedConnectionsScreen = ({ navigation }) => {
       <SafeAreaView style={styles.safeArea}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.logoText}>Xcience</Text>
+          <Text style={styles.logoText}>SciX</Text>
           <Text style={styles.title}>Connect with People</Text>
           <Text style={styles.subtitle}>
             Discover and connect with like-minded{'\n'}

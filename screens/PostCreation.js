@@ -35,7 +35,7 @@ const VISIBILITY_OPTIONS = [
   {
     id: 'public',
     label: 'Public',
-    description: 'Anyone on SciAstra can see this post',
+    description: 'Anyone on SciX can see this post',
     icon: 'earth',
   },
   {

@@ -291,7 +291,7 @@ const SettingsScreen = ({ navigation }) => {
             </View>
             
             <Text style={styles.modalTitle}>
-              {contactModalType === 'about' ? 'About SciAstra' : 'Help & Support'}
+              {contactModalType === 'about' ? 'About SciX' : 'Help & Support'}
             </Text>
             <Text style={styles.modalMessage}>
               For more information and support, please visit our website or contact us:

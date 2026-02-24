@@ -1,25 +1,32 @@
 {
   "expo": {
-    "name": "Xcience",
+    "name": "SciX",
     "slug": "ScistraCommunityApp",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/scix.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": false,
+    "newArchEnabled": true,
     "splash": {
-      "image": "./assets/icon.png",
+      "image": "./assets/scix.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.xcience.scix",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "SciX uses the camera so you can take photos to attach to posts and share in chats. For example, you can take a photo and add it to a community post or send it in a direct message.",
+        "NSPhotoLibraryUsageDescription": "SciX uses your photo library so you can choose photos to attach to posts, send in chats, or set as your profile picture. For example, you can select a photo from your gallery to add to a community post or to use as your profile photo."
+      },
+      "buildNumber": "10"
     },
     "android": {
-      "package": "com.sciastra.xcience",
-      "versionCode": 26,
+      "package": "com.sciastra.scix",
+      "versionCode": 39,
       "adaptiveIcon": {
-        "foregroundImage": "./assets/icon.png",
+        "foregroundImage": "./assets/scix.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
@@ -27,7 +34,7 @@
       "softwareKeyboardLayoutMode": "resize"
     },
     "web": {
-      "favicon": "./assets/icon.png"
+      "favicon": "./assets/scix.png"
     },
     "updates": {
       "enabled": true,
@@ -49,7 +56,7 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "01006aad-b1d4-499e-9ed8-f8dd53dd0933"
+        "projectId": "1b269736-133a-4424-890d-305ff14cfbf6"
       }
     }
   }
