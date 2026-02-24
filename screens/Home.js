@@ -12,6 +12,7 @@ import {
   Platform,
   StatusBar,
   ActivityIndicator,
+  SafeAreaView,
 } from "react-native";
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { useNavigation, useRoute } from "@react-navigation/native";
@@ -381,11 +382,12 @@ const HomeScreen = () => {
     const showNoResults = !searchLoading && searchText.trim().length >= 2 && !hasResults;
 
     return (
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={{ flex: 1 }}
-      >
-        <View style={{ backgroundColor: colors.background, flex: 1 }}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.background, paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) : 0 }}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={{ flex: 1 }}
+        >
+          <View style={{ backgroundColor: colors.background, flex: 1, paddingTop: 8 }}>
           {searchLoading ? (
             <ScrollView
               style={{ flex: 1 }}
@@ -477,6 +479,7 @@ const HomeScreen = () => {
           )}
         </View>
       </KeyboardAvoidingView>
+      </SafeAreaView>
     );
   };
 
@@ -496,7 +499,7 @@ const HomeScreen = () => {
         ) : (
           <View style={[
             styles.searchBarContainer,
-            { paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) : 0 }
+            { paddingTop: (StatusBar.currentHeight || 0) }
           ]}>
             <View style={styles.searchBar}>
               <TouchableOpacity
