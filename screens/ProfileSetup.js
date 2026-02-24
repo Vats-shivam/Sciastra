@@ -420,7 +420,7 @@ const ProfileSetupScreen = ({ navigation, route }) => {
         >
           {/* Header */}
           <View style={styles.header}>
-            <Text style={styles.logoText}>SciAstra</Text>
+            <Text style={styles.logoText}>SciX</Text>
             <Text style={styles.title}>
               {route?.params?.editMode ? 'Edit Your Profile' : 'Complete Your Profile'}
             </Text>

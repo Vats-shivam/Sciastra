@@ -188,7 +188,7 @@ const EventScreen = ({ navigation }) => {
 
   const renderListFooter = () => (
     <View style={styles.footer}>
-      <Text style={styles.footerTitle}>EXPLORE EVENTS WITH SCIASTRA</Text>
+      <Text style={styles.footerTitle}>EXPLORE EVENTS WITH SCIX</Text>
       <Text style={styles.footerMade}>Made with 💙 in India</Text>
     </View>
   );

@@ -20,7 +20,7 @@ const Header = ({
     <View style={styles.headerContainer}>
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <Text style={styles.logoText}>Xcience</Text>
+          <Text style={styles.logoText}>SciX</Text>
         </View>
         {showTitle && (
           <View style={styles.headerCenter}>

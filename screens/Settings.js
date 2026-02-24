@@ -8,9 +8,12 @@ import { useNotification } from '../contexts/NotificationContext';
 import Header from '../components/Header';
 import useScreenApiLogger from '../hooks/useScreenApiLogger';
 
+const DELETE_ACCOUNT_EMAIL = 'support@sciastra.com';
+
 const SettingsScreen = ({ navigation }) => {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
+  const [deleteAccountModalVisible, setDeleteAccountModalVisible] = useState(false);
   const [contactModalVisible, setContactModalVisible] = useState(false);
   const [contactModalType, setContactModalType] = useState('about');
   const [languageModalVisible, setLanguageModalVisible] = useState(false);
@@ -45,6 +48,32 @@ const SettingsScreen = ({ navigation }) => {
     });
   };
 
+  const handleDeleteAccountPress = () => {
+    setDeleteAccountModalVisible(true);
+  };
+
+  const confirmDeleteAccount = () => {
+    setDeleteAccountModalVisible(false);
+    const user = authManager.getCurrentUser() || {};
+    const details = [
+      `I want to delete my account and all associated data.`,
+      '',
+      'My account details:',
+      `- User ID: ${user.id || user.userId || 'N/A'}`,
+      `- Name: ${user.name || 'N/A'}`,
+      `- Phone: ${user.phone || user.mobile || 'N/A'}`,
+      `- Email: ${user.email || 'N/A'}`,
+      '',
+      'Please process my account deletion request.',
+    ].join('\n');
+    const subject = 'Account Deletion Request - SciX App';
+    const mailtoUrl = `mailto:${DELETE_ACCOUNT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(details)}`;
+    Linking.openURL(mailtoUrl).catch(err => {
+      showError('Could not open email app.');
+      console.error('Error opening mailto:', err);
+    });
+  };
+
   return (
     <View style={styles.container}>
       <Header 
@@ -69,6 +98,21 @@ const SettingsScreen = ({ navigation }) => {
                   <Icon name="account-edit" size={22} color={colors.white} />
                 </View>
                 <Text style={styles.settingLabel}>Edit Profile</Text>
+              </View>
+              <Icon name="chevron-right" size={24} color={colors.textMuted} />
+            </TouchableOpacity>
+
+            <View style={styles.divider} />
+
+            <TouchableOpacity 
+              style={styles.settingRow}
+              onPress={handleDeleteAccountPress}
+            >
+              <View style={styles.settingLeft}>
+                <View style={[styles.iconContainer, { backgroundColor: colors.error }]}>
+                  <Icon name="account-remove" size={22} color={colors.white} />
+                </View>
+                <Text style={[styles.settingLabel, { color: colors.error }]}>Delete account</Text>
               </View>
               <Icon name="chevron-right" size={24} color={colors.textMuted} />
             </TouchableOpacity>
@@ -191,6 +235,43 @@ const SettingsScreen = ({ navigation }) => {
                 onPress={confirmLogout}
               >
                 <Text style={styles.confirmModalButtonText}>Logout</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Delete Account Confirmation Modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={deleteAccountModalVisible}
+        onRequestClose={() => setDeleteAccountModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalIconContainer}>
+              <Icon name="account-remove" size={48} color={colors.error} />
+            </View>
+
+            <Text style={styles.modalTitle}>Delete account</Text>
+            <Text style={styles.modalMessage}>
+              To delete your account, an email will be opened to {DELETE_ACCOUNT_EMAIL} with your details and a request to delete your account. Send the email to complete the process.
+            </Text>
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.cancelModalButton]}
+                onPress={() => setDeleteAccountModalVisible(false)}
+              >
+                <Text style={styles.cancelModalButtonText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.confirmModalButton]}
+                onPress={confirmDeleteAccount}
+              >
+                <Text style={styles.confirmModalButtonText}>Open email</Text>
               </TouchableOpacity>
             </View>
           </View>

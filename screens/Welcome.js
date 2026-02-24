@@ -13,6 +13,7 @@ import {
   Image,
   FlatList,
   Alert,
+  Linking,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import LottieView from 'lottie-react-native';
@@ -219,7 +220,7 @@ const OnboardingScreen = ({ navigation }) => {
               },
             ]}
           >
-            <Text style={styles.logoText}>SciAstra</Text>
+            <Text style={styles.logoText}>SciX</Text>
             <Text style={styles.formTitle}>Ready to join our community?</Text>
             
             <TouchableOpacity
@@ -234,11 +235,26 @@ const OnboardingScreen = ({ navigation }) => {
               </LinearGradient>
             </TouchableOpacity>
             
-            <View style={styles.termsContainer}>
-              <Text style={styles.termsText}>
-                By continuing, you agree to our Terms of Service and Privacy Policy
-              </Text>
-            </View>
+            {/* Terms */}
+<View style={styles.termsContainer}>
+  <Text style={styles.termsText}>
+    By continuing, you agree to our{' '}
+    <Text
+      style={styles.termsLink}
+      onPress={() => Linking.openURL('https://www.sciastra.com/term-and-conditions')}
+    >
+      Terms of Service
+    </Text>
+    {' '}and{' '}
+    <Text
+      style={styles.termsLink}
+      onPress={() => Linking.openURL('https://www.sciastra.com/privacy-policy')}
+    >
+      Privacy Policy
+    </Text>
+    .
+  </Text>
+</View>
           </Animated.View>
         </KeyboardAvoidingView>
       )}

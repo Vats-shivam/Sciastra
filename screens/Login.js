@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -66,7 +67,7 @@ const LoginScreen = ({ navigation }) => {
         <View style={styles.content}>
           {/* Logo Section */}
           <View style={styles.logoContainer}>
-            <Text style={styles.logoText}>SciAstra</Text>
+            <Text style={styles.logoText}>SciX</Text>
             <Text style={styles.subtitle}>
               Join a vibrant community where{'\n'}
               collaboration and learning thrive!
@@ -123,9 +124,24 @@ const LoginScreen = ({ navigation }) => {
             </View> */}
 
             {/* Terms */}
+            {/* Terms */}
             <View style={styles.termsContainer}>
               <Text style={styles.termsText}>
-                By continuing, you agree to our Terms of Service and Privacy Policy
+                By continuing, you agree to our{' '}
+                <Text
+                  style={styles.termsLink}
+                  onPress={() => Linking.openURL('https://www.sciastra.com/term-and-conditions')}
+                >
+                  Terms of Service
+                </Text>
+                {' '}and{' '}
+                <Text
+                  style={styles.termsLink}
+                  onPress={() => Linking.openURL('https://www.sciastra.com/privacy-policy')}
+                >
+                  Privacy Policy
+                </Text>
+                .
               </Text>
             </View>
           </View>

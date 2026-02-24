@@ -916,7 +916,7 @@ const UserProfileScreen = ({ navigation, route }) => {
                 setShowReportSheet(true);
               }}
             >
-              <Text style={[styles.optionText, styles.reportOptionTextMenu]}>Report User</Text>
+              <Text style={[styles.optionText, styles.reportOptionTextMenu]}>Block and Report User</Text>
             </TouchableOpacity>
           </Pressable>
         </Pressable>
