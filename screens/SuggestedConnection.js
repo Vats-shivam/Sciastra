@@ -246,7 +246,7 @@ const SuggestedConnectionsScreen = ({ navigation }) => {
             source={
               item.profilePic
                 ? profileApi.getImageSource(item.profilePic, authApi.getAccessToken())
-                : require('../assets/icon.png')
+                : require('../assets/scix.png')
             }
             style={styles.avatar}
           />

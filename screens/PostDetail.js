@@ -423,7 +423,7 @@ const PostDetailScreen = ({ route, navigation }) => {
       || comment.profilePic 
       || comment.user?.profilePic;
     const imageSource = commentAvatarErrors[comment.id]
-      ? require('../assets/icon.png')
+      ? require('../assets/scix.png')
       : getProfileImageSource(userWithProfile, { fallbackKey: profilePicKey });
     
     const userId = comment.user?.id || comment.userId;
@@ -456,7 +456,7 @@ const PostDetailScreen = ({ route, navigation }) => {
               source={imageSource}
               style={styles.commentAvatar}
               resizeMode="cover"
-              defaultSource={require('../assets/icon.png')}
+              defaultSource={require('../assets/scix.png')}
               onError={() => {
                 setCommentAvatarErrors((prev) => ({ ...prev, [comment.id]: true }));
               }}
@@ -508,7 +508,7 @@ const PostDetailScreen = ({ route, navigation }) => {
       || userWithProfile.profilePic 
       || reaction.profilePic;
     const imageSource = reactionAvatarErrors[reaction.id]
-      ? require('../assets/icon.png')
+      ? require('../assets/scix.png')
       : getProfileImageSource(userWithProfile, { fallbackKey: profilePicKey });
     
     const userId = reaction.user?.id || reaction.userId;
@@ -531,7 +531,7 @@ const PostDetailScreen = ({ route, navigation }) => {
             source={imageSource}
             style={styles.reactionAvatar}
             resizeMode="cover"
-            defaultSource={require('../assets/icon.png')}
+            defaultSource={require('../assets/scix.png')}
             onError={() => {
               setReactionAvatarErrors((prev) => ({ ...prev, [reaction.id]: true }));
             }}
@@ -669,7 +669,7 @@ const PostDetailScreen = ({ route, navigation }) => {
                   })}
                   style={styles.avatar}
                   resizeMode="cover"
-                  defaultSource={require('../assets/icon.png')}
+                  defaultSource={require('../assets/scix.png')}
                 />
               </TouchableOpacity>
               <View style={styles.authorInfo}>

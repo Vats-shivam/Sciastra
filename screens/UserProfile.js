@@ -682,7 +682,7 @@ const UserProfileScreen = ({ navigation, route }) => {
   if (loading) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.background }}>
-        <Header title="PROFILE" />
+        <Header title="PROFILE" showBackButton={true} onBackPress={() => navigation.goBack()} />
         <ProfileSkeleton showPosts={true} />
       </View>
     );
@@ -698,8 +698,8 @@ const UserProfileScreen = ({ navigation, route }) => {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <Header title="PROFILE" />
-      
+<Header title="PROFILE" showBackButton={true} onBackPress={() => navigation.goBack()} />
+
       <ScrollView style={{ flex: 1 }}>
         {/* Profile Header */}
         <View style={styles.profileHeader}>

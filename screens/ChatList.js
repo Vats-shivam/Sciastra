@@ -318,12 +318,12 @@ const ChatListScreen = ({ navigation }) => {
               <Image 
                 source={
                   avatarErrors[item.id]
-                    ? require('../assets/icon.png')
+                    ? require('../assets/scix.png')
                     : getProfileImageSource(item.participant || {}, { fallbackKey: item.avatar })
                 }
                 style={styles.avatar}
                 resizeMode="cover"
-                defaultSource={require('../assets/icon.png')}
+                defaultSource={require('../assets/scix.png')}
                 onError={() => {
                   console.log('ChatList: Avatar error for chat', item.id, 'participant:', item.participant, 'avatar:', item.avatar);
                   setAvatarErrors(prev => ({ ...prev, [item.id]: true }));

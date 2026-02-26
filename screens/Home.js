@@ -461,12 +461,12 @@ const HomeScreen = () => {
                       <Image
                         source={
                           searchAvatarErrors[item.id]
-                            ? require("../assets/icon.png")
+                            ? require("../assets/scix.png")
                             : getProfileImageSource(item, { fallbackKey: item.profilePic })
                         }
                         style={styles.avatarSmall}
                         resizeMode="cover"
-                        defaultSource={require("../assets/icon.png")}
+                        defaultSource={require("../assets/scix.png")}
                         onError={() =>
                           setSearchAvatarErrors((prev) => ({ ...prev, [item.id]: true }))
                         }

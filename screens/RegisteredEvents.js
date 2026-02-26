@@ -423,7 +423,7 @@ const RegisteredEvents = ({ navigation }) => {
                                   source={
                                     speaker.profileImage || speaker.photoUrl
                                       ? { uri: speaker.profileImage || speaker.photoUrl }
-                                      : require('../assets/icon.png')
+                                      : require('../assets/scix.png')
                                   }
                                   style={styles.speakerAvatar}
                                 />

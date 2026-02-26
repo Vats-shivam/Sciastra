@@ -20,11 +20,11 @@
         "NSCameraUsageDescription": "SciX uses the camera so you can take photos to attach to posts and share in chats. For example, you can take a photo and add it to a community post or send it in a direct message.",
         "NSPhotoLibraryUsageDescription": "SciX uses your photo library so you can choose photos to attach to posts, send in chats, or set as your profile picture. For example, you can select a photo from your gallery to add to a community post or to use as your profile photo."
       },
-      "buildNumber": "10"
+      "buildNumber": "12"
     },
     "android": {
       "package": "com.sciastra.scix",
-      "versionCode": 39,
+      "versionCode": 42,
       "adaptiveIcon": {
         "foregroundImage": "./assets/scix.png",
         "backgroundColor": "#ffffff"

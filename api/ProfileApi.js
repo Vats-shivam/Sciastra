@@ -801,7 +801,7 @@ class ProfileApiService {
   // Get image source with auth headers for profile pictures
   getImageSource(mediaKey, userToken) {
     if (!mediaKey) {
-      return require('../assets/icon.png');
+      return require('../assets/scix.png');
     }
     
     // If it's already a full URL (presigned S3 URL), return it directly

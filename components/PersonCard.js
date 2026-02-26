@@ -7,7 +7,7 @@ import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 const PersonCard = ({ person, onChatPress, onMorePress, showActions = true }) => {
   return (
     <View style={styles.card}>
-      <Image source={person.profilePic ? { uri: person.profilePic } : require('../assets/icon.png')} style={styles.avatar} />
+      <Image source={person.profilePic ? { uri: person.profilePic } : require('../assets/scix.png')} style={styles.avatar} />
       <View style={styles.infoContainer}>
         <Text style={styles.name}>{person.name}</Text>
         <Text style={styles.designation}>{person.designation}</Text>

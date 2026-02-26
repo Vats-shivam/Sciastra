@@ -390,7 +390,7 @@ const PostCard = memo(({ post, onPostDeleted }) => {
               })}
               style={styles.avatar}
               resizeMode="cover"
-              defaultSource={require("../assets/icon.png")}
+              defaultSource={require("../assets/scix.png")}
             />
           </TouchableOpacity>
           <TouchableOpacity

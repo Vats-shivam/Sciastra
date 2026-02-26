@@ -5,7 +5,7 @@ import colors from '../config/colors';
 const Avatar = ({ uri, size = 50 }) => (
   <Image
     style={[styles.avatar, { width: size, height: size, borderRadius: size / 2 }]}
-    source={uri ? { uri } : require('../assets/icon.png')}
+      source={uri ? { uri } : require('../assets/scix.png')}
   />
 );
 

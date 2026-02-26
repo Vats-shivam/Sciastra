@@ -1,7 +1,7 @@
 import authApi from '../api/AuthApi';
 import profileApi from '../api/ProfileApi';
 
-const DEFAULT_IMAGE = require('../assets/icon.png');
+const DEFAULT_IMAGE = require('../assets/scix.png');
 
 const resolveProfileMediaKey = (entity) => {
   if (!entity) {

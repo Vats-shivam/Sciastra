@@ -716,7 +716,7 @@ useEffect(() => {
               source={getProfileImageSource({ profilePic: userProfilePic }, { fallbackKey: userProfilePic })}
               style={styles.userAvatar}
               resizeMode="cover"
-              defaultSource={require('../assets/icon.png')}
+              defaultSource={require('../assets/scix.png')}
             />
             <View style={styles.userInfo}>
               <Text style={styles.userName}>{userName}</Text>

@@ -266,14 +266,14 @@ const ConnectionsScreen = () => {
         <Image
           source={
             profileImageErrors[item.id]
-              ? require("../assets/icon.png")
+              ? require("../assets/scix.png")
               : getProfileImageSource(item.user || item, { 
                   fallbackKey: item.profilePic || item.user?.profilePic || item.user?.profile?.profilePic 
                 })
           }
           style={styles.avatar}
           resizeMode="cover"
-          defaultSource={require("../assets/icon.png")}
+          defaultSource={require("../assets/scix.png")}
           onError={() =>
             setProfileImageErrors((prev) => ({ ...prev, [item.id]: true }))
           }
@@ -366,14 +366,14 @@ const ConnectionsScreen = () => {
         <Image
           source={
             profileImageErrors[item.id]
-              ? require("../assets/icon.png")
+              ? require("../assets/scix.png")
               : getProfileImageSource(item.user || item, { 
                   fallbackKey: item.profilePic || item.user?.profilePic || item.user?.profile?.profilePic 
                 })
           }
           style={styles.avatar}
           resizeMode="cover"
-          defaultSource={require("../assets/icon.png")}
+          defaultSource={require("../assets/scix.png")}
           onError={() =>
             setProfileImageErrors((prev) => ({ ...prev, [item.id]: true }))
           }

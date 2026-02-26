@@ -309,7 +309,7 @@ const EventDetailScreen = ({ route, navigation }) => {
       >
         {/* Event Banner */}
         <Image
-          source={event.featuredImage ? { uri: event.featuredImage } : require("../assets/splash-icon.png")}
+          source={event.featuredImage ? { uri: event.featuredImage } : require("../assets/scix.png")}
           style={styles.banner}
           resizeMode="cover"
         />
@@ -399,7 +399,7 @@ const EventDetailScreen = ({ route, navigation }) => {
                     source={
                       speaker.profileImage || speaker.photoUrl
                         ? { uri: speaker.profileImage || speaker.photoUrl }
-                        : require('../assets/icon.png')
+                          : require('../assets/scix.png')
                     }
                     style={styles.speakerImage}
                   />

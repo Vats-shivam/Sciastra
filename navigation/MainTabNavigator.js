@@ -109,7 +109,7 @@ const MainTabNavigator = () => {
             const hasProfilePicture = userProfile?.profilePicture || userProfile?.avatar;
             const imageSource = hasProfilePicture 
               ? { uri: userProfile.profilePicture || userProfile.avatar }
-              : require('../assets/icon.png');
+              : require('../assets/scix.png');
             
             return (
               <View style={{
