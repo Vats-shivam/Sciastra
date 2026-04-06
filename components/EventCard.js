@@ -2,6 +2,11 @@ import React from "react";
 import { Image, Pressable, View, Text, StyleSheet } from "react-native";
 import Card from "./Card";
 import colors from "../config/colors";
+import {
+  EVENT_FEATURED_IMAGE_ASPECT_RATIO,
+  EVENT_FEATURED_IMAGE_FRAME_BG,
+  getEventFeaturedImageUri,
+} from "../config/eventBanner";
 
 const DEFAULT_EVENT_BANNER_URL = require("../assets/splash-icon.png");
 
@@ -78,10 +83,11 @@ const EventCard = ({ event, onPress }) => {
   const shouldShowUpcomingBadge = isUpcoming();
 
   // Format the event data to match what the component expects
+  const featuredUri = getEventFeaturedImageUri(event);
+
   const formattedEvent = {
     ...event,
-    // Map API fields to component's expected fields
-    banner_url: event.featuredImage || null,
+    banner_url: featuredUri,
     start_time: event.startDateTime,
     end_time: event.endDateTime,
     cheapest_ticket_price: event.isFree ? 0 : event.price,
@@ -94,9 +100,9 @@ const EventCard = ({ event, onPress }) => {
         {/* Image Container */}
         <View style={styles.imageContainer}>
           <Image
-            source={formattedEvent.featuredImage ? { uri: formattedEvent.featuredImage } : DEFAULT_EVENT_BANNER_URL}
+            source={featuredUri ? { uri: featuredUri } : DEFAULT_EVENT_BANNER_URL}
             style={styles.image}
-            resizeMode="cover"
+            resizeMode="contain"
           />
           {/* Upcoming Badge - Top Right (highest priority) */}
           {shouldShowUpcomingBadge && (
@@ -138,7 +144,8 @@ const styles = StyleSheet.create({
   },
   imageContainer: {
     width: "100%",
-    aspectRatio: 3 / 2,
+    aspectRatio: EVENT_FEATURED_IMAGE_ASPECT_RATIO,
+    backgroundColor: EVENT_FEATURED_IMAGE_FRAME_BG,
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
     overflow: "hidden",

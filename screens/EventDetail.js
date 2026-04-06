@@ -1,6 +1,12 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { View, Text, Image, StyleSheet, ScrollView, TouchableOpacity, Modal, ActivityIndicator, Linking } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
 import colors from "../config/colors";
+import {
+  EVENT_FEATURED_IMAGE_ASPECT_RATIO,
+  EVENT_FEATURED_IMAGE_FRAME_BG,
+  getEventFeaturedImageUri,
+} from "../config/eventBanner";
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import Header from "../components/Header";
 import eventsApi from "../api/EventsApi";
@@ -8,7 +14,7 @@ import { useNotification } from "../contexts/NotificationContext";
 import authApi from "../api/AuthApi";
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import authManager from "../services/AuthManager";
-import useScreenApiLogger from "../hooks/useScreenApiLogger";
+import apiLogger from "../services/ApiLogger";
 import { EventCardSkeleton } from "../components/skeletons";
 
 const INSTRUCTIONS = [
@@ -40,29 +46,55 @@ const getDisplayDate = (event) => {
   }
 };
 
+const getEventStartMs = (event) => {
+  const t = event?.startDateTime || event?.start_time || event?.startDate;
+  if (!t) return null;
+  const ms = new Date(t).getTime();
+  return Number.isNaN(ms) ? null : ms;
+};
+
+const getEventEndMs = (event) => {
+  const t = event?.endDateTime || event?.end_time || event?.endDate;
+  if (!t) return null;
+  const ms = new Date(t).getTime();
+  return Number.isNaN(ms) ? null : ms;
+};
+
 const isEventStarted = (event) => {
-  const startTime = event?.startDateTime || event?.start_time;
-  if (!startTime) return false;
-  return new Date(startTime) <= new Date();
+  const startMs = getEventStartMs(event);
+  if (startMs == null) return false;
+  return Date.now() >= startMs;
+};
+
+/** True when current time is after scheduled end (requires a valid end time on the event). */
+const isEventEnded = (event) => {
+  const endMs = getEventEndMs(event);
+  if (endMs == null) return false;
+  return Date.now() > endMs;
 };
 
 const getEventStatus = (event) => {
   if (!event) return { status: 'Unknown', color: colors.gray };
-  
-  const eventStarted = isEventStarted(event);
-  
+
+  const started = isEventStarted(event);
+  const ended = isEventEnded(event);
+
   if (event.status === 'CANCELLED') {
     return { status: 'Cancelled', color: colors.danger };
   }
-  
+
   if (event.status === 'COMPLETED') {
     return { status: 'Completed', color: colors.gray };
   }
-  
-  if (eventStarted) {
+
+  if (ended) {
+    return { status: 'Completed', color: colors.gray };
+  }
+
+  if (started) {
     return { status: 'Event in Progress', color: colors.warning };
   }
-  
+
   return { status: 'Registration Open', color: colors.success };
 };
 
@@ -70,6 +102,118 @@ const galleryImages = [1, 2, 3].map((i) => ({
   id: `img${i}`,
   uri: 'https://via.placeholder.com/300x200?text=Event+Image'
 }));
+
+const DEFAULT_SPEAKER_IMAGE = require("../assets/icon.png");
+
+/** Resolve portrait URL from public event API (camelCase or snake_case). */
+function getSpeakerPortraitUri(speaker) {
+  if (!speaker || typeof speaker !== "object") return null;
+  const raw =
+    speaker.profileImage ??
+    speaker.profile_image ??
+    speaker.photoUrl ??
+    speaker.photo_url;
+  if (raw == null || typeof raw !== "string") return null;
+  const s = raw.trim();
+  return s.length ? s : null;
+}
+
+function nonEmptyTrimmed(value) {
+  if (value == null) return false;
+  if (typeof value !== "string") return false;
+  return value.trim().length > 0;
+}
+
+/** Normalize API JSON (camelCase or snake_case); omit if all links empty */
+function pickSpeakerSocialLinks(speaker) {
+  if (!speaker || typeof speaker !== "object") return null;
+  const raw = speaker.socialLinks ?? speaker.social_links;
+  if (!raw || typeof raw !== "object") return null;
+  const linkedin = typeof raw.linkedin === "string" ? raw.linkedin.trim() : "";
+  const twitter = typeof raw.twitter === "string" ? raw.twitter.trim() : "";
+  const website = typeof raw.website === "string" ? raw.website.trim() : "";
+  const out = {};
+  if (linkedin) out.linkedin = linkedin;
+  if (twitter) out.twitter = twitter;
+  if (website) out.website = website;
+  return Object.keys(out).length > 0 ? out : null;
+}
+
+function openExternalUrl(url) {
+  const u = (url || "").trim();
+  if (!u) return;
+  const href = /^https?:\/\//i.test(u) ? u : `https://${u}`;
+  Linking.openURL(href).catch(() => {});
+}
+
+/**
+ * Rounded avatar with cover resize + onError fallback.
+ * RN often draws nothing for remote URIs inside borderRadius without overflow:hidden + resizeMode.
+ */
+function SpeakerPortrait({ uri, size = 80, style }) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    setFailed(false);
+  }, [uri]);
+  const showRemote = Boolean(uri) && !failed;
+  return (
+    <View
+      style={[
+        {
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          overflow: "hidden",
+          backgroundColor: colors.backgroundElevated,
+        },
+        style,
+      ]}
+    >
+      <Image
+        source={showRemote ? { uri } : DEFAULT_SPEAKER_IMAGE}
+        style={StyleSheet.absoluteFillObject}
+        resizeMode="cover"
+        onError={() => setFailed(true)}
+      />
+    </View>
+  );
+}
+
+/** Unwrap { data: event } from gateways that nest the payload */
+function unwrapEventPayload(data) {
+  if (!data || typeof data !== "object") return null;
+  if (data.id != null) return data;
+  const inner = data.data;
+  if (inner && typeof inner === "object" && inner.id != null) return inner;
+  return null;
+}
+
+function logEventDetailSpeakersDebug(context, eventSnapshot, routeParams) {
+  if (!__DEV__) return;
+  const speakers = eventSnapshot?.speakers;
+  const rows = Array.isArray(speakers)
+    ? speakers.map((s, index) => ({
+        index,
+        id: s?.id,
+        name: s?.name,
+        profileImage: s?.profileImage,
+        photoUrl: s?.photoUrl,
+        profile_image: s?.profile_image,
+        photo_url: s?.photo_url,
+        resolvedPortraitUri: getSpeakerPortraitUri(s),
+        keys: s && typeof s === "object" ? Object.keys(s) : [],
+      }))
+    : null;
+
+  console.log(`[EventDetail] speakers debug (${context})`, {
+    eventId: eventSnapshot?.id ?? routeParams?.eventId,
+    hasEvent: !!eventSnapshot,
+    speakersType: speakers == null ? "null/undefined" : Array.isArray(speakers) ? "array" : typeof speakers,
+    speakersLength: Array.isArray(speakers) ? speakers.length : null,
+    speakers: rows,
+    rawSpeakersSample: Array.isArray(speakers) && speakers[0] ? speakers[0] : undefined,
+  });
+}
 
 const EventDetailScreen = ({ route, navigation }) => {
   const { eventId } = route?.params || {};
@@ -85,11 +229,22 @@ const EventDetailScreen = ({ route, navigation }) => {
   const { showError, showSuccess } = useNotification();
   const insets = useSafeAreaInsets();
 
-  useScreenApiLogger("EventDetail");
+  // Log speakers before apiLogger prints "Screen visited: EventDetail" (same focus callback, ordered)
+  useFocusEffect(
+    useCallback(() => {
+      logEventDetailSpeakersDebug("on focus", event, { eventId });
+      apiLogger.setCurrentScreen("EventDetail");
+      return () => {
+        apiLogger.clearCurrentScreen("EventDetail");
+      };
+    }, [event, eventId])
+  );
 
   const eventStarted = event ? isEventStarted(event) : false;
+  const eventEnded = event ? isEventEnded(event) : false;
   const { status: eventStatus, color: statusColor } = event ? getEventStatus(event) : { status: '', color: colors.gray };
-  const isRegistrationOpen = event?.status === 'PUBLISHED' && !eventStarted;
+  const isRegistrationOpen =
+    event?.status === 'PUBLISHED' && !eventStarted && !eventEnded;
   const isOnlineEvent = event?.venueType === 'ONLINE' || event?.venue_type === 'ONLINE' || event?.venueType === 'VIRTUAL' || event?.venue_type === 'VIRTUAL';
   
   // Get meeting link from multiple possible field names
@@ -114,14 +269,15 @@ const EventDetailScreen = ({ route, navigation }) => {
   };
   
   const meetingLink = getMeetingLink(event);
+  const featuredImageUri = event ? getEventFeaturedImageUri(event) : null;
 
   useEffect(() => {
     if (eventId && !initialEvent) {
       loadEventDetails();
     } else if (event) {
       checkRegistrationStatus();
-      // Show modal if event has started
-      if (isEventStarted(event)) {
+      // Live window only: after start, before end (not for completed events)
+      if (isEventStarted(event) && !isEventEnded(event)) {
         setShowEventStartedModal(true);
       }
     }
@@ -138,7 +294,13 @@ const EventDetailScreen = ({ route, navigation }) => {
       setLoading(true);
       const result = await eventsApi.getEventById(eventId);
       if (result.success) {
-        setEvent(result.data);
+        const raw = result.data;
+        if (__DEV__) {
+          console.log("[EventDetail] getEventById raw result.data keys", raw && typeof raw === "object" ? Object.keys(raw) : raw);
+          logEventDetailSpeakersDebug("after getEventById (raw)", unwrapEventPayload(raw) ?? (raw?.id != null ? raw : null), { eventId });
+        }
+        const payload = unwrapEventPayload(raw) ?? (raw && typeof raw === "object" && raw.id != null ? raw : null);
+        setEvent(payload);
       } else {
         showError('Failed to load event details');
         setEvent(null);
@@ -180,7 +342,13 @@ const EventDetailScreen = ({ route, navigation }) => {
     try {
       setRegistering(true);
 
-      // Check if event has already started
+      if (eventEnded) {
+        setShowRegisterConfirm(false);
+        showError('This event has ended. Registration is no longer available.');
+        return;
+      }
+
+      // Check if event has already started (still live)
       if (eventStarted) {
         setShowRegisterConfirm(false);
         setShowEventStartedModal(true);
@@ -252,19 +420,22 @@ const EventDetailScreen = ({ route, navigation }) => {
   const getButtonText = () => {
     if (registering) return 'Processing...';
     if (registrationStatus?.is_registered) return 'Registered';
-    if (event?.status === 'COMPLETED') return 'Event Completed';
+    if (event?.status === 'COMPLETED' || eventEnded) return 'Event Completed';
     if (eventStarted) return 'Event In Progress';
     if (!isRegistrationOpen) return 'Registration Closed';
     return 'Register Now';
   };
 
   const isButtonDisabled = () => {
-    return registering ||
-           checkingRegistration || 
-           registrationStatus?.is_registered || 
-           event?.status === 'COMPLETED' ||
-           eventStarted ||
-           !isRegistrationOpen;
+    return (
+      registering ||
+      checkingRegistration ||
+      registrationStatus?.is_registered ||
+      event?.status === 'COMPLETED' ||
+      eventEnded ||
+      eventStarted ||
+      !isRegistrationOpen
+    );
   };
 
   if (loading) {
@@ -307,12 +478,18 @@ const EventDetailScreen = ({ route, navigation }) => {
         contentContainerStyle={[styles.scrollContent, { paddingBottom: 140 + insets.bottom } ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Event Banner */}
-        <Image
-          source={event.featuredImage ? { uri: event.featuredImage } : require("../assets/scix.png")}
-          style={styles.banner}
-          resizeMode="cover"
-        />
+        {/* Event banner: same 16:9 frame + contain as EventCard — full image visible, no crop */}
+        <View style={styles.bannerFrame}>
+          <Image
+            source={
+              featuredImageUri
+                ? { uri: featuredImageUri }
+                : require("../assets/splash-icon.png")
+            }
+            style={styles.bannerImage}
+            resizeMode="contain"
+          />
+        </View>
         
         {/* Event Details */}
         <View style={styles.content}>
@@ -393,52 +570,63 @@ const EventDetailScreen = ({ route, navigation }) => {
           {event.speakers && event.speakers.length > 0 && (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Speakers</Text>
-              {event.speakers.map((speaker, index) => (
-                <View key={speaker.id || index} style={styles.speakerCard}>
-                  <Image
-                    source={
-                      speaker.profileImage || speaker.photoUrl
-                        ? { uri: speaker.profileImage || speaker.photoUrl }
-                          : require('../assets/scix.png')
-                    }
-                    style={styles.speakerImage}
-                  />
-                  <View style={styles.speakerInfo}>
-                    <Text style={styles.speakerName}>{speaker.name}</Text>
-                    {speaker.title && (
-                      <Text style={styles.speakerTitle}>{speaker.title}</Text>
-                    )}
-                    {speaker.company && (
-                      <Text style={styles.speakerCompany}>{speaker.company}</Text>
-                    )}
-                    {speaker.bio && (
-                      <Text style={styles.speakerBio} numberOfLines={3}>
-                        {speaker.bio}
-                      </Text>
-                    )}
-                    {speaker.socialLinks && (
-                      <View style={styles.socialLinks}>
-                        {speaker.socialLinks.linkedin && (
-                          <TouchableOpacity
-                            onPress={() => Linking.openURL(speaker.socialLinks.linkedin)}
-                            style={styles.socialButton}
-                          >
-                            <Icon name="linkedin" size={20} color="#0077B5" />
-                          </TouchableOpacity>
-                        )}
-                        {speaker.socialLinks.twitter && (
-                          <TouchableOpacity
-                            onPress={() => Linking.openURL(speaker.socialLinks.twitter)}
-                            style={styles.socialButton}
-                          >
-                            <Icon name="twitter" size={20} color="#1DA1F2" />
-                          </TouchableOpacity>
-                        )}
-                      </View>
-                    )}
+              {event.speakers.map((speaker, index) => {
+                const social = pickSpeakerSocialLinks(speaker);
+                return (
+                  <View key={speaker.id || index} style={styles.speakerCard}>
+                    <SpeakerPortrait
+                      uri={getSpeakerPortraitUri(speaker)}
+                      size={80}
+                      style={styles.speakerPortraitSlot}
+                    />
+                    <View style={styles.speakerInfo}>
+                      <Text style={styles.speakerName}>{speaker.name}</Text>
+                      {nonEmptyTrimmed(speaker.title) && (
+                        <Text style={styles.speakerTitle}>{speaker.title.trim()}</Text>
+                      )}
+                      {nonEmptyTrimmed(speaker.company) && (
+                        <Text style={styles.speakerCompany}>{speaker.company.trim()}</Text>
+                      )}
+                      {nonEmptyTrimmed(speaker.bio) && (
+                        <Text style={styles.speakerBio} numberOfLines={3}>
+                          {speaker.bio.trim()}
+                        </Text>
+                      )}
+                      {social ? (
+                        <View style={styles.socialLinks}>
+                          {social.linkedin ? (
+                            <TouchableOpacity
+                              onPress={() => openExternalUrl(social.linkedin)}
+                              style={styles.socialButton}
+                              accessibilityLabel="Speaker LinkedIn"
+                            >
+                              <Icon name="linkedin" size={20} color="#0077B5" />
+                            </TouchableOpacity>
+                          ) : null}
+                          {social.twitter ? (
+                            <TouchableOpacity
+                              onPress={() => openExternalUrl(social.twitter)}
+                              style={styles.socialButton}
+                              accessibilityLabel="Speaker Twitter"
+                            >
+                              <Icon name="twitter" size={20} color="#1DA1F2" />
+                            </TouchableOpacity>
+                          ) : null}
+                          {social.website ? (
+                            <TouchableOpacity
+                              onPress={() => openExternalUrl(social.website)}
+                              style={styles.socialButton}
+                              accessibilityLabel="Speaker website"
+                            >
+                              <Icon name="web" size={20} color="#9CA6AB" />
+                            </TouchableOpacity>
+                          ) : null}
+                        </View>
+                      ) : null}
+                    </View>
                   </View>
-                </View>
-              ))}
+                );
+              })}
             </View>
           )}
 
@@ -482,13 +670,15 @@ const EventDetailScreen = ({ route, navigation }) => {
                     )}
                     {(item.speakerName || item.speaker) && (
                       <View style={styles.agendaSpeaker}>
-                        {item.speaker?.profileImage && (
-                          <Image
-                            source={{ uri: item.speaker.profileImage }}
-                            style={styles.agendaSpeakerImage}
+                        {getSpeakerPortraitUri(item.speaker) ? (
+                          <SpeakerPortrait
+                            uri={getSpeakerPortraitUri(item.speaker)}
+                            size={20}
+                            style={styles.agendaSpeakerPortraitSlot}
                           />
+                        ) : (
+                          <Icon name="account" size={14} color={colors.textMuted} style={styles.agendaSpeakerIcon} />
                         )}
-                        <Icon name="account" size={14} color={colors.textMuted} />
                         <Text style={styles.agendaSpeakerName}>
                           {item.speaker?.name || item.speakerName}
                         </Text>
@@ -650,9 +840,14 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: 100,
   },
-  banner: {
+  bannerFrame: {
     width: '100%',
-    height: 220,
+    aspectRatio: EVENT_FEATURED_IMAGE_ASPECT_RATIO,
+    backgroundColor: EVENT_FEATURED_IMAGE_FRAME_BG,
+  },
+  bannerImage: {
+    width: '100%',
+    height: '100%',
   },
   content: {
     padding: 20,
@@ -862,11 +1057,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  speakerImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: colors.backgroundElevated,
+  speakerPortraitSlot: {
     marginRight: 16,
   },
   speakerInfo: {
@@ -973,10 +1164,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 4,
   },
-  agendaSpeakerImage: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+  agendaSpeakerPortraitSlot: {
+    marginRight: 6,
+  },
+  agendaSpeakerIcon: {
     marginRight: 6,
   },
   agendaSpeakerName: {
